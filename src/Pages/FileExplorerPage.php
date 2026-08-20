@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer\Pages;
 
-use Koassi\FilamentFileExplorer\Models\Concerns\HasFileExplorer;
-use Koassi\FilamentFileExplorer\Pages\Concerns\InteractsWithFileExplorer;
-use Koassi\FilamentFileExplorer\Support\HasFileExplorerModel;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
+use Koassi\FilamentFileExplorer\Models\Concerns\HasFileExplorer;
+use Koassi\FilamentFileExplorer\Pages\Concerns\InteractsWithFileExplorer;
+use Koassi\FilamentFileExplorer\Support\HasFileExplorerModel;
 
 abstract class FileExplorerPage extends Page
 {
@@ -38,7 +38,7 @@ abstract class FileExplorerPage extends Page
             return $record->fileExplorerScopeKey();
         }
 
-        return static::class .'.'.$record->getKey();
+        return static::class.'.'.$record->getKey();
     }
 
     protected function resolveFileExplorerRootFolderId(): int

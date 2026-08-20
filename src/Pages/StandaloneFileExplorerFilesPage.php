@@ -11,9 +11,9 @@ use Filament\Panel;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
-use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Pages\Concerns\InteractsWithFileExplorer;
+use Koassi\FilamentFileExplorer\Support\StandaloneAccess;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Tables\Concerns\InteractsWithFileExplorerTable;
 use UnitEnum;
@@ -78,18 +78,7 @@ abstract class StandaloneFileExplorerFilesPage extends Page implements HasTable
 
     public static function canAccess(): bool
     {
-        if (! StandaloneSettings::enabled() || ! StandaloneSettings::hasFilesPage()) {
-            return false;
-        }
-
-        try {
-            $resolver = static::fileExplorerRootResolver();
-
-            return app(FileExplorerAuthorizer::class)
-                ->canAccess($resolver->scopeKey(), $resolver->rootFolderId());
-        } catch (\Throwable) {
-            return false;
-        }
+        return StandaloneSettings::hasFilesPage() && StandaloneAccess::granted();
     }
 
     protected static function fileExplorerRootResolver(): FileExplorerRootResolver

@@ -6,7 +6,7 @@ namespace Koassi\FilamentFileExplorer\Resolvers;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
+use Koassi\FilamentFileExplorer\Contracts\ResolvesExistingRoot;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 
@@ -16,7 +16,7 @@ use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
  * The user key is part of the scope key too, so session state (current folder,
  * clipboard) and authorization never leak between users.
  */
-class PerUserRootResolver implements FileExplorerRootResolver
+class PerUserRootResolver implements ResolvesExistingRoot
 {
     protected ?int $rootFolderId = null;
 
@@ -27,12 +27,30 @@ class PerUserRootResolver implements FileExplorerRootResolver
 
     public function rootFolderId(): int
     {
-        $userKey = $this->userKey();
-
         return $this->rootFolderId ??= (int) app(FileExplorerManager::class)->ensureRoot(
-            StandaloneSettings::rootSlug().'-'.Str::slug((string) $userKey),
+            $this->rootSlug(),
             StandaloneSettings::rootName().' — '.$this->userLabel(),
         )->id;
+    }
+
+    public function existingRootFolderId(): ?int
+    {
+        if ($this->rootFolderId !== null) {
+            return $this->rootFolderId;
+        }
+
+        $id = app(FileExplorerManager::class)->findRoot($this->rootSlug())?->id;
+
+        if ($id === null) {
+            return null;
+        }
+
+        return $this->rootFolderId = (int) $id;
+    }
+
+    protected function rootSlug(): string
+    {
+        return StandaloneSettings::rootSlug().'-'.Str::slug((string) $this->userKey());
     }
 
     protected function userKey(): int|string

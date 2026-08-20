@@ -8,9 +8,9 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
 use Filament\Panel;
-use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Pages\Concerns\InteractsWithFileExplorer;
+use Koassi\FilamentFileExplorer\Support\StandaloneAccess;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use UnitEnum;
 
@@ -71,18 +71,7 @@ abstract class StandaloneFileExplorerPage extends Page
 
     public static function canAccess(): bool
     {
-        if (! StandaloneSettings::enabled()) {
-            return false;
-        }
-
-        try {
-            $resolver = static::fileExplorerRootResolver();
-
-            return app(FileExplorerAuthorizer::class)
-                ->canAccess($resolver->scopeKey(), $resolver->rootFolderId());
-        } catch (\Throwable) {
-            return false;
-        }
+        return StandaloneAccess::granted();
     }
 
     protected static function fileExplorerRootResolver(): FileExplorerRootResolver

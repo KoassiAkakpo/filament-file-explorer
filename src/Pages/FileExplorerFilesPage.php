@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer\Pages;
 
-use Koassi\FilamentFileExplorer\Models\Concerns\HasFileExplorer;
-use Koassi\FilamentFileExplorer\Pages\Concerns\InteractsWithFileExplorer;
-use Koassi\FilamentFileExplorer\Support\HasFileExplorerModel;
-use Koassi\FilamentFileExplorer\Tables\Concerns\InteractsWithFileExplorerTable;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Koassi\FilamentFileExplorer\Models\Concerns\HasFileExplorer;
+use Koassi\FilamentFileExplorer\Pages\Concerns\InteractsWithFileExplorer;
+use Koassi\FilamentFileExplorer\Support\HasFileExplorerModel;
+use Koassi\FilamentFileExplorer\Tables\Concerns\InteractsWithFileExplorerTable;
 
 abstract class FileExplorerFilesPage extends Page implements HasTable
 {

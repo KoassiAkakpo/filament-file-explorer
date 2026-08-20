@@ -6,6 +6,7 @@ namespace Koassi\FilamentFileExplorer\Support;
 
 use Illuminate\Support\Facades\Auth;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
+use Koassi\FilamentFileExplorer\Contracts\ResolvesExistingRoot;
 
 /**
  * Records which root folder a scope key resolved to, so the media routes can
@@ -77,7 +78,11 @@ final class ScopeRoots
                 return null;
             }
 
-            $rootFolderId = $resolver->rootFolderId();
+            // Read-only: a request for a media file must never create a root
+            // folder, and if the scope has none there is no media to serve.
+            $rootFolderId = $resolver instanceof ResolvesExistingRoot
+                ? (int) $resolver->existingRootFolderId()
+                : $resolver->rootFolderId();
 
             return $rootFolderId > 0 ? $rootFolderId : null;
         } catch (\Throwable) {
