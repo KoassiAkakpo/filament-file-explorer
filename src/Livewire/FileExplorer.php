@@ -156,12 +156,18 @@ class FileExplorer extends \Livewire\Component
      * the root. Resolving the folder and skipping the check when it is missing
      * would leave every media row of every other model reachable.
      */
-    protected function assertMediaUnderRoot(Media $media): void
+    protected function assertMediaUnderRoot(Media $media): Folder
     {
         abort_unless($media->model_type === (new Folder)->getMorphClass(), 403);
         abort_unless($media->collection_name === UploadRules::collection(), 403);
 
-        $this->assertUnderRoot(Folder::query()->find($media->model_id));
+        $folder = Folder::query()->find($media->model_id);
+
+        // Aborts when the folder is missing or out of scope, so what comes back
+        // is always the media's in-scope folder.
+        $this->assertUnderRoot($folder);
+
+        return $folder;
     }
 
     public function setViewMode(string $mode): void
@@ -926,14 +932,14 @@ class FileExplorer extends \Livewire\Component
 
         if ($type === 'file' && $id) {
             $media = Media::query()->findOrFail($id);
-            $this->assertMediaUnderRoot($media);
+            $folder = $this->assertMediaUnderRoot($media);
             $deleteState = app(FileExplorerAuthorizer::class)->mediaDeleteState($this->scopeKey, $media);
             $this->infoItem = [
                 'type' => 'file',
                 'id' => $media->id,
                 'name' => MediaLabel::display($media),
                 'size' => $this->formatBytes((int) $media->size),
-                'path' => ($folder ? $this->folderPathString($folder).' / ' : '').$media->file_name,
+                'path' => $this->folderPathString($folder).' / '.$media->file_name,
                 'mime' => $media->mime_type ?: '—',
                 'permissions' => $this->mediaPermissionLabel($media),
                 'created' => $media->created_at?->format('Y/m/d H:i'),
