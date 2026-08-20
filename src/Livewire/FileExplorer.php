@@ -15,6 +15,7 @@ use Koassi\FilamentFileExplorer\Support\ScopeRoots;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\MimeIcon;
 use Koassi\FilamentFileExplorer\Support\Quota;
+use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Notifications\Notification;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
@@ -1238,6 +1239,7 @@ class FileExplorer extends \Livewire\Component
                     ? $this->mediaOpenUrl($media->id)
                     : null,
                 'delete_note' => $deleteState['reason'],
+                'added_by' => app(Uploader::class)->label($media),
             ];
             $this->showInfoModal = true;
 

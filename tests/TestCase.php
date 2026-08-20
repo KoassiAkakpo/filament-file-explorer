@@ -78,6 +78,14 @@ abstract class TestCase extends Orchestra
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
+        // The uploader recorded on a media row is resolved back to its model,
+        // so one has to exist to be resolved.
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name')->nullable();
+            $table->string('email')->nullable();
+        });
+
         Schema::create('projects', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('folder_id')->nullable()->index();

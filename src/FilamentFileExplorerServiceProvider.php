@@ -15,6 +15,7 @@ use Koassi\FilamentFileExplorer\Livewire\FileExplorer;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\Quota;
+use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
@@ -58,6 +59,10 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         // Scoped for the same reason: it memoises how many bytes a scope
         // already takes, which the very next request may have changed.
         $this->app->scoped(Quota::class);
+
+        // Scoped as well: it memoises uploader names, which a profile edit in
+        // the next request would make wrong.
+        $this->app->scoped(Uploader::class);
 
         $this->app->singleton(FileExplorerAuthorizer::class, function ($app) {
             $class = config('filament-file-explorer.authorizer');

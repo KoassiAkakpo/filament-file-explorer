@@ -121,6 +121,7 @@ return [
         'delete' => 'Supprimer',
     ],
 
+    'added_by' => 'Ajouté par',
     'quota' => [
         'label' => 'Stockage',
         'usage' => ':used utilisés sur :limit',
@@ -128,6 +129,7 @@ return [
         'refused' => '{1} :count fichier ne tient pas dans le quota de stockage|[2,*] :count fichiers ne tiennent pas dans le quota de stockage',
     ],
     'inspector' => [
+        'added_by' => 'Ajouté par',
         'title' => 'Obtenir les informations',
         'close' => 'Fermer',
         'size' => 'Taille',

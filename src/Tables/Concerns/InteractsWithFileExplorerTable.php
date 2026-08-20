@@ -7,6 +7,7 @@ namespace Koassi\FilamentFileExplorer\Tables\Concerns;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
+use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -94,6 +95,15 @@ trait InteractsWithFileExplorerTable
                         return $ext !== '' ? $ext : ((string) $record->mime_type ?: '—');
                     })
                     ->color('gray')
+                    ->toggleable(),
+
+                TextColumn::make('added_by')
+                    ->label(__('filament-file-explorer::file-explorer.added_by'))
+                    // custom_properties is JSON, so there is nothing to sort or
+                    // search on here; the uploader is resolved per row and
+                    // memoised, one query per distinct uploader on the page.
+                    ->getStateUsing(fn (Media $record): ?string => app(Uploader::class)->label($record))
+                    ->placeholder('—')
                     ->toggleable(),
 
                 TextColumn::make('created_at')

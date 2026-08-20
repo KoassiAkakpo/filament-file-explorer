@@ -703,6 +703,9 @@
                                     <div class="fe-inspector-row"><dt>{{ __('filament-file-explorer::file-explorer.inspector.size') }}</dt><dd>{{ $infoItem['size'] }}</dd></div>
                                     <div class="fe-inspector-row"><dt>{{ __('filament-file-explorer::file-explorer.inspector.where') }}</dt><dd class="break-all text-end">{{ $infoItem['path'] }}</dd></div>
                                     <div class="fe-inspector-row"><dt>{{ __('filament-file-explorer::file-explorer.inspector.permissions') }}</dt><dd class="text-end">{{ $infoItem['permissions'] }}</dd></div>
+                                    @if (!empty($infoItem['added_by']))
+                                        <div class="fe-inspector-row"><dt>{{ __('filament-file-explorer::file-explorer.inspector.added_by') }}</dt><dd class="break-all text-end">{{ $infoItem['added_by'] }}</dd></div>
+                                    @endif
                                     @if (!empty($infoItem['delete_note']))
                                         <div class="fe-inspector-row"><dt>{{ __('filament-file-explorer::file-explorer.inspector.delete') }}</dt><dd class="text-end text-amber-700 dark:text-amber-300">{{ $infoItem['delete_note'] }}</dd></div>
                                     @endif

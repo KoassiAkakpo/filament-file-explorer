@@ -121,6 +121,7 @@ return [
         'delete' => 'Delete',
     ],
 
+    'added_by' => 'Added by',
     'quota' => [
         'label' => 'Storage',
         'usage' => ':used of :limit used',
@@ -128,6 +129,7 @@ return [
         'refused' => '{1} :count file did not fit in the storage quota|[2,*] :count files did not fit in the storage quota',
     ],
     'inspector' => [
+        'added_by' => 'Added by',
         'title' => 'Get Info',
         'close' => 'Close',
         'size' => 'Size',
