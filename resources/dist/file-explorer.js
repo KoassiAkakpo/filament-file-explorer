@@ -1000,6 +1000,39 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.uploadDroppedFiles(files);
                     input.value = '';
                 },
+                /**
+                 * A folder upload keeps its structure: each file carries the path
+                 * the browser saw, and the server recreates the folders from it.
+                 */
+                async pickAndUploadFolder(event) {
+                    const input = event.target;
+                    const picked = [...(input?.files || [])];
+                    input.value = '';
+
+                    if (!picked.length) return;
+                    if (!this.abilities.upload || !this.abilities.mkdir) return;
+
+                    const files = picked.filter((file) => this.isAllowedFile(file));
+
+                    if (!files.length) {
+                        Alpine.store('feUpload').error(this.translations?.validation?.invalid_format || 'Invalid file format');
+
+                        return;
+                    }
+
+                    // Committed before the upload starts, so the paths are on the
+                    // component when the files land — and in the same order.
+                    await this.$wire.set('uploadRelativePaths', files.map((file) => file.webkitRelativePath || file.name));
+
+                    this.onUploadStart();
+                    this.$wire.uploadMultiple(
+                        'files',
+                        files,
+                        () => { this.onUploadFinish(); },
+                        () => { this.onUploadError(); },
+                        (event) => { this.onUploadProgress(event.detail.progress); }
+                    );
+                },
                 isAllowedFile(file) {
                     const accept = (document.getElementById('fileInput')?.accept || '')
                         .split(',')

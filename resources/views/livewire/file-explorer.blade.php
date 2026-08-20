@@ -97,6 +97,25 @@
                         <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.upload') }}" @click="document.getElementById('fileInput').click()">
                             @svg('heroicon-o-arrow-up-tray', 'h-4 w-4')
                         </button>
+
+                        @if ($abilities['mkdir'])
+                        {{-- webkitdirectory is what carries the folder structure: each
+                             file arrives with a relative path the server rebuilds. --}}
+                        <input
+                            type="file"
+                            id="folderInput"
+                            multiple
+                            webkitdirectory
+                            directory
+                            class="hidden"
+                            wire:key="folder-input-{{ $fileInputKey }}"
+                            @change="pickAndUploadFolder($event)"
+                        >
+
+                        <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.upload_folder') }}" @click="document.getElementById('folderInput').click()">
+                            @svg('heroicon-o-folder-arrow-down', 'h-4 w-4')
+                        </button>
+                        @endif
                         @endif
                     </div>
 

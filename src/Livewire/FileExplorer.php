@@ -91,6 +91,17 @@ class FileExplorer extends \Livewire\Component
 
     public ?int $uploadTargetFolderId = null;
 
+    /**
+     * Per-file paths sent by a folder upload, in the same order as $files.
+     * User input: sanitised in resolveUploadFolder().
+     *
+     * @var list<string>
+     */
+    public array $uploadRelativePaths = [];
+
+    /** Folders a folder upload had to create, for the closing notification. */
+    private int $uploadCreatedFolders = 0;
+
     public int $fileInputKey = 0;
 
     /** @var list<int> */
@@ -1433,8 +1444,8 @@ class FileExplorer extends \Livewire\Component
         $targetId = $this->uploadTargetFolderId ?? (int) $this->currentFolder->id;
         $this->uploadTargetFolderId = null;
 
-        $folder = Folder::query()->findOrFail($targetId);
-        $this->assertUnderRoot($folder);
+        $target = Folder::query()->findOrFail($targetId);
+        $this->assertUnderRoot($target);
 
         try {
             $this->validate();
@@ -1457,10 +1468,18 @@ class FileExplorer extends \Livewire\Component
         $replaced = 0;
         $skipped = [];
 
-        foreach ($this->files as $file) {
+        $paths = $this->uploadRelativePaths;
+        $this->uploadRelativePaths = [];
+        $this->uploadCreatedFolders = 0;
+
+        foreach ($this->files as $index => $file) {
             if (! $file) {
                 continue;
             }
+
+            // A folder upload sends one relative path per file; anything else
+            // lands directly in the target folder.
+            $folder = $this->resolveUploadFolder($target, $paths[$index] ?? null);
 
             $original = method_exists($file, 'getClientOriginalName')
                 ? $file->getClientOriginalName()
@@ -1489,9 +1508,9 @@ class FileExplorer extends \Livewire\Component
                 } else {
                     // Keep both, the way a desktop does: the stored name gets a
                     // slug suffix, the label the reader sees gets " (2)".
-                    $index = FileNames::availableIndex($folder, $safe);
-                    $safe = FileNames::applyIndex($safe, $index);
-                    $label = FileNames::applyIndexToLabel($original, $index);
+                    $copy = FileNames::availableIndex($folder, $safe);
+                    $safe = FileNames::applyIndex($safe, $copy);
+                    $label = FileNames::applyIndexToLabel($original, $copy);
                 }
             }
 
@@ -1512,8 +1531,8 @@ class FileExplorer extends \Livewire\Component
         $this->reset('files');
         $this->fileInputKey++;
 
-        if ((int) $folder->id === (int) $this->currentFolder->id) {
-            $this->currentFolder = $folder->fresh(['children', 'parent']);
+        if ((int) $target->id === (int) $this->currentFolder->id) {
+            $this->currentFolder = $target->fresh(['children', 'parent']);
         } else {
             $this->currentFolder = $this->currentFolder->fresh(['children', 'parent']);
         }
@@ -1527,7 +1546,8 @@ class FileExplorer extends \Livewire\Component
                 ->success()
                 ->title(__('filament-file-explorer::file-explorer.uploaded'))
                 ->body(
-                    trans_choice('filament-file-explorer::file-explorer.uploaded_to_folder', $uploaded, ['folder' => $folder->name])
+                    trans_choice('filament-file-explorer::file-explorer.uploaded_to_folder', $uploaded, ['folder' => $target->name])
+                    .($this->uploadCreatedFolders > 0 ? ' · '.trans_choice('filament-file-explorer::file-explorer.upload_created_folders', $this->uploadCreatedFolders) : '')
                     .($replaced > 0 ? ' · '.trans_choice('filament-file-explorer::file-explorer.upload_replaced', $replaced) : '')
                 )
                 ->send();
@@ -1540,6 +1560,72 @@ class FileExplorer extends \Livewire\Component
                 ->body(implode(', ', array_slice($skipped, 0, 5)))
                 ->send();
         }
+    }
+
+    /**
+     * Folder an uploaded file belongs in, creating the chain a folder upload
+     * describes.
+     *
+     * The relative path comes from the browser, so every segment is flattened
+     * to a name: "../" must not walk out of the target folder, and the depth
+     * limit still applies — files from deeper levels land in the deepest folder
+     * allowed rather than being refused.
+     */
+    protected function resolveUploadFolder(Folder $target, ?string $relativePath): Folder
+    {
+        if (! is_string($relativePath) || ! str_contains($relativePath, '/')) {
+            return $target;
+        }
+
+        abort_unless($this->ability('mkdir'), 403);
+
+        $segments = array_values(array_filter(
+            array_map(
+                fn (string $segment): string => trim(str_replace(["\0", '\\'], '', $segment)),
+                explode('/', str_replace('\\', '/', $relativePath)),
+            ),
+            fn (string $segment): bool => $segment !== '' && $segment !== '.' && $segment !== '..',
+        ));
+
+        // The last segment is the file itself.
+        array_pop($segments);
+
+        $maxDepth = config('filament-file-explorer.folders.max_depth');
+        $current = $target;
+
+        foreach (array_slice($segments, 0, 20) as $segment) {
+            if ($maxDepth !== null && $current->getDepth() >= $maxDepth - 1) {
+                break;
+            }
+
+            $current = $this->findOrCreateChildFolder($current, $segment);
+        }
+
+        return $current;
+    }
+
+    protected function findOrCreateChildFolder(Folder $parent, string $name): Folder
+    {
+        $slug = Str::slug($name) ?: ('folder-'.Str::lower(Str::random(8)));
+
+        $existing = Folder::query()
+            ->where('parent_id', $parent->id)
+            ->where('slug', $slug)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $folder = new Folder;
+        $folder->name = Str::limit($name, 255, '');
+        $folder->slug = $slug;
+        $folder->parent_id = $parent->id;
+        $folder->save();
+
+        $this->uploadCreatedFolders++;
+
+        return $folder;
     }
 
     public function prepareUploadToFolder(int $folderId): void
