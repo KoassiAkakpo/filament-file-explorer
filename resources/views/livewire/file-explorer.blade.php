@@ -53,6 +53,27 @@
                                 :current-id="$currentFolder->id"
                             />
                         </div>
+                        @if ($quota = $this->quotaState())
+                            <div class="border-t border-zinc-200/80 px-2.5 py-2 dark:border-zinc-700" x-show="$store.feUi.sidebarOpen" x-cloak>
+                                <div class="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                                    <span>{{ __('filament-file-explorer::file-explorer.quota.label') }}</span>
+                                    <span @class(['text-red-600 dark:text-red-400' => $quota['full']])>{{ $quota['percent'] }}%</span>
+                                </div>
+                                <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $quota['percent'] }}">
+                                    <div @class([
+                                            'h-full rounded-full',
+                                            'bg-red-500' => $quota['full'],
+                                            'bg-amber-500' => $quota['warning'] && ! $quota['full'],
+                                            'bg-primary-500' => ! $quota['warning'],
+                                        ]) style="width: {{ $quota['percent'] }}%"></div>
+                                </div>
+                                <div class="mt-1 text-[10px] text-zinc-500" translate="no">
+                                    {{ $quota['full']
+                                        ? __('filament-file-explorer::file-explorer.quota.full')
+                                        : __('filament-file-explorer::file-explorer.quota.usage', ['used' => $quota['used_label'], 'limit' => $quota['limit_label']]) }}
+                                </div>
+                            </div>
+                        @endif
                     </aside>
 
                     <div class="flex min-w-0 flex-1 flex-col">

@@ -52,6 +52,13 @@ class FilamentFileExplorerPlugin implements Plugin
 
     protected ?bool $shouldRegisterFilesNavigation = null;
 
+    protected ?int $quotaBytes = null;
+
+    // A quota of null means "no limit", so the value alone cannot say whether
+    // the panel set one. Without this flag, ->quota(null) could not turn off a
+    // limit that config had set.
+    protected bool $quotaSet = false;
+
     public function getId(): string
     {
         return 'filament-file-explorer';
@@ -150,6 +157,18 @@ class FilamentFileExplorerPlugin implements Plugin
     public function disabled(): static
     {
         $this->standaloneEnabled = false;
+
+        return $this;
+    }
+
+    /**
+     * Bytes a scope may hold, or null for no limit. Panel-scoped, so two panels
+     * over the same tree can cap it differently.
+     */
+    public function quota(?int $bytes): static
+    {
+        $this->quotaBytes = $bytes;
+        $this->quotaSet = true;
 
         return $this;
     }
@@ -281,6 +300,16 @@ class FilamentFileExplorerPlugin implements Plugin
     public function getNavigationSort(): ?int
     {
         return $this->navigationSort;
+    }
+
+    public function hasQuota(): bool
+    {
+        return $this->quotaSet;
+    }
+
+    public function getQuotaBytes(): ?int
+    {
+        return $this->quotaBytes;
     }
 
     public function shouldRegisterStandaloneNavigation(): ?bool

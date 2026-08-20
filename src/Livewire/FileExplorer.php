@@ -14,6 +14,7 @@ use Koassi\FilamentFileExplorer\Support\MediaLabel;
 use Koassi\FilamentFileExplorer\Support\ScopeRoots;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\MimeIcon;
+use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Notifications\Notification;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
@@ -105,6 +106,9 @@ class FileExplorer extends \Livewire\Component
 
     /** Folders a folder upload had to create, for the closing notification. */
     private int $uploadCreatedFolders = 0;
+
+    /** Copies or uploads the quota refused, for the summary notification. */
+    private int $quotaRefused = 0;
 
     public int $fileInputKey = 0;
 
@@ -494,6 +498,8 @@ class FileExplorer extends \Livewire\Component
 
         abort_unless($this->ability('copy'), 403);
 
+        $this->quotaRefused = 0;
+
         foreach ($folderIds as $folderId) {
             $source = Folder::query()->find($folderId);
             if (! $source || (int) $source->id === $this->rootFolderId) {
@@ -515,13 +521,24 @@ class FileExplorer extends \Livewire\Component
         $this->currentFolder = $this->currentFolder->fresh(['children']);
         $this->resetListing();
         Notification::make()->success()->title(__('filament-file-explorer::file-explorer.pasted'))->send();
+        $this->notifyQuotaRefused();
     }
 
-    protected function duplicateMedia(Media $media, Folder $target): void
+    /**
+     * @return bool false when the copy would not fit in the scope's quota
+     */
+    protected function duplicateMedia(Media $media, Folder $target): bool
     {
         $path = $media->getPath();
         if (! is_file($path)) {
-            return;
+            return false;
+        }
+
+        // A copy adds as many bytes as the original takes.
+        if (! app(Quota::class)->reserve($this->rootFolderId, (int) $media->size)) {
+            $this->quotaRefused++;
+
+            return false;
         }
 
         // A copy never overwrites, whatever the upload conflict policy says:
@@ -540,6 +557,8 @@ class FileExplorer extends \Livewire\Component
                 'uploaded_by_id' => $actor?->getAuthIdentifier(),
             ]))
             ->toMediaCollection(UploadRules::collection());
+
+        return true;
     }
 
     protected function copyFolderRecursive(Folder $source, Folder $parent): Folder
@@ -1399,6 +1418,16 @@ class FileExplorer extends \Livewire\Component
         ];
     }
 
+    /**
+     * Usage the sidebar shows, or null when the scope has no cap.
+     *
+     * @return array{used:int,limit:int,percent:int,used_label:string,limit_label:string,warning:bool,full:bool}|null
+     */
+    public function quotaState(): ?array
+    {
+        return app(Quota::class)->state($this->rootFolderId);
+    }
+
     public function pageSize(): int
     {
         return max(1, (int) config('filament-file-explorer.listing.per_page', 100));
@@ -1442,6 +1471,7 @@ class FileExplorer extends \Livewire\Component
         $this->listingCache = null;
 
         app(FolderTree::class)->flush();
+        app(Quota::class)->flush();
     }
 
     /**
@@ -1682,6 +1712,7 @@ class FileExplorer extends \Livewire\Component
         $paths = $this->uploadRelativePaths;
         $this->uploadRelativePaths = [];
         $this->uploadCreatedFolders = 0;
+        $this->quotaRefused = 0;
 
         foreach ($this->files as $index => $file) {
             if (! $file) {
@@ -1702,6 +1733,7 @@ class FileExplorer extends \Livewire\Component
             $label = $original;
 
             $clash = FileNames::existing($folder, $safe);
+            $replacing = null;
 
             if ($clash !== null) {
                 $policy = UploadRules::onConflict();
@@ -1714,8 +1746,7 @@ class FileExplorer extends \Livewire\Component
 
                 if ($policy === 'replace') {
                     $this->assertMediaUnderRoot($clash);
-                    $clash->delete();
-                    $replaced++;
+                    $replacing = $clash;
                 } else {
                     // Keep both, the way a desktop does: the stored name gets a
                     // slug suffix, the label the reader sees gets " (2)".
@@ -1723,6 +1754,22 @@ class FileExplorer extends \Livewire\Component
                     $safe = FileNames::applyIndex($safe, $copy);
                     $label = FileNames::applyIndexToLabel($original, $copy);
                 }
+            }
+
+            // Checked before anything is written, and after the conflict policy
+            // is known: replacing a file frees what it took, so only the
+            // difference counts against the quota.
+            $incoming = (int) ($file->getSize() ?: 0) - (int) ($replacing->size ?? 0);
+
+            if (! app(Quota::class)->reserve($this->rootFolderId, $incoming)) {
+                $this->quotaRefused++;
+
+                continue;
+            }
+
+            if ($replacing !== null) {
+                $replacing->delete();
+                $replaced++;
             }
 
             $folder
@@ -1771,6 +1818,32 @@ class FileExplorer extends \Livewire\Component
                 ->body(implode(', ', array_slice($skipped, 0, 5)))
                 ->send();
         }
+
+        $this->notifyQuotaRefused();
+    }
+
+    /**
+     * Reports what a quota turned away, once for the whole action rather than
+     * once per file.
+     */
+    protected function notifyQuotaRefused(): void
+    {
+        if ($this->quotaRefused === 0) {
+            return;
+        }
+
+        $count = $this->quotaRefused;
+        $state = $this->quotaState();
+        $this->quotaRefused = 0;
+
+        Notification::make()
+            ->danger()
+            ->title(trans_choice('filament-file-explorer::file-explorer.quota.refused', $count))
+            ->body($state === null ? null : __('filament-file-explorer::file-explorer.quota.usage', [
+                'used' => $state['used_label'],
+                'limit' => $state['limit_label'],
+            ]))
+            ->send();
     }
 
     /**
@@ -2048,6 +2121,8 @@ class FileExplorer extends \Livewire\Component
 
         abort_unless($this->ability('copy'), 403);
 
+        $this->quotaRefused = 0;
+
         $targetFolder = Folder::query()->find($targetFolderId);
 
         if (! $targetFolder) {
@@ -2094,6 +2169,7 @@ class FileExplorer extends \Livewire\Component
         $this->currentFolder = $this->currentFolder->fresh(['children']);
         $this->resetListing();
         Notification::make()->success()->title(__('filament-file-explorer::file-explorer.copied'))->send();
+        $this->notifyQuotaRefused();
     }
 
     /**

@@ -121,6 +121,12 @@ return [
         'delete' => 'Supprimer',
     ],
 
+    'quota' => [
+        'label' => 'Stockage',
+        'usage' => ':used utilisés sur :limit',
+        'full' => 'Stockage saturé',
+        'refused' => '{1} :count fichier ne tient pas dans le quota de stockage|[2,*] :count fichiers ne tiennent pas dans le quota de stockage',
+    ],
     'inspector' => [
         'title' => 'Obtenir les informations',
         'close' => 'Fermer',

@@ -98,6 +98,20 @@ final class StandaloneSettings
             ?? FileExplorerFiles::class;
     }
 
+    /**
+     * Bytes a scope may hold, or null for no limit.
+     */
+    public static function quotaBytes(): ?int
+    {
+        $plugin = self::plugin();
+
+        $bytes = $plugin?->hasQuota() === true
+            ? $plugin->getQuotaBytes()
+            : config('filament-file-explorer.quota.bytes');
+
+        return is_numeric($bytes) && (int) $bytes > 0 ? (int) $bytes : null;
+    }
+
     public static function navigationLabel(): ?string
     {
         $label = self::plugin()?->getNavigationLabel()

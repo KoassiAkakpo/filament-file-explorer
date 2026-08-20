@@ -14,6 +14,7 @@ use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
+use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
@@ -53,6 +54,10 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         // of one request, and a long-lived worker would otherwise keep serving
         // a tree that has since been reorganised.
         $this->app->scoped(FolderTree::class);
+
+        // Scoped for the same reason: it memoises how many bytes a scope
+        // already takes, which the very next request may have changed.
+        $this->app->scoped(Quota::class);
 
         $this->app->singleton(FileExplorerAuthorizer::class, function ($app) {
             $class = config('filament-file-explorer.authorizer');

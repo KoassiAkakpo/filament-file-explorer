@@ -138,6 +138,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Storage quota
+    |--------------------------------------------------------------------------
+    |
+    | Maximum number of bytes a scope may hold, or null for no limit. The cap
+    | applies per root folder, so with the per-user or per-tenant resolver each
+    | user or tenant gets an allowance of this size. Trashed files still count:
+    | they occupy the disk until they are purged.
+    |
+    | Uploads and copies that would go over are refused, with the reason. The
+    | sidebar shows the usage as soon as a limit is set.
+    |
+    |   'bytes' => 10 * 1024 ** 3,   // 10 GiB per scope
+    |
+    | Set it per panel instead with FilamentFileExplorerPlugin::make()->quota(...).
+    |
+    */
+    'quota' => [
+        'bytes' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Trash
     |--------------------------------------------------------------------------
     |
