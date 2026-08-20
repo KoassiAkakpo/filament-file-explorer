@@ -157,6 +157,28 @@ The explorer renders `listing.per_page` items at a time (100 by default), folder
 'listing' => ['per_page' => 100],
 ```
 
+## Trash
+
+Deleting moves things aside instead of destroying them. Folders are soft-deleted, files move to a separate media collection, and the toolbar's trash button lists what is in there with where it came from and when it went — each row restorable or deletable for good.
+
+```php
+// config/filament-file-explorer.php
+'trash' => [
+    'enabled' => true,                       // false deletes permanently, as before
+    'collection' => 'file-explorer-trash',
+],
+```
+
+Restoring a folder brings back what went down with it, but leaves a file you had trashed on its own where you put it. Restore and purge require the same ability as deleting (`delete` for files, `deleteFolder` for folders).
+
+Nothing expires on its own. Schedule the purge if you want it to:
+
+```php
+Schedule::command('file-explorer:purge-trash --days=30')->daily();
+```
+
+Upgrading an existing install adds a `deleted_at` column to the folders table, so run `php artisan migrate`.
+
 ## Keyboard
 
 The listing is a `listbox`: it takes focus, and the items are options.

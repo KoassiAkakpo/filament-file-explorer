@@ -9,6 +9,7 @@ use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer as FileExplorerComponent;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
+use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Koassi\FilamentFileExplorer\Tests\Fixtures\Project;
 use Livewire\Features\SupportTesting\Testable;
@@ -98,15 +99,29 @@ it('renders the confirmation as a dialog', function (): void {
         ->assertSee('loose.pdf');
 });
 
-it('deletes only once the confirmation is accepted', function (): void {
+it('acts only once the confirmation is accepted', function (): void {
     $file = feDelMedia(feDelRoot(), 'loose.pdf');
 
     $component = feDelComponent();
     $component->call('requestDelete', [], [$file->id])
         ->call('confirmDelete');
 
-    expect(Media::query()->find($file->id))->toBeNull()
+    // With the trash on — the default — the row survives in the trash
+    // collection, out of every live listing.
+    expect($file->refresh()->collection_name)->toBe(Trash::collection())
         ->and($component->get('deleteRequest'))->toBeNull();
+});
+
+it('destroys the row when the trash is turned off', function (): void {
+    config(['filament-file-explorer.trash.enabled' => false]);
+
+    $file = feDelMedia(feDelRoot(), 'loose.pdf');
+
+    feDelComponent()
+        ->call('requestDelete', [], [$file->id])
+        ->call('confirmDelete');
+
+    expect(Media::query()->find($file->id))->toBeNull();
 });
 
 it('keeps everything when the confirmation is dismissed', function (): void {

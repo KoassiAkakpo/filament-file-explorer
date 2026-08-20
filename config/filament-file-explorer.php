@@ -138,6 +138,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trash
+    |--------------------------------------------------------------------------
+    |
+    | With the trash on, deleting moves folders and files aside instead of
+    | destroying them: folders are soft-deleted, files move to the collection
+    | below, and both can be restored or purged from the explorer's trash view.
+    | Turn it off to delete permanently, as before.
+    |
+    | `php artisan file-explorer:purge-trash --days=30` empties what has been
+    | sitting there for a while; schedule it if you want automatic cleanup.
+    |
+    */
+    'trash' => [
+        'enabled' => true,
+        'collection' => 'file-explorer-trash',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Folders
     |--------------------------------------------------------------------------
     */

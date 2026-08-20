@@ -689,6 +689,27 @@
             background: #fff;
         }
 
+        .fe-tool-btn--active {
+            background: rgba(13, 148, 136, 0.12);
+            color: #0f766e;
+        }
+        .dark .fe-tool-btn--active { background: rgba(45, 212, 191, 0.16); color: #5eead4; }
+
+        .fe-trash-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 8rem auto;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.6rem;
+            border-radius: 0.5rem;
+        }
+        .fe-trash-row:hover { background: rgba(24, 24, 27, 0.04); }
+        .dark .fe-trash-row:hover { background: rgba(255, 255, 255, 0.05); }
+        @media (max-width: 720px) {
+            .fe-trash-row { grid-template-columns: minmax(0, 1fr) auto; }
+            .fe-trash-row > :nth-child(2), .fe-trash-row > :nth-child(3) { display: none; }
+        }
+
         .fe-load-more-bar { flex-basis: 100%; }
         .fe-load-more {
             display: inline-flex;

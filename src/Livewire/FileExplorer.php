@@ -12,6 +12,7 @@ use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 
 use Koassi\FilamentFileExplorer\Support\MediaLabel;
 use Koassi\FilamentFileExplorer\Support\ScopeRoots;
+use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\MimeIcon;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Notifications\Notification;
@@ -86,6 +87,9 @@ class FileExplorer extends \Livewire\Component
 
     /** @var array{id: int, name: string, mime: string, kind: string, url: string, download_url: string, size: string, icon: string, position: int, total: int}|null */
     public ?array $previewItem = null;
+
+    /** Whether the browser area shows the trash instead of the current folder. */
+    public bool $showTrash = false;
 
     public bool $clipboardReady = false;
 
@@ -745,6 +749,7 @@ class FileExplorer extends \Livewire\Component
         }
 
         $this->deleteRequest = [
+            'mode' => Trash::enabled() ? 'trash' : 'delete',
             'folders' => $folderIds,
             'files' => $fileIds,
             'names' => array_slice($names, 0, 5),
@@ -761,11 +766,217 @@ class FileExplorer extends \Livewire\Component
             return;
         }
 
-        $this->selectedFolders = $this->deleteRequest['folders'];
-        $this->selectedFiles = $this->deleteRequest['files'];
+        $request = $this->deleteRequest;
         $this->deleteRequest = null;
 
+        if (($request['mode'] ?? null) === 'purge') {
+            $this->purgeItems($request['folders'], $request['files']);
+
+            return;
+        }
+
+        $this->selectedFolders = $request['folders'];
+        $this->selectedFiles = $request['files'];
+
         $this->deleteItems();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Trash
+    |--------------------------------------------------------------------------
+    */
+
+    public function trashEnabled(): bool
+    {
+        return Trash::enabled();
+    }
+
+    public function toggleTrash(): void
+    {
+        abort_unless($this->ability('browse'), 403);
+
+        $this->showTrash = Trash::enabled() && ! $this->showTrash;
+        $this->selectedFolders = [];
+        $this->selectedFiles = [];
+        $this->dispatch('fe-sel-cleared');
+    }
+
+    /**
+     * Rows for the trash view: what was removed, where it came from, and when.
+     *
+     * @return list<array{type: string, id: int, name: string, path: string, deleted_at: string, meta: string, icon: string}>
+     */
+    public function trashItems(): array
+    {
+        abort_unless($this->ability('browse'), 403);
+
+        $trash = app(Trash::class);
+        $items = $trash->items($this->rootFolderId);
+        $rows = [];
+
+        foreach ($items['folders'] as $folder) {
+            $rows[] = [
+                'type' => 'folder',
+                'id' => (int) $folder->id,
+                'name' => (string) $folder->name,
+                'path' => $this->trashOriginPath($folder->parent_id),
+                'deleted_at' => $folder->deleted_at?->format('Y/m/d H:i') ?? '—',
+                'meta' => __('filament-file-explorer::file-explorer.folder_kind'),
+                'icon' => 'folder',
+            ];
+        }
+
+        foreach ($items['files'] as $media) {
+            $trashedAt = $media->getCustomProperty('trashed_at');
+
+            $rows[] = [
+                'type' => 'file',
+                'id' => (int) $media->id,
+                'name' => MediaLabel::display($media),
+                'path' => $this->trashOriginPath((int) $media->model_id),
+                'deleted_at' => is_string($trashedAt)
+                    ? \Illuminate\Support\Carbon::parse($trashedAt)->format('Y/m/d H:i')
+                    : '—',
+                'meta' => $this->formatBytes((int) $media->size),
+                'icon' => MimeIcon::forMedia($media),
+            ];
+        }
+
+        return $rows;
+    }
+
+    public function trashCount(): int
+    {
+        return Trash::enabled() ? app(Trash::class)->count($this->rootFolderId) : 0;
+    }
+
+    public function restoreItem(string $type, int $id): void
+    {
+        $trash = app(Trash::class);
+
+        if ($type === 'folder') {
+            // Restoring is the mirror of deleting, so it takes the same ability.
+            abort_unless($this->ability('deleteFolder'), 403);
+
+            $folder = Folder::withTrashed()->findOrFail($id);
+            $this->assertUnderRoot($folder);
+            $trash->restoreFolder($folder);
+        } else {
+            abort_unless($this->ability('delete'), 403);
+
+            $media = Media::query()->findOrFail($id);
+            $this->assertTrashedMediaUnderRoot($media);
+            $trash->restoreMedia($media);
+        }
+
+        $this->resetListing();
+
+        Notification::make()
+            ->success()
+            ->title(__('filament-file-explorer::file-explorer.trash.restored'))
+            ->send();
+    }
+
+    /**
+     * Confirmation for a permanent delete, from the trash view.
+     */
+    public function requestPurge(?string $type = null, ?int $id = null): void
+    {
+        abort_unless($this->ability('delete') || $this->ability('deleteFolder'), 403);
+
+        $rows = collect($this->trashItems());
+
+        if ($type !== null && $id !== null) {
+            $rows = $rows->where('type', $type)->where('id', $id)->values();
+        }
+
+        if ($rows->isEmpty()) {
+            $this->deleteRequest = null;
+
+            return;
+        }
+
+        $this->deleteRequest = [
+            'mode' => 'purge',
+            'folders' => $rows->where('type', 'folder')->pluck('id')->map('intval')->all(),
+            'files' => $rows->where('type', 'file')->pluck('id')->map('intval')->all(),
+            'names' => $rows->pluck('name')->take(5)->all(),
+            'more' => max(0, $rows->count() - 5),
+            'nested_count' => 0,
+            'deletable' => $rows->count(),
+            'blocked' => [],
+        ];
+    }
+
+    /**
+     * @param  list<int>  $folderIds
+     * @param  list<int>  $fileIds
+     */
+    protected function purgeItems(array $folderIds, array $fileIds): void
+    {
+        $trash = app(Trash::class);
+        $purged = 0;
+
+        foreach ($folderIds as $folderId) {
+            abort_unless($this->ability('deleteFolder'), 403);
+
+            $folder = Folder::withTrashed()->find($folderId);
+
+            if (! $folder || ! $folder->trashed()) {
+                continue;
+            }
+
+            $this->assertUnderRoot($folder);
+            $trash->purgeFolder($folder);
+            $purged++;
+        }
+
+        foreach ($fileIds as $fileId) {
+            abort_unless($this->ability('delete'), 403);
+
+            $media = Media::query()->find($fileId);
+
+            if (! $media) {
+                continue;
+            }
+
+            $this->assertTrashedMediaUnderRoot($media);
+            $trash->purgeMedia($media);
+            $purged++;
+        }
+
+        $this->resetListing();
+
+        if ($purged > 0) {
+            Notification::make()
+                ->success()
+                ->title(trans_choice('filament-file-explorer::file-explorer.trash.purged', $purged))
+                ->send();
+        }
+    }
+
+    /**
+     * Same three conditions as assertMediaUnderRoot(), against the trash
+     * collection: a trashed row is out of the live one, so it would fail there.
+     */
+    protected function assertTrashedMediaUnderRoot(Media $media): void
+    {
+        abort_unless($media->model_type === (new Folder)->getMorphClass(), 403);
+        abort_unless($media->collection_name === Trash::collection(), 403);
+
+        $this->assertUnderRoot(Folder::withTrashed()->find($media->model_id));
+    }
+
+    protected function trashOriginPath(?int $folderId): string
+    {
+        if ($folderId === null) {
+            return '—';
+        }
+
+        $folder = Folder::withTrashed()->find($folderId);
+
+        return $folder ? $this->folderPathString($folder) : '—';
     }
 
     public function cancelDelete(): void
@@ -1678,7 +1889,12 @@ class FileExplorer extends \Livewire\Component
                 continue;
             }
 
-            $media->delete();
+            if (Trash::enabled()) {
+                app(Trash::class)->trashMedia($media);
+            } else {
+                $media->delete();
+            }
+
             $deleted++;
         }
 
@@ -1711,16 +1927,23 @@ class FileExplorer extends \Livewire\Component
                 continue;
             }
 
-            $this->deleteFolderRecursive($folder);
+            if (Trash::enabled()) {
+                app(Trash::class)->trashFolder($folder);
+            } else {
+                $this->deleteFolderRecursive($folder);
+            }
+
             $deleted++;
         }
 
         if ($deleted > 0) {
             Notification::make()
                 ->success()
-                ->title($deleted === 1
-                    ? __('filament-file-explorer::file-explorer.item_deleted')
-                    : __('filament-file-explorer::file-explorer.items_deleted', ['count' => $deleted]))
+                ->title(match (true) {
+                    Trash::enabled() => trans_choice('filament-file-explorer::file-explorer.trash.moved', $deleted),
+                    $deleted === 1 => __('filament-file-explorer::file-explorer.item_deleted'),
+                    default => __('filament-file-explorer::file-explorer.items_deleted', ['count' => $deleted]),
+                })
                 ->send();
         }
 
@@ -1742,6 +1965,11 @@ class FileExplorer extends \Livewire\Component
         $this->resetListing();
     }
 
+    /**
+     * Permanent delete, used when the trash is off. forceDelete because the
+     * model soft-deletes: delete() would leave rows behind that nothing ever
+     * shows again and nothing ever purges.
+     */
     protected function deleteFolderRecursive(Folder $folder): void
     {
         foreach ($folder->children as $child) {
@@ -1752,7 +1980,7 @@ class FileExplorer extends \Livewire\Component
             $media->delete();
         }
 
-        $folder->delete();
+        $folder->forceDelete();
     }
 
     public function moveItemsToFolder($targetFolderId, $folderIds = [], $fileIds = []): void

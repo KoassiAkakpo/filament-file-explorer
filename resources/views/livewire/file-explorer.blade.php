@@ -212,6 +212,18 @@
                         </div>
                     </div>
 
+                    @if ($this->trashEnabled())
+                    <button
+                        type="button"
+                        @class(['fe-tool-btn', 'fe-tool-btn--active' => $showTrash])
+                        title="{{ __('filament-file-explorer::file-explorer.toolbar.trash') }}"
+                        aria-pressed="{{ $showTrash ? 'true' : 'false' }}"
+                        wire:click="toggleTrash"
+                    >
+                        @svg('heroicon-o-trash', 'h-4 w-4')
+                    </button>
+                    @endif
+
                     <div class="fe-toolbar__spacer min-w-0 flex-1"></div>
 
                     <div class="fe-toolbar__end flex shrink-0 items-center gap-1">
@@ -296,6 +308,52 @@
                 </div>
 
                 <div id="filemanager-area" class="fe-browser relative overflow-x-hidden dark:bg-zinc-800/50" x-bind:class="dropingFile ? 'fe-browser--drop' : ''">
+                    @if ($showTrash)
+                        @php $trashRows = $this->trashItems(); @endphp
+                        <div class="flex items-center justify-between gap-2 border-b border-zinc-200/80 px-3 py-2 dark:border-zinc-700">
+                            <div class="flex items-center gap-2 text-[13px] font-medium text-zinc-700 dark:text-zinc-200">
+                                @svg('heroicon-o-trash', 'h-4 w-4 text-zinc-400')
+                                <span>{{ __('filament-file-explorer::file-explorer.trash.title') }}</span>
+                                <span class="text-[11px] font-normal text-zinc-400">{{ trans_choice('filament-file-explorer::file-explorer.trash.count', count($trashRows)) }}</span>
+                            </div>
+                            @if ($trashRows !== [] && ($abilities['delete'] || $abilities['deleteFolder']))
+                                <button type="button" class="fe-btn fe-btn--danger" wire:click="requestPurge">
+                                    {{ __('filament-file-explorer::file-explorer.trash.empty') }}
+                                </button>
+                            @endif
+                        </div>
+
+                        <div class="min-h-[500px] p-2">
+                            @if ($trashRows === [])
+                                <p class="p-8 text-center text-sm text-zinc-500">{{ __('filament-file-explorer::file-explorer.trash.empty_state') }}</p>
+                            @else
+                                <ul class="space-y-0.5">
+                                    @foreach ($trashRows as $row)
+                                        <li class="fe-trash-row" wire:key="trash-{{ $row['type'] }}-{{ $row['id'] }}">
+                                            <div class="flex min-w-0 items-center gap-2">
+                                                @if ($row['type'] === 'folder')
+                                                    <x-filament-file-explorer::file-explorer.folder-icon class="h-6 w-6 shrink-0" />
+                                                @else
+                                                    <x-filament-file-explorer::file-explorer.mime-icon :icon="$row['icon']" size="sm" />
+                                                @endif
+                                                <span class="truncate text-[13px] text-zinc-800 dark:text-zinc-100">{{ $row['name'] }}</span>
+                                            </div>
+                                            <span class="truncate text-xs text-zinc-500">{{ __('filament-file-explorer::file-explorer.trash.origin') }}: {{ $row['path'] }}</span>
+                                            <span class="text-xs text-zinc-500">{{ $row['deleted_at'] }}</span>
+                                            <div class="flex shrink-0 items-center gap-1">
+                                                <button type="button" class="fe-btn" wire:click="restoreItem('{{ $row['type'] }}', {{ $row['id'] }})">
+                                                    {{ __('filament-file-explorer::file-explorer.trash.restore') }}
+                                                </button>
+                                                <button type="button" class="fe-tool-btn fe-tool-btn--ghost-danger" title="{{ __('filament-file-explorer::file-explorer.trash.purge') }}" wire:click="requestPurge('{{ $row['type'] }}', {{ $row['id'] }})">
+                                                    @svg('heroicon-o-trash', 'h-3.5 w-3.5')
+                                                </button>
+                                            </div>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </div>
+                    @else
                     @if($search)
                         <div class="border-b border-zinc-200 bg-zinc-100/80 px-4 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 sm:px-5">{{ trans_choice('filament-file-explorer::file-explorer.search_results', $listing['total']) }}</div>
                     @endif
@@ -546,6 +604,8 @@
                         @endif
                     </div>
 
+                    @endif
+
                     <div class="pointer-events-none absolute inset-x-3 bottom-3 z-20" x-cloak x-show="$store.feUpload.visible"
                          x-transition:enter="transition ease-out duration-100"
                          x-transition:enter-start="opacity-0"
@@ -650,8 +710,9 @@
                         x-init="$nextTick(() => $refs.feConfirmDefault?.focus())"
                         @keydown.tab.prevent="trapTab($event, $el)"
                     >
+                        @php $mode = $deleteRequest['mode'] ?? 'delete'; @endphp
                         <h2 id="{{ $confirmId }}" class="fe-modal__title">
-                            {{ trans_choice('filament-file-explorer::file-explorer.confirm.delete_title', max(1, $deleteRequest['deletable'])) }}
+                            {{ trans_choice('filament-file-explorer::file-explorer.confirm.'.$mode.'_title', max(1, $deleteRequest['deletable'])) }}
                         </h2>
 
                         @if ($deleteRequest['deletable'] > 0)
@@ -668,7 +729,7 @@
                                 <p class="fe-modal__note">{{ trans_choice('filament-file-explorer::file-explorer.confirm.delete_nested', $deleteRequest['nested_count']) }}</p>
                             @endif
 
-                            <p class="fe-modal__note">{{ __('filament-file-explorer::file-explorer.confirm.delete_body') }}</p>
+                            <p class="fe-modal__note">{{ __('filament-file-explorer::file-explorer.confirm.'.$mode.'_body') }}</p>
                         @else
                             <p class="fe-modal__note">{{ __('filament-file-explorer::file-explorer.confirm.nothing_deletable') }}</p>
                         @endif
@@ -698,7 +759,7 @@
                                     class="fe-btn fe-btn--danger"
                                     x-ref="feConfirmDefault"
                                     wire:click="confirmDelete"
-                                >{{ __('filament-file-explorer::file-explorer.confirm.delete') }}</button>
+                                >{{ __('filament-file-explorer::file-explorer.confirm.'.$mode) }}</button>
                             @endif
                         </div>
                     </div>

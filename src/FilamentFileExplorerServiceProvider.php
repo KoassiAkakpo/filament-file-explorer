@@ -8,6 +8,7 @@ use Koassi\FilamentFileExplorer\Commands\InstallCommand;
 use Koassi\FilamentFileExplorer\Commands\MakeAuthorizerCommand;
 use Koassi\FilamentFileExplorer\Commands\MakeFolderMigrationCommand;
 use Koassi\FilamentFileExplorer\Commands\MakePageCommand;
+use Koassi\FilamentFileExplorer\Commands\PurgeTrashCommand;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer;
@@ -39,6 +40,7 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
                 MakePageCommand::class,
                 MakeAuthorizerCommand::class,
                 MakeFolderMigrationCommand::class,
+                PurgeTrashCommand::class,
             ]);
     }
 

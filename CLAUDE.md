@@ -65,6 +65,19 @@ Both keep their state on the server (`$deleteRequest`, `$previewItem`) rather th
 
 Escape is handled once, on the component root (`@keydown.escape.window`), and `trapTab()` in the JS keeps Tab inside whichever dialog is open.
 
+## Trash
+
+`trash.enabled` (on by default) turns deleting into moving aside. [Support/Trash.php](src/Support/Trash.php) owns it, and the two halves work differently on purpose:
+
+- **Folders** use `SoftDeletes`. A trashed folder drops out of every `Folder::query()` the explorer runs, so the listing, the sidebar, the search scope and `descendantFolderIdsIncludingRoot()` need no extra filter. `FolderTree::parentId()` and `Folder::parent()` are the exceptions: they use `withTrashed()`, because containment is about where a folder sits, and a trashed item still has to say where it came from.
+- **Files** have no soft deletes in Media Library, so a trashed file moves to `trash.collection` instead. Everything that lists or authorises media already filters on `UploadRules::collection()`, which takes trashed files out of listings *and* out of the media routes for free — the trash is not a download bypass. The file on disk is untouched, so restoring is a database write.
+
+The trash view lists one entry per trashed *thing*: trashed folders whose parent is not itself trashed, and trashed files still sitting in a live folder. A file trashed on its own before its folder went stays in the trash when that folder is restored — `trashed_with_folder` is what distinguishes the two. Restoring re-resolves the file name, since a new upload may have taken it in the meantime.
+
+Restore and purge take the same ability that trashing took (`delete` for files, `deleteFolder` for folders) rather than a new one, because `FileExplorerAuthorizer::abilities()` returns a fixed array and adding a key would silently deny the action for every authorizer already written against the contract.
+
+With the trash **off**, `deleteFolderRecursive()` must `forceDelete()`: the model soft-deletes now, so `delete()` would leave rows nothing ever shows again and nothing ever purges.
+
 ## Security model
 
 Two independent guards, both required — never add an entry point that skips either:
