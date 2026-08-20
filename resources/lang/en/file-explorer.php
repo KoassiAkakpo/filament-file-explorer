@@ -7,6 +7,8 @@ return [
     'folder_without_title' => 'Untitled folder',
     'folder_already_exists' => 'A folder with this name already exists.',
     'folder_kind' => 'Folder',
+    'current_folder_kind' => 'Current folder',
+    'items_count' => '{0} 0 items|{1} :count item|[2,*] :count items',
     'search_results' => '{0} No results|{1} :count result|[2,*] :count results',
     'validation' => [
         'max_folder_depth_exceeded' => 'Maximum folder depth of :max exceeded.',
@@ -16,6 +18,7 @@ return [
         'file_not_allowed' => 'File not allowed.',
     ],
     'uploaded' => 'Uploaded',
+    'uploaded_to_folder' => '{1} :count file in “:folder”|[2,*] :count files in “:folder”',
     'upload_invalid' => 'Invalid upload',
     'copied' => 'Copied',
     'cut' => 'Cut',
@@ -119,6 +122,17 @@ return [
         'created' => 'Created',
         'modified' => 'Modified',
         'details' => 'Details',
+    ],
+
+    'sidebar' => [
+        'toggle_node' => 'Expand / Collapse',
+    ],
+
+    'upload' => [
+        'uploading' => 'Uploading…',
+        'complete' => 'Upload complete',
+        'failed' => 'Upload failed',
+        'cancelled' => 'Upload cancelled',
     ],
 
     'js' => [

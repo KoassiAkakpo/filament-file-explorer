@@ -705,11 +705,11 @@ class FileExplorer extends \Livewire\Component
                 'name' => $folder->name,
                 'size' => $this->formatBytes($size),
                 'path' => $this->folderPathString($folder),
-                'mime' => 'Folder',
+                'mime' => __('filament-file-explorer::file-explorer.folder_kind'),
                 'permissions' => $this->folderPermissionLabel($folder),
                 'created' => $folder->created_at?->format('Y/m/d H:i'),
                 'updated' => $folder->updated_at?->format('Y/m/d H:i'),
-                'extra' => $items.' '.($items === 1 ? 'item' : 'items'),
+                'extra' => trans_choice('filament-file-explorer::file-explorer.items_count', $items),
                 'delete_note' => $this->folderDeleteNote($folder),
             ];
             $this->showInfoModal = true;
@@ -757,11 +757,11 @@ class FileExplorer extends \Livewire\Component
             'name' => $folder->name,
             'size' => $this->formatBytes($size),
             'path' => $this->folderPathString($folder),
-            'mime' => 'Current folder',
+            'mime' => __('filament-file-explorer::file-explorer.current_folder_kind'),
             'permissions' => $this->folderPermissionLabel($folder),
             'created' => $folder->created_at?->format('Y/m/d H:i'),
             'updated' => $folder->updated_at?->format('Y/m/d H:i'),
-            'extra' => $items.' '.($items === 1 ? 'item' : 'items'),
+            'extra' => trans_choice('filament-file-explorer::file-explorer.items_count', $items),
             'delete_note' => $this->folderDeleteNote($folder),
         ];
         $this->showInfoModal = true;
@@ -1238,7 +1238,7 @@ class FileExplorer extends \Livewire\Component
             Notification::make()
                 ->success()
                 ->title(__('filament-file-explorer::file-explorer.uploaded'))
-                ->body($uploaded.' '.$folder->name.'»')
+                ->body(trans_choice('filament-file-explorer::file-explorer.uploaded_to_folder', $uploaded, ['folder' => $folder->name]))
                 ->send();
         }
     }

@@ -7,6 +7,8 @@ return [
     'folder_without_title' => 'Dossier sans titre',
     'folder_already_exists' => 'Un dossier portant ce nom existe déjà.',
     'folder_kind' => 'Dossier',
+    'current_folder_kind' => 'Dossier courant',
+    'items_count' => '{0} 0 élément|{1} :count élément|[2,*] :count éléments',
     'search_results' => '{0} Aucun résultat|{1} :count résultat|[2,*] :count résultats',
     'validation' => [
         'max_folder_depth_exceeded' => 'Profondeur maximale de dossier de :max dépassée.',
@@ -16,6 +18,7 @@ return [
         'file_not_allowed' => 'Fichier non autorisé.',
     ],
     'uploaded' => 'Téléversé',
+    'uploaded_to_folder' => '{1} :count fichier dans « :folder »|[2,*] :count fichiers dans « :folder »',
     'upload_invalid' => 'Téléversement invalide',
     'copied' => 'Copié',
     'cut' => 'Couper',
@@ -119,6 +122,17 @@ return [
         'created' => 'Créé',
         'modified' => 'Modifié',
         'details' => 'Détails',
+    ],
+
+    'sidebar' => [
+        'toggle_node' => 'Développer / Réduire',
+    ],
+
+    'upload' => [
+        'uploading' => 'Téléversement…',
+        'complete' => 'Téléversement terminé',
+        'failed' => 'Échec du téléversement',
+        'cancelled' => 'Téléversement annulé',
     ],
 
     'js' => [

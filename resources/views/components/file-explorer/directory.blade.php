@@ -79,7 +79,7 @@
             <span
                 class="fe-meta mt-0.5 text-[10px] leading-none text-zinc-400"
                 x-show="!($store.feSel.hasFolder({{ $folder->id }}) || $store.feSel.inMarqueeFolder({{ $folder->id }}))"
-            >{{ $itemCount }} {{ $itemCount === 1 ? 'item' : 'items' }}</span>
+            >{{ trans_choice('filament-file-explorer::file-explorer.items_count', $itemCount) }}</span>
         @endif
     </div>
 </div>

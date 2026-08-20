@@ -28,7 +28,7 @@
                 <button
                     type="button"
                     class="fe-side-chevron"
-                    title="Expand / Collapse"
+                    title="{{ __('filament-file-explorer::file-explorer.sidebar.toggle_node') }}"
                     @click.stop.prevent="$store.feUi.toggle({{ $id }}, {{ $defaultOpen }})"
                 >
                     <span

@@ -300,14 +300,18 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 visible: false,
                 progress: 0,
                 status: 'idle',
+                translations: {},
                 label: 'Uploading…',
                 hideTimer: null,
+                t(key, fallback) {
+                    return this.translations?.upload?.[key] || fallback;
+                },
                 start() {
                     if (this.hideTimer) clearTimeout(this.hideTimer);
                     this.visible = true;
                     this.progress = 0;
                     this.status = 'uploading';
-                    this.label = 'Uploading…';
+                    this.label = this.t('uploading', 'Uploading…');
                     this.hideTimer = null;
                 },
                 progressTo(p) {
@@ -316,19 +320,19 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 finish() {
                     this.status = 'done';
                     this.progress = 100;
-                    this.label = 'Upload complete';
+                    this.label = this.t('complete', 'Upload complete');
                     this.scheduleHide(900);
                 },
-                error(label = 'Upload failed') {
+                error(label = null) {
                     this.status = 'error';
                     this.progress = 100;
-                    this.label = label;
+                    this.label = label || this.t('failed', 'Upload failed');
                     this.scheduleHide(2200);
                 },
                 cancel() {
                     this.status = 'cancelled';
                     this.progress = 100;
-                    this.label = 'Upload cancelled';
+                    this.label = this.t('cancelled', 'Upload cancelled');
                     this.scheduleHide(1800);
                 },
                 settled() {
@@ -411,6 +415,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     registerQfUploadStore();
                     Alpine.store('feSel').setWire(this.$wire);
                     Alpine.store('feDrag').abilities = this.abilities;
+                    Alpine.store('feUpload').translations = this.translations;
                     Alpine.store('feSel').replace(
                         config.selectedFolders || [],
                         config.selectedFiles || []
