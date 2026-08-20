@@ -19,8 +19,15 @@
         .fe-toolbar__more {
             display: none;
         }
+        /* min-width/max-width, not just width: the search is the one thing in the
+           toolbar allowed to give when the inspector opens and takes 300px. An
+           input keeps an intrinsic min-width otherwise, so the toolbar would
+           overflow its column — and the search sits in a positioned wrapper, so
+           what overflows paints *over* the inspector rather than under it. */
         .fe-search {
             width: 10rem;
+            min-width: 0;
+            max-width: 100%;
         }
         @container fe-toolbar (max-width: 760px) {
             .fe-toolbar__collapse {
@@ -421,7 +428,11 @@
             background: #27272a;
         }
 
+        /* Positioned so it wins the paint order against the toolbar's relative
+           wrappers if anything ever overflows again: same layer, later in the
+           DOM. Its own menus keep z-30 and stay above it. */
         .fe-inspector {
+            position: relative;
             border-inline-start: 1px solid rgba(24, 24, 27, 0.1);
             background: #fafafa;
         }

@@ -275,14 +275,14 @@
 
                     <div class="fe-toolbar__spacer min-w-0 flex-1"></div>
 
-                    <div class="fe-toolbar__end flex shrink-0 items-center gap-1">
-                        <span class="me-1 hidden text-[11px] text-zinc-400 sm:inline" x-cloak
+                    <div class="fe-toolbar__end flex min-w-0 items-center gap-1">
+                        <span class="me-1 hidden min-w-0 truncate text-[11px] text-zinc-400 sm:inline" x-cloak
                               x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0"
                               x-text="translations?.toolbar?.selected_count
                                   ? translations.toolbar.selected_count.replace(':count', $store.feSel.folders.length + $store.feSel.files.length)
                                   : ($store.feSel.folders.length + $store.feSel.files.length) + ' selected'"></span>
 
-                        <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                        <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false">
                             <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.sort_by') }}" @click="open = !open">
                                 @svg('heroicon-o-arrows-up-down', 'h-3.5 w-3.5')
                             </button>
@@ -318,7 +318,7 @@
                             </div>
                         </div>
 
-                        <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                        <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false">
                             <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.view_options') }}" @click="open = !open">
                                 @if ($viewMode === 'list')
                                     @svg('heroicon-o-list-bullet', 'h-3.5 w-3.5')
@@ -348,7 +348,7 @@
                             </div>
                         </div>
                         @if ($abilities['search'])
-                        <div class="relative shrink-0">
+                        <div class="relative min-w-0 shrink">
                             @svg('heroicon-o-magnifying-glass', 'pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400')
                             <input wire:model.live.debounce.250ms="search" class="fe-input fe-search h-8 pe-3 ps-8 text-xs" type="search" title="{{ __('filament-file-explorer::file-explorer.toolbar.search') }}" placeholder="{{ __('filament-file-explorer::file-explorer.toolbar.search_placeholder') }}">
                         </div>

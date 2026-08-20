@@ -167,6 +167,7 @@ Fixtures live in [tests/Fixtures/](tests/Fixtures/): `TestPanelProvider` boots a
 - User-facing strings go through `__('filament-file-explorer::file-explorer.…')` with entries in both `resources/lang/en` and `resources/lang/fr`.
 - Non-obvious decisions are documented as short comments explaining *why* (see the provider-order and resolver-binding comments) — match that style rather than describing what the code does.
 - Host apps must add `@source '…/vendor/koassi/filament-file-explorer/resources/views/**/*.blade.php';` to their Filament theme, so Tailwind classes used in Blade must be literal, not built from variables.
+- The toolbar is `flex-wrap: nowrap` in a column that shrinks by 300px when the inspector opens, so **something in it has to give**: the selection count truncates and the search narrows (`min-w-0`, and `min-width: 0` on the input, which otherwise keeps an intrinsic width). Putting `shrink-0` back on `.fe-toolbar__end` makes the toolbar overflow its column, and since the search sits in a `position: relative` wrapper, what overflows paints *over* the inspector instead of under it.
 
 ## Foreign agent configs
 
