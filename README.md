@@ -167,13 +167,21 @@ The listing is a `listbox`: it takes focus, and the items are options.
 | Shift + click / Shift + arrows | Extend the selection to a range |
 | Ctrl/Cmd + click | Add or remove one item |
 | Ctrl/Cmd + A | Select everything on screen |
-| Enter | Open the selected folder or file |
+| Enter | Open the selected folder, or preview the selected file |
 | F2 | Rename |
 | Ctrl/Cmd + C / X / V | Copy, cut, paste |
 | Delete / Backspace | Delete the selection |
 | Escape | Close the context menu, cancel a rename |
 
 Shortcuts only fire while the listing has focus, never while typing in the search or rename field, and each one still goes through its ability check. Downloading a multi-item selection produces a single archive (`selection/zip`, capped at 500 items).
+
+## Preview and confirmation
+
+Double-clicking a file (or pressing Enter, or picking *Open* in the context menu) opens it in a lightbox: images, video, audio, PDFs and text render inline, anything else offers a download. Left and right arrows walk through the files of the current listing. Previewing requires the `download` ability, since it streams the same bytes as a download.
+
+PDFs and text files render in a same-origin `<iframe>`, so an app that sends `X-Frame-Options: DENY` needs `SAMEORIGIN` (or a `frame-ancestors 'self'` CSP) for that part of the preview to show.
+
+Deleting asks first, in a dialog that names what is about to go, counts what a folder takes with it, and lists the items the authorizer refuses to delete — those are kept, and the rest still goes.
 
 ## Authorization
 

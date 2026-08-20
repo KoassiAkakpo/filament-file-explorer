@@ -34,7 +34,7 @@
             @fe-sel-cleared.window="Alpine.store('feSel').replace([], [])"
             @fe-folder-created.window="Alpine.store('feSel').replace([Number($event.detail.folderId)], [])"
             @click.window="closeContext()"
-            @keydown.escape.window="closeContext(); $wire.cancelRename(); $wire.cancelNewFolder(); $wire.closeInfo()"
+            @keydown.escape.window="closeContext(); $wire.cancelRename(); $wire.cancelNewFolder(); $wire.closeInfo(); $wire.cancelDelete(); $wire.closePreview()"
         >
             <div class="fe-finder w-full overflow-hidden rounded-xl border border-zinc-200/90 bg-zinc-50/80 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40" dir="ltr" lang="{{ $locale }}" translate="no">
                 <div class="flex min-h-[560px]">
@@ -445,7 +445,7 @@
                                             if ($store.feDrag.consumeClickSuppression()) return;
                                             $store.feSel.click('file', {{ $media->id }}, $event, $el);
                                         "
-                                        x-on:dblclick.stop="window.open(@js($this->mediaOpenUrl($media->id)), '_blank')"
+                                        x-on:dblclick.stop="openFile({{ $media->id }})"
                                     @endunless
                                     x-on:contextmenu.stop.prevent="
                                         if (!$store.feSel.hasFile({{ $media->id }})) { $store.feSel.toggle('file', {{ $media->id }}, false); }
@@ -618,6 +618,146 @@
                 </div>{{-- end flex row --}}
             </div>
 
+            {{-- Delete confirmation --}}
+            @if ($deleteRequest)
+                @php $confirmId = 'fe-confirm-'.$this->getId(); @endphp
+                <div class="fe-overlay" wire:key="fe-confirm">
+                    <div
+                        class="fe-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="{{ $confirmId }}"
+                        x-data
+                        x-init="$nextTick(() => $refs.feConfirmDefault?.focus())"
+                        @keydown.tab.prevent="trapTab($event, $el)"
+                    >
+                        <h2 id="{{ $confirmId }}" class="fe-modal__title">
+                            {{ trans_choice('filament-file-explorer::file-explorer.confirm.delete_title', max(1, $deleteRequest['deletable'])) }}
+                        </h2>
+
+                        @if ($deleteRequest['deletable'] > 0)
+                            <ul class="fe-modal__list">
+                                @foreach ($deleteRequest['names'] as $name)
+                                    <li class="truncate">{{ $name }}</li>
+                                @endforeach
+                                @if ($deleteRequest['more'] > 0)
+                                    <li class="text-zinc-400">{{ trans_choice('filament-file-explorer::file-explorer.confirm.delete_more', $deleteRequest['more']) }}</li>
+                                @endif
+                            </ul>
+
+                            @if ($deleteRequest['nested_count'] > 0)
+                                <p class="fe-modal__note">{{ trans_choice('filament-file-explorer::file-explorer.confirm.delete_nested', $deleteRequest['nested_count']) }}</p>
+                            @endif
+
+                            <p class="fe-modal__note">{{ __('filament-file-explorer::file-explorer.confirm.delete_body') }}</p>
+                        @else
+                            <p class="fe-modal__note">{{ __('filament-file-explorer::file-explorer.confirm.nothing_deletable') }}</p>
+                        @endif
+
+                        @if ($deleteRequest['blocked'] !== [])
+                            <div class="fe-modal__blocked">
+                                <p class="font-medium">{{ __('filament-file-explorer::file-explorer.confirm.blocked') }}</p>
+                                <ul class="mt-1 space-y-0.5">
+                                    @foreach ($deleteRequest['blocked'] as $item)
+                                        <li class="truncate"><span class="font-medium">{{ $item['name'] }}</span> — {{ $item['reason'] }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
+                        <div class="fe-modal__actions">
+                            <button
+                                type="button"
+                                class="fe-btn"
+                                x-ref="{{ $deleteRequest['deletable'] > 0 ? 'feConfirmCancel' : 'feConfirmDefault' }}"
+                                wire:click="cancelDelete"
+                            >{{ __('filament-file-explorer::file-explorer.confirm.cancel') }}</button>
+
+                            @if ($deleteRequest['deletable'] > 0)
+                                <button
+                                    type="button"
+                                    class="fe-btn fe-btn--danger"
+                                    x-ref="feConfirmDefault"
+                                    wire:click="confirmDelete"
+                                >{{ __('filament-file-explorer::file-explorer.confirm.delete') }}</button>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- Preview lightbox --}}
+            @if ($previewItem)
+                <div
+                    class="fe-lightbox"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="{{ $previewItem['name'] }}"
+                    tabindex="-1"
+                    wire:key="fe-preview-{{ $previewItem['id'] }}"
+                    x-data
+                    x-init="$nextTick(() => $el.focus())"
+                    @keydown.arrow-left.prevent="$wire.previewShift(-1)"
+                    @keydown.arrow-right.prevent="$wire.previewShift(1)"
+                    @keydown.tab.prevent="trapTab($event, $el)"
+                >
+                    <div class="fe-lightbox__bar">
+                        <div class="min-w-0">
+                            <div class="truncate text-[13px] font-medium">{{ $previewItem['name'] }}</div>
+                            <div class="text-[11px] opacity-70">
+                                {{ $previewItem['mime'] }} · {{ $previewItem['size'] }}
+                                @if ($previewItem['total'] > 1 && $previewItem['position'] > 0)
+                                    · {{ __('filament-file-explorer::file-explorer.lightbox.position', ['position' => $previewItem['position'], 'total' => $previewItem['total']]) }}
+                                @endif
+                            </div>
+                        </div>
+
+                        <div class="flex shrink-0 items-center gap-1">
+                            @if ($previewItem['total'] > 1)
+                                <button type="button" class="fe-lightbox__btn" title="{{ __('filament-file-explorer::file-explorer.lightbox.previous') }}" wire:click="previewShift(-1)">
+                                    @svg('heroicon-o-chevron-left', 'h-4 w-4')
+                                </button>
+                                <button type="button" class="fe-lightbox__btn" title="{{ __('filament-file-explorer::file-explorer.lightbox.next') }}" wire:click="previewShift(1)">
+                                    @svg('heroicon-o-chevron-right', 'h-4 w-4')
+                                </button>
+                            @endif
+                            <a class="fe-lightbox__btn" title="{{ __('filament-file-explorer::file-explorer.lightbox.download') }}" href="{{ $previewItem['download_url'] }}">
+                                @svg('heroicon-o-arrow-down-tray', 'h-4 w-4')
+                            </a>
+                            <a class="fe-lightbox__btn" title="{{ __('filament-file-explorer::file-explorer.lightbox.open_new_tab') }}" href="{{ $previewItem['url'] }}" target="_blank" rel="noopener">
+                                @svg('heroicon-o-arrow-top-right-on-square', 'h-4 w-4')
+                            </a>
+                            <button type="button" class="fe-lightbox__btn" title="{{ __('filament-file-explorer::file-explorer.lightbox.close') }}" wire:click="closePreview">
+                                @svg('heroicon-o-x-mark', 'h-4 w-4')
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="fe-lightbox__stage" @click.self="$wire.closePreview()">
+                        @switch ($previewItem['kind'])
+                            @case ('image')
+                                <img class="fe-lightbox__image" src="{{ $previewItem['url'] }}" alt="{{ $previewItem['name'] }}">
+                                @break
+                            @case ('video')
+                                <video class="fe-lightbox__image" src="{{ $previewItem['url'] }}" controls preload="metadata"></video>
+                                @break
+                            @case ('audio')
+                                <audio class="w-full max-w-xl" src="{{ $previewItem['url'] }}" controls preload="metadata"></audio>
+                                @break
+                            @case ('frame')
+                                <iframe class="fe-lightbox__frame" src="{{ $previewItem['url'] }}" title="{{ $previewItem['name'] }}"></iframe>
+                                @break
+                            @default
+                                <div class="flex flex-col items-center gap-3 text-center text-zinc-300">
+                                    <x-filament-file-explorer::file-explorer.mime-icon :icon="$previewItem['icon']" size="lg" />
+                                    <p class="text-sm">{{ __('filament-file-explorer::file-explorer.lightbox.unsupported') }}</p>
+                                    <a class="fe-btn" href="{{ $previewItem['download_url'] }}">{{ __('filament-file-explorer::file-explorer.lightbox.download') }}</a>
+                                </div>
+                        @endswitch
+                    </div>
+                </div>
+            @endif
+
             {{-- Context menu --}}
             <div
                 x-show="ctx.open"
@@ -721,7 +861,7 @@
                         <button type="button" class="fe-ctx-item" x-show="ctx.type === 'folder'" @click="run(() => { const u = new URL(window.location.href); u.searchParams.set('folder', ctx.id); window.open(u.toString(), '_blank'); })">
                             @svg('heroicon-o-arrow-top-right-on-square', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.context.open_new_tab') }}
                         </button>
-                        <button type="button" class="fe-ctx-item" x-show="ctx.type === 'file'" @click="run(() => window.open(fileUrl(ctx.id, false), '_self'))">
+                        <button type="button" class="fe-ctx-item" x-show="ctx.type === 'file'" @click="run(() => openFile(ctx.id))">
                             @svg('heroicon-o-eye', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.context.open') }}
                         </button>
                         <button type="button" class="fe-ctx-item" x-show="ctx.type === 'file'" @click="run(() => window.open(fileUrl(ctx.id, false), '_blank'))">
@@ -759,13 +899,7 @@
                             x-show="(abilities.delete && ctx.type === 'file') || (abilities.deleteFolder && ctx.type === 'folder')"
                             :disabled="!ctx.canDelete || (ctx.type === 'folder' && ctx.id === rootFolderId && ($store.feSel.folders.length + $store.feSel.files.length) <= 1)"
                             :title="ctx.deleteHint || ''"
-                            @click="run(() => {
-                                if (!ctx.canDelete) {
-                                    alert(ctx.deleteHint || (translations?.js?.delete_not_allowed ?? @js(__('filament-file-explorer::file-explorer.js.delete_not_allowed'))));
-                                    return;
-                                }
-                                confirmDeleteSelected();
-                            })">
+                            @click="run(() => confirmDeleteSelected())">
                             @svg('heroicon-o-trash', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.context.delete') }}
                         </button>
                         <div

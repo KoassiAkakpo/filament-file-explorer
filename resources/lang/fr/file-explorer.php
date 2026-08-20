@@ -140,7 +140,25 @@ return [
     ],
 
     'js' => [
-        'confirm_delete_selected' => 'Supprimer les éléments sélectionnés ?',
         'delete_not_allowed' => 'Suppression non autorisée',
+    ],
+    'confirm' => [
+        'delete_title' => '{1} Supprimer cet élément ?|[2,*] Supprimer ces :count éléments ?',
+        'delete_body' => 'Cette action est irréversible.',
+        'delete_nested' => '{1} Cela supprime aussi :count élément à l’intérieur.|[2,*] Cela supprime aussi :count éléments à l’intérieur.',
+        'delete_more' => '{1} et :count autre|[2,*] et :count autres',
+        'blocked' => 'Conservés, suppression impossible :',
+        'nothing_deletable' => 'Aucun des éléments sélectionnés ne peut être supprimé.',
+        'cancel' => 'Annuler',
+        'delete' => 'Supprimer',
+    ],
+    'lightbox' => [
+        'close' => 'Fermer l’aperçu',
+        'previous' => 'Fichier précédent',
+        'next' => 'Fichier suivant',
+        'download' => 'Télécharger',
+        'open_new_tab' => 'Ouvrir dans un nouvel onglet',
+        'unsupported' => 'Ce type de fichier ne peut pas être prévisualisé.',
+        'position' => ':position sur :total',
     ],
 ];

@@ -534,13 +534,39 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 confirmDeleteSelected() {
                     const folders = [...Alpine.store('feSel').folders];
                     const files = [...Alpine.store('feSel').files];
+
                     if (!folders.length && !files.length) return;
-                    if (!confirm(this.translations?.js?.confirm_delete_selected || 'Delete selected items?')) return;
+
                     if (Alpine.store('feSel')._syncTimer) clearTimeout(Alpine.store('feSel')._syncTimer);
                     Alpine.store('feSel')._syncTimer = null;
                     Alpine.store('feSel').clearMarquee();
-                    this.$wire.deleteSelected(folders, files);
-                    Alpine.store('feSel').replace([], []);
+
+                    // The dialog is built server-side: it knows what a recursive
+                    // delete takes with it and which items are refused.
+                    this.$wire.requestDelete(folders, files);
+                },
+                openFile(id) {
+                    // The preview streams the same bytes as a download, so
+                    // without that ability there is nothing to show.
+                    if (!this.abilities.download) return;
+
+                    this.$wire.preview(Number(id));
+                },
+                /**
+                 * Keeps Tab inside an open dialog.
+                 */
+                trapTab(event, dialog) {
+                    const focusable = [...dialog.querySelectorAll('button:not([disabled]), a[href], video, audio, iframe, [tabindex]:not([tabindex="-1"])')];
+
+                    if (!focusable.length) return;
+
+                    const current = focusable.indexOf(document.activeElement);
+                    const last = focusable.length - 1;
+                    const next = event.shiftKey
+                        ? (current <= 0 ? last : current - 1)
+                        : (current === last || current === -1 ? 0 : current + 1);
+
+                    focusable[next].focus();
                 },
                 async openContext(detail) {
                     this.positionMenu(detail.x, detail.y);
@@ -665,7 +691,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     }
 
                     if (sel.files.length === 1) {
-                        window.open(this.fileUrl(sel.files[0], false), '_blank');
+                        this.openFile(sel.files[0]);
                     }
                 },
                 moveSelection(key, extend) {

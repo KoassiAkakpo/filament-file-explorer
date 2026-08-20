@@ -551,6 +551,144 @@
         .dark .fe-icon-item:focus-visible,
         .dark .fe-list-row:focus-visible { outline-color: #2dd4bf; }
 
+        /* Dialogs: the confirmation and the preview lightbox. Both sit inside the
+           component, so they carry their own overlay rather than relying on the
+           host panel's modal stack. */
+        .fe-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 90;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(24, 24, 27, 0.45);
+            backdrop-filter: blur(2px);
+        }
+        .fe-modal {
+            width: 100%;
+            max-width: 26rem;
+            border-radius: 12px;
+            border: 1px solid rgba(24, 24, 27, 0.08);
+            background: #fff;
+            padding: 1.1rem 1.2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+            color: #18181b;
+        }
+        .dark .fe-modal {
+            background: #27272a;
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #fafafa;
+        }
+        .fe-modal__title { font-size: 0.95rem; font-weight: 600; }
+        .fe-modal__list {
+            margin-top: 0.6rem;
+            max-height: 8rem;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            color: #52525b;
+        }
+        .dark .fe-modal__list { color: #d4d4d8; }
+        .fe-modal__note { margin-top: 0.6rem; font-size: 0.78rem; color: #71717a; }
+        .dark .fe-modal__note { color: #a1a1aa; }
+        .fe-modal__blocked {
+            margin-top: 0.75rem;
+            border-radius: 8px;
+            background: rgba(217, 119, 6, 0.1);
+            padding: 0.5rem 0.6rem;
+            font-size: 0.75rem;
+            color: #92400e;
+        }
+        .dark .fe-modal__blocked { background: rgba(251, 191, 36, 0.12); color: #fcd34d; }
+        .fe-modal__actions {
+            margin-top: 1.1rem;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+        .fe-btn {
+            display: inline-flex;
+            align-items: center;
+            height: 2.1rem;
+            padding: 0 0.9rem;
+            border-radius: 8px;
+            border: 1px solid rgba(24, 24, 27, 0.14);
+            background: #fff;
+            color: #3f3f46;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .fe-btn:hover { background: rgba(24, 24, 27, 0.05); }
+        .dark .fe-btn {
+            border-color: rgba(255, 255, 255, 0.16);
+            background: rgba(255, 255, 255, 0.05);
+            color: #e4e4e7;
+        }
+        .dark .fe-btn:hover { background: rgba(255, 255, 255, 0.1); }
+        .fe-btn--danger {
+            border-color: transparent;
+            background: #dc2626;
+            color: #fff;
+        }
+        .fe-btn--danger:hover { background: #b91c1c; }
+        .fe-btn:focus-visible, .fe-lightbox__btn:focus-visible, .fe-load-more:focus-visible {
+            outline: 2px solid #0f766e;
+            outline-offset: 2px;
+        }
+        .dark .fe-btn:focus-visible, .fe-lightbox__btn:focus-visible { outline-color: #2dd4bf; }
+
+        .fe-lightbox {
+            position: fixed;
+            inset: 0;
+            z-index: 95;
+            display: flex;
+            flex-direction: column;
+            background: rgba(9, 9, 11, 0.92);
+            color: #fafafa;
+        }
+        .fe-lightbox:focus { outline: none; }
+        .fe-lightbox__bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.6rem 0.9rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .fe-lightbox__btn {
+            display: inline-flex;
+            height: 2rem;
+            width: 2rem;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.55rem;
+            border: 0;
+            background: transparent;
+            color: #e4e4e7;
+        }
+        .fe-lightbox__btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+        .fe-lightbox__stage {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+            padding: 1rem;
+        }
+        .fe-lightbox__image {
+            max-height: 100%;
+            max-width: 100%;
+            object-fit: contain;
+        }
+        .fe-lightbox__frame {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            border-radius: 8px;
+            background: #fff;
+        }
+
         .fe-load-more-bar { flex-basis: 100%; }
         .fe-load-more {
             display: inline-flex;

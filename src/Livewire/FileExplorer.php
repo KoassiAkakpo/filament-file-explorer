@@ -74,6 +74,18 @@ class FileExplorer extends \Livewire\Component
 
     public bool $showInfoModal = false;
 
+    /**
+     * Pending delete, summarised for the confirmation dialog. Built server-side
+     * so it can report what is actually about to disappear — nested contents
+     * included — and which items the authorizer refuses.
+     *
+     * @var array{folders: list<int>, files: list<int>, names: list<string>, more: int, nested_count: int, deletable: int, blocked: list<array{name: string, reason: string}>}|null
+     */
+    public ?array $deleteRequest = null;
+
+    /** @var array{id: int, name: string, mime: string, kind: string, url: string, download_url: string, size: string, icon: string, position: int, total: int}|null */
+    public ?array $previewItem = null;
+
     public bool $clipboardReady = false;
 
     public ?int $uploadTargetFolderId = null;
@@ -136,6 +148,20 @@ class FileExplorer extends \Livewire\Component
             $folder && app(FolderTree::class)->isUnderRoot($folder, $this->rootFolderId),
             403
         );
+    }
+
+    /**
+     * Media ids arrive as user input, so a row is only in scope when it hangs
+     * off a Folder of this explorer's collection *and* that folder sits under
+     * the root. Resolving the folder and skipping the check when it is missing
+     * would leave every media row of every other model reachable.
+     */
+    protected function assertMediaUnderRoot(Media $media): void
+    {
+        abort_unless($media->model_type === (new Folder)->getMorphClass(), 403);
+        abort_unless($media->collection_name === UploadRules::collection(), 403);
+
+        $this->assertUnderRoot(Folder::query()->find($media->model_id));
     }
 
     public function setViewMode(string $mode): void
@@ -418,10 +444,7 @@ class FileExplorer extends \Livewire\Component
             if (! $media) {
                 continue;
             }
-            $source = Folder::query()->find($media->model_id);
-            if ($source) {
-                $this->assertUnderRoot($source);
-            }
+            $this->assertMediaUnderRoot($media);
             $this->duplicateMedia($media, $this->currentFolder);
         }
 
@@ -502,10 +525,7 @@ class FileExplorer extends \Livewire\Component
 
         if ($type === 'file' && $id) {
             $media = Media::query()->findOrFail($id);
-            $folder = Folder::query()->find($media->model_id);
-            if ($folder) {
-                $this->assertUnderRoot($folder);
-            }
+            $this->assertMediaUnderRoot($media);
             $this->renamingType = 'file';
             $this->renamingId = $id;
             $this->renameValue = $media->name ?: pathinfo($media->file_name, PATHINFO_FILENAME);
@@ -563,10 +583,7 @@ class FileExplorer extends \Livewire\Component
             $folder->save();
         } else {
             $media = Media::query()->findOrFail($this->renamingId);
-            $folder = Folder::query()->find($media->model_id);
-            if ($folder) {
-                $this->assertUnderRoot($folder);
-            }
+            $this->assertMediaUnderRoot($media);
             $media->name = $name;
             $media->save();
         }
@@ -574,6 +591,217 @@ class FileExplorer extends \Livewire\Component
         $this->cancelRename();
         $this->currentFolder = $this->currentFolder->fresh(['children']);
         $this->resetListing();
+    }
+
+    /**
+     * Prepares the confirmation dialog for the current selection.
+     *
+     * Nothing is deleted here: confirmDelete() re-enters deleteItems(), which
+     * remains the only place enforcing the delete rules.
+     */
+    public function requestDelete(array $folders = [], array $files = []): void
+    {
+        abort_unless($this->ability('delete') || $this->ability('deleteFolder'), 403);
+
+        if ($folders !== [] || $files !== []) {
+            $this->setSelection($folders, $files);
+        }
+
+        $folderIds = array_values(array_unique(array_map('intval', $this->selectedFolders)));
+        $fileIds = array_values(array_unique(array_map('intval', $this->selectedFiles)));
+
+        if ($folderIds === [] && $fileIds === []) {
+            $this->deleteRequest = null;
+
+            return;
+        }
+
+        $authorizer = app(FileExplorerAuthorizer::class);
+        $names = [];
+        $blocked = [];
+        $nested = 0;
+        $deletable = 0;
+
+        foreach ($folderIds as $folderId) {
+            $folder = Folder::query()->find($folderId);
+
+            if (! $folder) {
+                continue;
+            }
+
+            $this->assertUnderRoot($folder);
+
+            if ((int) $folder->id === $this->rootFolderId) {
+                $blocked[] = [
+                    'name' => (string) $folder->name,
+                    'reason' => __('filament-file-explorer::file-explorer.root_not_deletable'),
+                ];
+
+                continue;
+            }
+
+            $state = $authorizer->folderDeleteState($this->scopeKey, $folder);
+
+            if (! $state['allowed']) {
+                $blocked[] = [
+                    'name' => (string) $folder->name,
+                    'reason' => (string) ($state['reason'] ?? __('filament-file-explorer::file-explorer.folder_delete_denied')),
+                ];
+
+                continue;
+            }
+
+            $names[] = (string) $folder->name;
+            $nested += $this->folderContentCount($folder);
+            $deletable++;
+        }
+
+        foreach ($fileIds as $fileId) {
+            $media = Media::query()->find($fileId);
+
+            if (! $media) {
+                continue;
+            }
+
+            $this->assertMediaUnderRoot($media);
+
+            $state = $authorizer->mediaDeleteState($this->scopeKey, $media);
+
+            if (! $state['allowed']) {
+                $blocked[] = [
+                    'name' => MediaLabel::display($media),
+                    'reason' => (string) ($state['reason'] ?? __('filament-file-explorer::file-explorer.file_delete_denied')),
+                ];
+
+                continue;
+            }
+
+            $names[] = MediaLabel::display($media);
+            $deletable++;
+        }
+
+        $this->deleteRequest = [
+            'folders' => $folderIds,
+            'files' => $fileIds,
+            'names' => array_slice($names, 0, 5),
+            'more' => max(0, count($names) - 5),
+            'nested_count' => $nested,
+            'deletable' => $deletable,
+            'blocked' => $blocked,
+        ];
+    }
+
+    public function confirmDelete(): void
+    {
+        if ($this->deleteRequest === null) {
+            return;
+        }
+
+        $this->selectedFolders = $this->deleteRequest['folders'];
+        $this->selectedFiles = $this->deleteRequest['files'];
+        $this->deleteRequest = null;
+
+        $this->deleteItems();
+    }
+
+    public function cancelDelete(): void
+    {
+        $this->deleteRequest = null;
+    }
+
+    /**
+     * Everything inside a folder — nested folders and their files — so the
+     * dialog can say what a recursive delete actually takes with it.
+     */
+    protected function folderContentCount(Folder $folder): int
+    {
+        $ids = app(FolderTree::class)->descendantFolderIdsIncludingRoot((int) $folder->id);
+
+        $files = (int) Media::query()
+            ->where('collection_name', UploadRules::collection())
+            ->where('model_type', (new Folder)->getMorphClass())
+            ->whereIn('model_id', $ids)
+            ->count();
+
+        return (count($ids) - 1) + $files;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Preview
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Opens the lightbox on one file.
+     *
+     * Gated on the download ability: the preview streams the same bytes as a
+     * download, through the same route.
+     */
+    public function preview(int $mediaId): void
+    {
+        abort_unless($this->ability('download'), 403);
+
+        $media = Media::query()->findOrFail($mediaId);
+        $this->assertMediaUnderRoot($media);
+
+        $mime = (string) $media->mime_type;
+        $ids = $this->listing()['files']->map(fn (Media $file): int => (int) $file->id)->all();
+        $position = array_search((int) $media->id, $ids, true);
+
+        $this->previewItem = [
+            'id' => (int) $media->id,
+            'name' => MediaLabel::display($media),
+            'mime' => $mime !== '' ? $mime : '—',
+            'kind' => $this->previewKind($mime),
+            'url' => $this->mediaOpenUrl((int) $media->id),
+            'download_url' => $this->mediaDownloadUrl((int) $media->id),
+            'size' => $this->formatBytes((int) $media->size),
+            'icon' => MimeIcon::forMedia($media),
+            'position' => $position === false ? 0 : $position + 1,
+            'total' => count($ids),
+        ];
+    }
+
+    public function closePreview(): void
+    {
+        $this->previewItem = null;
+    }
+
+    /**
+     * Steps to the previous or next file of the current listing window.
+     */
+    public function previewShift(int $direction): void
+    {
+        if ($this->previewItem === null) {
+            return;
+        }
+
+        $ids = $this->listing()['files']->map(fn (Media $file): int => (int) $file->id)->all();
+        $index = array_search((int) $this->previewItem['id'], $ids, true);
+
+        if ($index === false) {
+            return;
+        }
+
+        $target = $index + ($direction >= 0 ? 1 : -1);
+
+        if (! isset($ids[$target])) {
+            return;
+        }
+
+        $this->preview($ids[$target]);
+    }
+
+    protected function previewKind(string $mime): string
+    {
+        return match (true) {
+            str_starts_with($mime, 'image/') => 'image',
+            str_starts_with($mime, 'video/') => 'video',
+            str_starts_with($mime, 'audio/') => 'audio',
+            $mime === 'application/pdf', str_starts_with($mime, 'text/') => 'frame',
+            default => 'other',
+        };
     }
 
     public function deleteTarget(?string $type = null, ?int $id = null): void
@@ -698,10 +926,7 @@ class FileExplorer extends \Livewire\Component
 
         if ($type === 'file' && $id) {
             $media = Media::query()->findOrFail($id);
-            $folder = Folder::query()->find($media->model_id);
-            if ($folder) {
-                $this->assertUnderRoot($folder);
-            }
+            $this->assertMediaUnderRoot($media);
             $deleteState = app(FileExplorerAuthorizer::class)->mediaDeleteState($this->scopeKey, $media);
             $this->infoItem = [
                 'type' => 'file',
@@ -868,10 +1093,7 @@ class FileExplorer extends \Livewire\Component
 
         if ($type === 'file' && $id) {
             $media = Media::query()->findOrFail($id);
-            $folder = Folder::query()->find($media->model_id);
-            if ($folder) {
-                $this->assertUnderRoot($folder);
-            }
+            $this->assertMediaUnderRoot($media);
 
             $state = $docs->mediaDeleteState($this->scopeKey, $media);
             $state['hint'] = $state['allowed']
@@ -1265,6 +1487,8 @@ class FileExplorer extends \Livewire\Component
                 continue;
             }
 
+            $this->assertMediaUnderRoot($media);
+
             $state = $docs->mediaDeleteState($this->scopeKey, $media);
 
             if (! $state['allowed']) {
@@ -1398,11 +1622,7 @@ class FileExplorer extends \Livewire\Component
                 continue;
             }
 
-            $source = Folder::query()->find($media->model_id);
-
-            if ($source) {
-                $this->assertUnderRoot($source);
-            }
+            $this->assertMediaUnderRoot($media);
 
             $media->model_id = $targetFolderId;
             $media->save();
@@ -1460,11 +1680,7 @@ class FileExplorer extends \Livewire\Component
                 continue;
             }
 
-            $source = Folder::query()->find($media->model_id);
-
-            if ($source) {
-                $this->assertUnderRoot($source);
-            }
+            $this->assertMediaUnderRoot($media);
 
             $this->duplicateMedia($media, $targetFolder);
         }

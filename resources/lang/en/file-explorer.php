@@ -140,7 +140,25 @@ return [
     ],
 
     'js' => [
-        'confirm_delete_selected' => 'Delete selected items?',
         'delete_not_allowed' => 'Delete not allowed',
+    ],
+    'confirm' => [
+        'delete_title' => '{1} Delete this item?|[2,*] Delete these :count items?',
+        'delete_body' => 'This cannot be undone.',
+        'delete_nested' => '{1} It also removes :count item inside.|[2,*] They also remove :count items inside.',
+        'delete_more' => '{1} and :count other|[2,*] and :count others',
+        'blocked' => 'Kept, cannot be deleted:',
+        'nothing_deletable' => 'None of the selected items can be deleted.',
+        'cancel' => 'Cancel',
+        'delete' => 'Delete',
+    ],
+    'lightbox' => [
+        'close' => 'Close preview',
+        'previous' => 'Previous file',
+        'next' => 'Next file',
+        'download' => 'Download',
+        'open_new_tab' => 'Open in a new tab',
+        'unsupported' => 'This file type cannot be previewed.',
+        'position' => ':position of :total',
     ],
 ];

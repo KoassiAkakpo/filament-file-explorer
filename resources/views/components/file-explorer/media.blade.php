@@ -37,7 +37,7 @@
             $store.feSel.click('file', {{ $media->id }}, $event, $el);
         "
         @if($openUrl)
-            x-on:dblclick.stop="window.open(@js($openUrl), '_blank')"
+            x-on:dblclick.stop="openFile({{ $media->id }})"
         @endif
     @endunless
     x-on:contextmenu.stop.prevent="
