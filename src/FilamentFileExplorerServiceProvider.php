@@ -9,9 +9,11 @@ use Koassi\FilamentFileExplorer\Commands\MakeAuthorizerCommand;
 use Koassi\FilamentFileExplorer\Commands\MakeFolderMigrationCommand;
 use Koassi\FilamentFileExplorer\Commands\MakePageCommand;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
+use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
@@ -52,6 +54,18 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
 
             return $app->make($class);
         });
+
+        // Not a singleton on the interface: the resolver class is panel-scoped,
+        // so it is looked up per resolution. The concrete resolvers below are
+        // singletons, which is what memoises the root folder lookup.
+        $this->app->bind(
+            FileExplorerRootResolver::class,
+            fn ($app) => $app->make(StandaloneSettings::resolverClass()),
+        );
+
+        $this->app->singleton(\Koassi\FilamentFileExplorer\Resolvers\GlobalRootResolver::class);
+        $this->app->singleton(\Koassi\FilamentFileExplorer\Resolvers\PerUserRootResolver::class);
+        $this->app->singleton(\Koassi\FilamentFileExplorer\Resolvers\PerTenantRootResolver::class);
     }
 
     public function packageBooted(): void

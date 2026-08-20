@@ -946,7 +946,7 @@ class FileExplorer extends \Livewire\Component
 
             $this->searchedFiles = Media::query()
                 ->where('collection_name', UploadRules::collection())
-                ->where('model_type', Folder::class)
+                ->where('model_type', (new Folder)->getMorphClass())
                 ->whereIn('model_id', $rootIds)
                 ->where('name', 'like', '%'.$this->search.'%')
                 ->get();
@@ -1238,7 +1238,7 @@ class FileExplorer extends \Livewire\Component
             Notification::make()
                 ->success()
                 ->title(__('filament-file-explorer::file-explorer.uploaded'))
-                ->body($uploaded.' فایل در «'.$folder->name.'»')
+                ->body($uploaded.' '.$folder->name.'»')
                 ->send();
         }
     }

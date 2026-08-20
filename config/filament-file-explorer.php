@@ -90,6 +90,66 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Standalone page
+    |--------------------------------------------------------------------------
+    |
+    | The panel-level File Explorer page, registered by the plugin and reachable
+    | from the navigation menu — no Eloquent record involved. Anything here can
+    | also be set fluently on the plugin, which takes precedence and keeps the
+    | settings panel-scoped:
+    |
+    |   FilamentFileExplorerPlugin::make()
+    |       ->slug('library')
+    |       ->rootFolder('Library', 'library')
+    |       ->navigationGroup('Content')
+    |
+    */
+    'standalone' => [
+
+        // Master switch for the standalone page.
+        'enabled' => true,
+
+        // Let the plugin call $panel->pages([...]). Turn off to register the
+        // page classes yourself in the panel provider.
+        'register_pages' => true,
+
+        // Also register the flat files table page.
+        'files_page' => true,
+
+        // Route slugs, relative to the panel path.
+        'slug' => 'file-explorer',
+        'files_slug' => 'file-explorer/files',
+
+        // Authorization / session namespace passed to FileExplorerAuthorizer.
+        'scope_key' => 'library',
+
+        /*
+         | Resolves the scope key and root folder id. Ships with:
+         |   Resolvers\GlobalRootResolver    — one shared root (default)
+         |   Resolvers\PerUserRootResolver   — one root per authenticated user
+         |   Resolvers\PerTenantRootResolver — one root per Filament tenant
+         | Or bind your own FileExplorerRootResolver implementation.
+         */
+        'resolver' => Koassi\FilamentFileExplorer\Resolvers\GlobalRootResolver::class,
+
+        // Root folder created on first visit if missing.
+        'root' => [
+            'name' => 'Library',
+            'slug' => 'library',
+        ],
+
+        'navigation' => [
+            'enabled' => true,
+            'files_enabled' => false,
+            'label' => null,
+            'icon' => 'heroicon-o-folder',
+            'group' => null,
+            'sort' => null,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Livewire component
     |--------------------------------------------------------------------------
     */

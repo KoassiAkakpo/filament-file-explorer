@@ -1,0 +1,36 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Koassi\FilamentFileExplorer\Pages\StandaloneFileExplorerPage;
+
+/**
+ * Panel-level File Explorer page — no record required.
+ *
+ * Register it with the plugin so it replaces the packaged page:
+ *
+ *   FilamentFileExplorerPlugin::make()->explorerPage(\{{ namespace }}\{{ class }}::class)
+ *
+ * Everything below is optional: without overrides the page follows the
+ * `standalone` config block and the plugin's fluent settings.
+ */
+class {{ class }} extends StandaloneFileExplorerPage
+{
+    // public static function getSlug(?\Filament\Panel $panel = null): string
+    // {
+    //     return 'library';
+    // }
+
+    // public static function getNavigationLabel(): string
+    // {
+    //     return 'Library';
+    // }
+
+    // Point the explorer at a different root folder / scope, e.g. per team.
+    // protected static function fileExplorerRootResolver(): \Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver
+    // {
+    //     return app(\Koassi\FilamentFileExplorer\Resolvers\PerUserRootResolver::class);
+    // }
+}

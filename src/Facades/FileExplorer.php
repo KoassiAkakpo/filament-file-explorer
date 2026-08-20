@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Facade;
 /**
  * @method static string collection()
  * @method static \Koassi\FilamentFileExplorer\Models\Folder createRoot(string $name, ?string $slug = null)
+ * @method static \Koassi\FilamentFileExplorer\Models\Folder ensureRoot(string $slug, string $name)
+ * @method static \Koassi\FilamentFileExplorer\Models\Folder|null findRoot(string $slug)
+ * @method static \Koassi\FilamentFileExplorer\Models\Folder createChild(\Koassi\FilamentFileExplorer\Models\Folder $parent, string $name, ?string $slug = null)
  *
  * @see \Koassi\FilamentFileExplorer\Support\FileExplorerManager
  */

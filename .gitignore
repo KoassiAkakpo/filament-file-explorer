@@ -13,5 +13,6 @@ node_modules/
 .graphify_labels.json
 .graphify_root
 
-# Published stubs during local QA (optional publish in host apps)
+# Published stubs during local QA (host apps publish into stubs/filament-file-explorer/).
+# The package's own stubs/ directory must stay tracked — the make-* commands read it.
 /stubs/filament-file-explorer/

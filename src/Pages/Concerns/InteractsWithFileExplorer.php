@@ -8,7 +8,7 @@ trait InteractsWithFileExplorer
 {
     public int $rootFolderId = 0;
 
-    abstract protected function fileExplorerScopeKey(): string;
+    abstract public function fileExplorerScopeKey(): string;
 
     abstract protected function resolveFileExplorerRootFolderId(): int;
 

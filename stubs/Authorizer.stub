@@ -1,0 +1,63 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
+use Koassi\FilamentFileExplorer\Models\Folder;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
+
+class {{ class }} implements FileExplorerAuthorizer
+{
+    /**
+     * $scopeKey identifies which explorer is being accessed:
+     *   - standalone page: the configured scope key, e.g. 'library'
+     *   - record page:     '{model-kebab}.{id}', e.g. 'project.42'
+     */
+    public function canAccess(string $scopeKey, int $rootFolderId): bool
+    {
+        return auth()->check();
+    }
+
+    public function abilities(string $scopeKey, int $rootFolderId): array
+    {
+        $canWrite = auth()->check();
+
+        return [
+            'browse'       => true,
+            'search'       => true,
+            'getInfo'      => true,
+            'download'     => true,
+            'upload'       => $canWrite,
+            'mkdir'        => $canWrite,
+            'rename'       => $canWrite,
+            'move'         => $canWrite,
+            'copy'         => $canWrite,
+            'delete'       => $canWrite,
+            'deleteFolder' => $canWrite,
+        ];
+    }
+
+    public function mediaDeleteState(string $scopeKey, Media $media): array
+    {
+        return [
+            'allowed'           => true,
+            'reason_code'       => null,
+            'reason'            => null,
+            'remaining_seconds' => null,
+            'window_seconds'    => 0,
+        ];
+    }
+
+    public function folderDeleteState(string $scopeKey, Folder $folder): array
+    {
+        return [
+            'allowed'           => true,
+            'reason_code'       => null,
+            'reason'            => null,
+            'remaining_seconds' => null,
+            'window_seconds'    => 0,
+        ];
+    }
+}

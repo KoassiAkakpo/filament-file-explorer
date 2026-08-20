@@ -40,7 +40,7 @@ abstract class FileExplorerFilesPage extends Page implements HasTable
         return $this->configureFileExplorerTable($table);
     }
 
-    protected function fileExplorerScopeKey(): string
+    public function fileExplorerScopeKey(): string
     {
         $record = HasFileExplorerModel::assert($this->getRecord());
 

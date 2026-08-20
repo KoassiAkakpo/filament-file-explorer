@@ -14,16 +14,28 @@ class MakePageCommand extends Command
     use CopiesPackageStubs;
 
     protected $signature = 'filament-file-explorer:make-page
-                            {resource : Filament resource class basename or FQCN (e.g. ProjectResource)}
+                            {resource? : Filament resource class basename or FQCN (e.g. ProjectResource); omit with --standalone}
+                            {--standalone : Generate panel-level pages that need no record}
                             {--explorer : Generate explorer page only}
                             {--list : Generate files list page only}
                             {--force : Overwrite existing files}';
 
-    protected $description = 'Generate File Explorer resource pages from stubs (publish stubs only to customize templates)';
+    protected $description = 'Generate File Explorer pages from stubs (publish stubs only to customize templates)';
 
     public function handle(): int
     {
+        if ($this->option('standalone')) {
+            return $this->handleStandalone();
+        }
+
         $resourceInput = (string) $this->argument('resource');
+
+        if ($resourceInput === '') {
+            $this->components->error('Pass a resource, or use --standalone for a panel-level page.');
+
+            return self::FAILURE;
+        }
+
         $resourceClass = $this->resolveResourceClass($resourceInput);
 
         if ($resourceClass === null) {
@@ -104,6 +116,63 @@ class MakePageCommand extends Command
         $this->newLine();
         $this->comment('Customize templates only if needed:');
         $this->comment('  php artisan vendor:publish --tag=filament-file-explorer-stubs');
+
+        return self::SUCCESS;
+    }
+
+    protected function handleStandalone(): int
+    {
+        $wantExplorer = ! $this->option('list') || $this->option('explorer');
+        $wantList = ! $this->option('explorer') || $this->option('list');
+
+        $namespace = 'App\\Filament\\Pages';
+        $path = app_path('Filament/Pages');
+
+        $created = [];
+
+        $pages = [];
+        if ($wantExplorer) {
+            $pages[] = ['stub' => 'StandalonePage', 'class' => 'FileExplorer', 'setter' => 'explorerPage'];
+        }
+        if ($wantList) {
+            $pages[] = ['stub' => 'StandaloneFilesPage', 'class' => 'FileExplorerFiles', 'setter' => 'filesPage'];
+        }
+
+        foreach ($pages as $page) {
+            $target = $path.'/'.$page['class'].'.php';
+
+            if (! $this->option('force') && is_file($target)) {
+                $this->components->warn("Skipped (exists): {$this->relativePath($target)}");
+
+                continue;
+            }
+
+            $this->copyPackageStub($page['stub'], $target, [
+                'namespace' => $namespace,
+                'class' => $page['class'],
+            ]);
+
+            $created[] = $page;
+            $this->components->info("Created {$this->relativePath($target)}");
+        }
+
+        if ($created === []) {
+            return self::SUCCESS;
+        }
+
+        $this->newLine();
+        $this->line('Register on the plugin in your panel provider:');
+        $this->newLine();
+        $this->line('  ->plugin(');
+        $this->line('      \\Koassi\\FilamentFileExplorer\\FilamentFileExplorerPlugin::make()');
+
+        foreach ($created as $page) {
+            $this->line("          ->{$page['setter']}(\\{$namespace}\\{$page['class']}::class)");
+        }
+
+        $this->line('  )');
+        $this->newLine();
+        $this->comment('The packaged pages are registered automatically — generate these only to customise them.');
 
         return self::SUCCESS;
     }

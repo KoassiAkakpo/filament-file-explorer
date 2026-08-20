@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Koassi\FilamentFileExplorer\Pages\StandaloneFileExplorerFilesPage;
+
+/**
+ * Flat table of every file under the standalone root folder.
+ *
+ *   FilamentFileExplorerPlugin::make()->filesPage(\{{ namespace }}\{{ class }}::class)
+ */
+class {{ class }} extends StandaloneFileExplorerFilesPage
+{
+    // public function table(\Filament\Tables\Table $table): \Filament\Tables\Table
+    // {
+    //     return $this->configureFileExplorerTable($table)
+    //         ->defaultSort('created_at', 'desc');
+    // }
+}

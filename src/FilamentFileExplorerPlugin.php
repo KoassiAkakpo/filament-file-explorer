@@ -4,12 +4,53 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer;
 
+use BackedEnum;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Koassi\FilamentFileExplorer\Filament\Pages\FileExplorer;
+use Koassi\FilamentFileExplorer\Filament\Pages\FileExplorerFiles;
+use UnitEnum;
 
 class FilamentFileExplorerPlugin implements Plugin
 {
     protected ?string $authorizerClass = null;
+
+    protected ?bool $standaloneEnabled = null;
+
+    protected ?bool $registersPages = null;
+
+    protected ?bool $hasFilesPage = null;
+
+    /** @var class-string|null */
+    protected ?string $explorerPageClass = null;
+
+    /** @var class-string|null */
+    protected ?string $filesPageClass = null;
+
+    /** @var class-string|null */
+    protected ?string $rootResolverClass = null;
+
+    protected ?string $scopeKey = null;
+
+    protected ?string $slug = null;
+
+    protected ?string $filesSlug = null;
+
+    protected ?string $rootFolderName = null;
+
+    protected ?string $rootFolderSlug = null;
+
+    protected ?string $navigationLabel = null;
+
+    protected string|BackedEnum|null $navigationIcon = null;
+
+    protected string|UnitEnum|null $navigationGroup = null;
+
+    protected ?int $navigationSort = null;
+
+    protected ?bool $shouldRegisterNavigation = null;
+
+    protected ?bool $shouldRegisterFilesNavigation = null;
 
     public function getId(): string
     {
@@ -26,6 +67,12 @@ class FilamentFileExplorerPlugin implements Plugin
         return filament(app(static::class)->getId());
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Configuration
+    |--------------------------------------------------------------------------
+    */
+
     public function authorizer(string $class): static
     {
         $this->authorizerClass = $class;
@@ -33,14 +80,238 @@ class FilamentFileExplorerPlugin implements Plugin
         return $this;
     }
 
+    /**
+     * Resolver that supplies the scope key and root folder for the standalone
+     * page. Defaults to GlobalRootResolver (one shared root).
+     */
+    public function rootResolver(string $class): static
+    {
+        $this->rootResolverClass = $class;
+
+        return $this;
+    }
+
+    public function scopeKey(string $scopeKey): static
+    {
+        $this->scopeKey = $scopeKey;
+
+        return $this;
+    }
+
+    public function rootFolder(string $name, ?string $slug = null): static
+    {
+        $this->rootFolderName = $name;
+        $this->rootFolderSlug = $slug ?? $this->rootFolderSlug;
+
+        return $this;
+    }
+
+    public function slug(string $slug, ?string $filesSlug = null): static
+    {
+        $this->slug = $slug;
+        $this->filesSlug = $filesSlug ?? ($slug.'/files');
+
+        return $this;
+    }
+
+    public function explorerPage(string $class): static
+    {
+        $this->explorerPageClass = $class;
+
+        return $this;
+    }
+
+    public function filesPage(string $class): static
+    {
+        $this->filesPageClass = $class;
+        $this->hasFilesPage = true;
+
+        return $this;
+    }
+
+    public function withoutFilesPage(): static
+    {
+        $this->hasFilesPage = false;
+
+        return $this;
+    }
+
+    /**
+     * Skip page registration entirely (keep the plugin for its authorizer and
+     * record-scoped resource pages only).
+     */
+    public function withoutPages(): static
+    {
+        $this->registersPages = false;
+
+        return $this;
+    }
+
+    public function disabled(): static
+    {
+        $this->standaloneEnabled = false;
+
+        return $this;
+    }
+
+    public function navigationLabel(?string $label): static
+    {
+        $this->navigationLabel = $label;
+
+        return $this;
+    }
+
+    public function navigationIcon(string|BackedEnum|null $icon): static
+    {
+        $this->navigationIcon = $icon;
+
+        return $this;
+    }
+
+    public function navigationGroup(string|UnitEnum|null $group): static
+    {
+        $this->navigationGroup = $group;
+
+        return $this;
+    }
+
+    public function navigationSort(?int $sort): static
+    {
+        $this->navigationSort = $sort;
+
+        return $this;
+    }
+
+    public function withoutNavigation(): static
+    {
+        $this->shouldRegisterNavigation = false;
+
+        return $this;
+    }
+
+    public function withFilesNavigation(bool $condition = true): static
+    {
+        $this->shouldRegisterFilesNavigation = $condition;
+
+        return $this;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accessors
+    |--------------------------------------------------------------------------
+    */
+
     public function getAuthorizerClass(): ?string
     {
         return $this->authorizerClass;
     }
 
+    public function getRootResolverClass(): ?string
+    {
+        return $this->rootResolverClass;
+    }
+
+    public function getScopeKey(): ?string
+    {
+        return $this->scopeKey;
+    }
+
+    public function getStandaloneSlug(): ?string
+    {
+        return $this->slug;
+    }
+
+    public function getStandaloneFilesSlug(): ?string
+    {
+        return $this->filesSlug;
+    }
+
+    public function getRootFolderName(): ?string
+    {
+        return $this->rootFolderName;
+    }
+
+    public function getRootFolderSlug(): ?string
+    {
+        return $this->rootFolderSlug;
+    }
+
+    public function isStandaloneEnabled(): ?bool
+    {
+        return $this->standaloneEnabled;
+    }
+
+    public function hasStandaloneFilesPage(): ?bool
+    {
+        return $this->hasFilesPage;
+    }
+
+    /**
+     * @return class-string
+     */
+    public function getExplorerPageClass(): string
+    {
+        return $this->explorerPageClass ?? FileExplorer::class;
+    }
+
+    /**
+     * @return class-string
+     */
+    public function getFilesPageClass(): string
+    {
+        return $this->filesPageClass ?? FileExplorerFiles::class;
+    }
+
+    public function getNavigationLabel(): ?string
+    {
+        return $this->navigationLabel;
+    }
+
+    public function getNavigationIcon(): string|BackedEnum|null
+    {
+        return $this->navigationIcon;
+    }
+
+    public function getNavigationGroup(): string|UnitEnum|null
+    {
+        return $this->navigationGroup;
+    }
+
+    public function getNavigationSort(): ?int
+    {
+        return $this->navigationSort;
+    }
+
+    public function shouldRegisterStandaloneNavigation(): ?bool
+    {
+        return $this->shouldRegisterNavigation;
+    }
+
+    public function shouldRegisterStandaloneFilesNavigation(): ?bool
+    {
+        return $this->shouldRegisterFilesNavigation;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Plugin lifecycle
+    |--------------------------------------------------------------------------
+    */
+
     public function register(Panel $panel): void
     {
-        //
+        if (! $this->registersStandalonePages()) {
+            return;
+        }
+
+        $pages = [$this->getExplorerPageClass()];
+
+        if ($this->registersFilesPage()) {
+            $pages[] = $this->getFilesPageClass();
+        }
+
+        $panel->pages($pages);
     }
 
     public function boot(Panel $panel): void
@@ -48,5 +319,22 @@ class FilamentFileExplorerPlugin implements Plugin
         if ($this->authorizerClass) {
             config(['filament-file-explorer.authorizer' => $this->authorizerClass]);
         }
+    }
+
+    protected function registersStandalonePages(): bool
+    {
+        $enabled = $this->standaloneEnabled
+            ?? (bool) config('filament-file-explorer.standalone.enabled', true);
+
+        $registers = $this->registersPages
+            ?? (bool) config('filament-file-explorer.standalone.register_pages', true);
+
+        return $enabled && $registers;
+    }
+
+    protected function registersFilesPage(): bool
+    {
+        return $this->hasFilesPage
+            ?? (bool) config('filament-file-explorer.standalone.files_page', true);
     }
 }

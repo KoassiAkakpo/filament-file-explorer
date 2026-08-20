@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resource }};
+use Koassi\FilamentFileExplorer\Pages\FileExplorerFilesPage;
+
+class {{ class }} extends FileExplorerFilesPage
+{
+    protected static string $resource = {{ resourceClass }}::class;
+}

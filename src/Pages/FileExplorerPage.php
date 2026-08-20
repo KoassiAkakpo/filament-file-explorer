@@ -29,7 +29,7 @@ abstract class FileExplorerPage extends Page
         $this->mountFileExplorer();
     }
 
-    protected function fileExplorerScopeKey(): string
+    public function fileExplorerScopeKey(): string
     {
         $record = $this->getRecord();
 

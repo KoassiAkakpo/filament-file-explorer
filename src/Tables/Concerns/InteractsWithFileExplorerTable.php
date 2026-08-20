@@ -20,7 +20,7 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 trait InteractsWithFileExplorerTable
 {
-    abstract protected function fileExplorerScopeKey(): string;
+    abstract public function fileExplorerScopeKey(): string;
 
     abstract protected function fileExplorerRootFolderId(): int;
 
