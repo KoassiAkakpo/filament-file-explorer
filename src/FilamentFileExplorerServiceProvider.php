@@ -47,7 +47,10 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         $this->app->singleton(FileExplorerManager::class);
         $this->app->alias(FileExplorerManager::class, 'filament-file-explorer');
 
-        $this->app->singleton(FolderTree::class);
+        // Scoped, not shared: FolderTree memoises tree walks for the duration
+        // of one request, and a long-lived worker would otherwise keep serving
+        // a tree that has since been reorganised.
+        $this->app->scoped(FolderTree::class);
 
         $this->app->singleton(FileExplorerAuthorizer::class, function ($app) {
             $class = config('filament-file-explorer.authorizer');

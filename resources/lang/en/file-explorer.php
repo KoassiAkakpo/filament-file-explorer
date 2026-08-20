@@ -10,6 +10,10 @@ return [
     'current_folder_kind' => 'Current folder',
     'items_count' => '{0} 0 items|{1} :count item|[2,*] :count items',
     'search_results' => '{0} No results|{1} :count result|[2,*] :count results',
+    'listing' => [
+        'load_more' => 'Load more',
+        'showing' => ':shown of :total',
+    ],
     'validation' => [
         'max_folder_depth_exceeded' => 'Maximum folder depth of :max exceeded.',
         'invalid_file' => 'Invalid file.',

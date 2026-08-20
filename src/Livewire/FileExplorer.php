@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Koassi\FilamentFileExplorer\Livewire;
 
 
+use Koassi\FilamentFileExplorer\Support\FolderListing;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 
@@ -30,11 +31,6 @@ class FileExplorer extends \Livewire\Component
     /** @var list<Folder> */
     public array $breadcrumb = [];
 
-    /** @var \Illuminate\Support\Collection<int, Folder>|array */
-    public $folders = [];
-
-    public $searchedFiles = null;
-
     /** @var list<int> */
     public array $selectedFolders = [];
 
@@ -53,6 +49,15 @@ class FileExplorer extends \Livewire\Component
     public int $rootFolderId = 0;
 
     public string $viewMode = 'grid';
+
+    /**
+     * How many items the listing currently shows. Grown by loadMore() rather
+     * than paged, so selection and drag targets already on screen stay put.
+     */
+    public int $perPage = 0;
+
+    /** @var array{folders: \Illuminate\Database\Eloquent\Collection<int, Folder>, files: \Illuminate\Database\Eloquent\Collection<int, Media>, shown: int, total: int, hasMore: bool}|null */
+    private ?array $listingCache = null;
 
     public string $sortBy = 'name';
 
@@ -111,7 +116,7 @@ class FileExplorer extends \Livewire\Component
         $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
         $this->navHistory = [(int) $folder->id];
         $this->navIndex = 0;
-        $this->loadFolders();
+        $this->perPage = $this->pageSize();
     }
 
     protected function sessionKey(): string
@@ -213,7 +218,7 @@ class FileExplorer extends \Livewire\Component
         $this->selectedFolders = [];
         $this->selectedFiles = [];
         $this->dispatch('fe-sel-cleared');
-        $this->loadFolders();
+        $this->resetListing();
     }
 
     public function canGoBack(): bool
@@ -273,7 +278,7 @@ class FileExplorer extends \Livewire\Component
 
         $this->currentFolder = $folder;
         $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
-        $this->loadFolders();
+        $this->resetListing();
         session([$this->sessionKey() => $folder->id]);
     }
 
@@ -282,6 +287,8 @@ class FileExplorer extends \Livewire\Component
         if (! in_array($by, ['name', 'date', 'type'], true)) {
             return;
         }
+
+        $this->listingCache = null;
 
         if ($dir === null) {
             if ($this->sortBy === $by) {
@@ -296,40 +303,6 @@ class FileExplorer extends \Livewire\Component
 
         $this->sortBy = $by;
         $this->sortDir = $dir === 'desc' ? 'desc' : 'asc';
-    }
-
-    /**
-     * @param  \Illuminate\Support\Collection<int, Folder>  $folders
-     * @return \Illuminate\Support\Collection<int, Folder>
-     */
-    public function sortedFolders($folders)
-    {
-        $dir = $this->sortDir === 'desc';
-
-        return match ($this->sortBy) {
-            'date' => $dir ? $folders->sortByDesc('updated_at') : $folders->sortBy('updated_at'),
-            'type' => $dir ? $folders->sortByDesc('name') : $folders->sortBy('name'),
-            default => $dir ? $folders->sortByDesc('name') : $folders->sortBy('name'),
-        };
-    }
-
-    /**
-     * @param  \Illuminate\Support\Collection<int, Media>  $files
-     * @return \Illuminate\Support\Collection<int, Media>
-     */
-    public function sortedFiles($files)
-    {
-        $dir = $this->sortDir === 'desc';
-
-        return match ($this->sortBy) {
-            'date' => $dir ? $files->sortByDesc('created_at') : $files->sortBy('created_at'),
-            'type' => $dir
-            ? $files->sortByDesc(fn (Media $m) => strtolower(pathinfo($m->file_name, PATHINFO_EXTENSION)))
-            : $files->sortBy(fn (Media $m) => strtolower(pathinfo($m->file_name, PATHINFO_EXTENSION))),
-            default => $dir
-            ? $files->sortByDesc(fn (Media $m) => strtolower($m->name ?: $m->file_name))
-            : $files->sortBy(fn (Media $m) => strtolower($m->name ?: $m->file_name)),
-        };
     }
 
     public function handleMediaClick($fileId): void
@@ -453,7 +426,7 @@ class FileExplorer extends \Livewire\Component
         }
 
         $this->currentFolder = $this->currentFolder->fresh(['children']);
-        $this->loadFolders();
+        $this->resetListing();
         Notification::make()->success()->title(__('filament-file-explorer::file-explorer.pasted'))->send();
     }
 
@@ -600,7 +573,7 @@ class FileExplorer extends \Livewire\Component
 
         $this->cancelRename();
         $this->currentFolder = $this->currentFolder->fresh(['children']);
-        $this->loadFolders();
+        $this->resetListing();
     }
 
     public function deleteTarget(?string $type = null, ?int $id = null): void
@@ -704,7 +677,7 @@ class FileExplorer extends \Livewire\Component
             $folder = Folder::query()->findOrFail($id);
             $this->assertUnderRoot($folder);
             $size = $this->folderSizeBytes($folder);
-            $items = (int) $folder->children()->count() + $folder->getMedia(UploadRules::collection())->count();
+            $items = (int) $folder->children()->count() + (int) $folder->media()->where('collection_name', UploadRules::collection())->count();
             $this->infoItem = [
                 'type' => 'folder',
                 'id' => $folder->id,
@@ -756,7 +729,7 @@ class FileExplorer extends \Livewire\Component
         $folder = $this->currentFolder;
         $this->assertUnderRoot($folder);
         $size = $this->folderSizeBytes($folder);
-        $items = (int) $folder->children()->count() + $folder->getMedia(UploadRules::collection())->count();
+        $items = (int) $folder->children()->count() + (int) $folder->media()->where('collection_name', UploadRules::collection())->count();
         $this->infoItem = [
             'type' => 'folder',
             'id' => $folder->id,
@@ -818,15 +791,11 @@ class FileExplorer extends \Livewire\Component
 
     protected function folderSizeBytes(Folder $folder): int
     {
-        $total = 0;
-        foreach ($folder->getMedia(UploadRules::collection()) as $media) {
-            $total += (int) $media->size;
-        }
-        foreach ($folder->children as $child) {
-            $total += $this->folderSizeBytes($child);
-        }
-
-        return $total;
+        return (int) Media::query()
+            ->where('collection_name', UploadRules::collection())
+            ->where('model_type', (new Folder)->getMorphClass())
+            ->whereIn('model_id', app(FolderTree::class)->descendantFolderIdsIncludingRoot((int) $folder->id))
+            ->sum('size');
     }
 
     protected function formatBytes(int $bytes): string
@@ -933,38 +902,49 @@ class FileExplorer extends \Livewire\Component
         ];
     }
 
-    public function loadFolders(): void
+    public function pageSize(): int
     {
-        $withCounts = [
-            'children',
-            'media as file_explorer_count' => fn ($q) => $q->where('collection_name', UploadRules::collection()),
-        ];
+        return max(1, (int) config('filament-file-explorer.listing.per_page', 100));
+    }
 
-        if ($this->search != '') {
-            $rootIds = $this->descendantFolderIdsIncludingRoot();
+    /**
+     * The folders and files to render, sorted and windowed in SQL.
+     *
+     * @return array{folders: \Illuminate\Database\Eloquent\Collection<int, Folder>, files: \Illuminate\Database\Eloquent\Collection<int, Media>, shown: int, total: int, hasMore: bool}
+     */
+    public function listing(): array
+    {
+        // Not a public property: the render calls this once, but a host app's
+        // view may not, and each call costs four queries.
+        return $this->listingCache ??= (new FolderListing(
+            $this->rootFolderId,
+            (int) $this->currentFolder->id,
+            $this->search,
+            $this->sortBy,
+            $this->sortDir,
+        ))->window($this->perPage > 0 ? $this->perPage : $this->pageSize());
+    }
 
-            $this->folders = Folder::query()
-                ->whereIn('id', $rootIds)
-                ->where('id', '!=', $this->rootFolderId)
-                ->where('name', 'like', '%'.$this->search.'%')
-                ->withCount($withCounts)
-                ->get();
+    public function loadMore(): void
+    {
+        abort_unless($this->ability('browse'), 403);
 
-            $this->searchedFiles = Media::query()
-                ->where('collection_name', UploadRules::collection())
-                ->where('model_type', (new Folder)->getMorphClass())
-                ->whereIn('model_id', $rootIds)
-                ->where('name', 'like', '%'.$this->search.'%')
-                ->get();
+        $this->perPage = ($this->perPage > 0 ? $this->perPage : $this->pageSize()) + $this->pageSize();
+        $this->listingCache = null;
+    }
 
-            return;
-        }
+    /**
+     * Called whenever the listing's contents may have changed: navigation, a
+     * new search, or a mutation. Sends the window back to the first page and
+     * drops the memoised tree, which a create/move/delete in this same request
+     * would otherwise leave describing the old structure.
+     */
+    public function resetListing(): void
+    {
+        $this->perPage = $this->pageSize();
+        $this->listingCache = null;
 
-        $this->folders = Folder::query()
-            ->where('parent_id', $this->currentFolder->id)
-            ->withCount($withCounts)
-            ->get();
-        $this->searchedFiles = null;
+        app(FolderTree::class)->flush();
     }
 
     /**
@@ -1088,7 +1068,7 @@ class FileExplorer extends \Livewire\Component
         $this->currentFolder = $parent->fresh(['children', 'parent']);
         $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
         session([$this->sessionKey() => $parent->id]);
-        $this->loadFolders();
+        $this->resetListing();
         $this->dispatch('fe-folder-created', folderId: (int) $newFolder->id);
     }
 
@@ -1114,7 +1094,7 @@ class FileExplorer extends \Livewire\Component
         session([$this->sessionKey() => $parentFolder->id]);
         $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
         $this->pushNavHistory((int) $parentFolder->id);
-        $this->loadFolders();
+        $this->resetListing();
     }
 
     public function navigateToFolder($folderId): void
@@ -1130,7 +1110,7 @@ class FileExplorer extends \Livewire\Component
 
         $this->currentFolder = $folder;
         $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
-        $this->loadFolders();
+        $this->resetListing();
         $this->pushNavHistory((int) $folder->id);
 
         session([$this->sessionKey() => $folder->id]);
@@ -1149,7 +1129,7 @@ class FileExplorer extends \Livewire\Component
 
         session([$this->sessionKey() => $this->currentFolder->id]);
         $this->pushNavHistory((int) $this->currentFolder->id);
-        $this->loadFolders();
+        $this->resetListing();
     }
 
     protected function generateBreadcrumb($folder)
@@ -1236,7 +1216,7 @@ class FileExplorer extends \Livewire\Component
             $this->currentFolder = $this->currentFolder->fresh(['children', 'parent']);
         }
 
-        $this->loadFolders();
+        $this->resetListing();
 
         $this->dispatch('fe-upload-settled');
 
@@ -1358,7 +1338,7 @@ class FileExplorer extends \Livewire\Component
             $this->currentFolder = $this->currentFolder->fresh(['children', 'parent']);
         }
 
-        $this->loadFolders();
+        $this->resetListing();
     }
 
     protected function deleteFolderRecursive(Folder $folder): void
@@ -1434,7 +1414,7 @@ class FileExplorer extends \Livewire\Component
         $this->dispatch('reset-folder');
         $this->dispatch('fe-sel-cleared');
         $this->currentFolder = $this->currentFolder->fresh(['children']);
-        $this->loadFolders();
+        $this->resetListing();
     }
 
     public function copyItemsToFolder($targetFolderId, $folderIds = [], $fileIds = []): void
@@ -1491,7 +1471,7 @@ class FileExplorer extends \Livewire\Component
 
         $this->dispatch('fe-sel-cleared');
         $this->currentFolder = $this->currentFolder->fresh(['children']);
-        $this->loadFolders();
+        $this->resetListing();
         Notification::make()->success()->title(__('filament-file-explorer::file-explorer.copied'))->send();
     }
 

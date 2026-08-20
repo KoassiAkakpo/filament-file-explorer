@@ -148,6 +148,15 @@ public static function getPages(): array
 
 Both modes coexist: registering the plugin does not interfere with record-scoped pages, and they use separate root folders.
 
+## Large libraries
+
+The explorer renders `listing.per_page` items at a time (100 by default), folders first, with a “Load more” control for the rest. Sorting, filtering and windowing all happen in SQL, so a folder holding thousands of files stays responsive.
+
+```php
+// config/filament-file-explorer.php
+'listing' => ['per_page' => 100],
+```
+
 ## Authorization
 
 Implement `FileExplorerAuthorizer` to control access and per-ability permissions. `$scopeKey` tells you which explorer is being accessed — the configured scope key for the standalone page, `{model-kebab}.{id}` for a record page.

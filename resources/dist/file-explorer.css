@@ -536,6 +536,29 @@
         .dark .fe-tool-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); color: #fafafa; }
         .dark .fe-tool-btn--primary { background: #14b8a6; color: #042f2e; }
 
+        .fe-load-more-bar { flex-basis: 100%; }
+        .fe-load-more {
+            display: inline-flex;
+            align-items: center;
+            height: 2rem;
+            padding: 0 0.9rem;
+            border: 1px solid rgba(24, 24, 27, 0.12);
+            border-radius: 999px;
+            background: #fff;
+            color: #3f3f46;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: background .08s ease, color .08s ease, opacity .08s ease;
+        }
+        .fe-load-more:hover:not(:disabled) { background: rgba(24, 24, 27, 0.05); color: #18181b; }
+        .fe-load-more:disabled { opacity: .5; cursor: progress; }
+        .dark .fe-load-more {
+            border-color: rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.04);
+            color: #d4d4d8;
+        }
+        .dark .fe-load-more:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); color: #fafafa; }
+
         #folder-container { background: transparent; }
 
         @keyframes fe-fade-in {

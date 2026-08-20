@@ -10,6 +10,10 @@ return [
     'current_folder_kind' => 'Dossier courant',
     'items_count' => '{0} 0 élément|{1} :count élément|[2,*] :count éléments',
     'search_results' => '{0} Aucun résultat|{1} :count résultat|[2,*] :count résultats',
+    'listing' => [
+        'load_more' => 'Afficher plus',
+        'showing' => ':shown sur :total',
+    ],
     'validation' => [
         'max_folder_depth_exceeded' => 'Profondeur maximale de dossier de :max dépassée.',
         'invalid_file' => 'Fichier invalide.',

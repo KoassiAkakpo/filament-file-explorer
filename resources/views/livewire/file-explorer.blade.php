@@ -3,9 +3,9 @@
         <div class="p-8 text-center text-zinc-500">{{ __('filament-file-explorer::file-explorer.empty') }}</div>
     @else
         @php
-            $sortedFolders = $this->sortedFolders(collect($folders));
-            $fileCollection = collect($searchedFiles ?: $currentFolder->getMedia(config('filament-file-explorer.collection')));
-            $sortedMedia = $this->sortedFiles($fileCollection);
+            $listing = $this->listing();
+            $sortedFolders = $listing['folders'];
+            $sortedMedia = $listing['files'];
             $abilities = $this->abilities();
             $locale = str_replace('_', '-', app()->getLocale());
             $i18n = trans('filament-file-explorer::file-explorer');
@@ -278,7 +278,7 @@
 
                 <div id="filemanager-area" class="fe-browser relative overflow-x-hidden dark:bg-zinc-800/50" x-bind:class="dropingFile ? 'fe-browser--drop' : ''">
                     @if($search)
-                        <div class="border-b border-zinc-200 bg-zinc-100/80 px-4 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 sm:px-5">{{ trans_choice('filament-file-explorer::file-explorer.search_results', count($searchedFiles) + count($folders)) }}</div>
+                        <div class="border-b border-zinc-200 bg-zinc-100/80 px-4 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 sm:px-5">{{ trans_choice('filament-file-explorer::file-explorer.search_results', $listing['total']) }}</div>
                     @endif
 
                     <div
@@ -501,6 +501,17 @@
                                     wire:key="file-{{ $media->id }}"
                                 />
                             @endforeach
+                        @endif
+
+                        @if ($listing['hasMore'])
+                            <div class="fe-load-more-bar w-full px-3 py-4 text-center" wire:key="fe-load-more">
+                                <button type="button" class="fe-load-more" wire:click="loadMore" wire:loading.attr="disabled">
+                                    {{ __('filament-file-explorer::file-explorer.listing.load_more') }}
+                                </button>
+                                <div class="mt-1.5 text-[11px] text-zinc-400">
+                                    {{ __('filament-file-explorer::file-explorer.listing.showing', ['shown' => $listing['shown'], 'total' => $listing['total']]) }}
+                                </div>
+                            </div>
                         @endif
                     </div>
 

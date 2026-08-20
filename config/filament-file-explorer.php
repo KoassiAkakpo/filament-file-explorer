@@ -80,6 +80,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Listing
+    |--------------------------------------------------------------------------
+    |
+    | How many items the explorer renders at once. The rest is reachable with
+    | "Load more", which raises the window by this amount again. Sorting and
+    | windowing run in SQL, so this is what keeps a folder holding thousands of
+    | files responsive.
+    |
+    */
+    'listing' => [
+        'per_page' => 100,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Folders
     |--------------------------------------------------------------------------
     */
