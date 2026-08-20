@@ -29,6 +29,7 @@
                     type="button"
                     class="fe-side-chevron"
                     title="{{ __('filament-file-explorer::file-explorer.sidebar.toggle_node') }}"
+                    :aria-expanded="$store.feUi.isOpen({{ $id }}, {{ $defaultOpen }}) ? 'true' : 'false'"
                     @click.stop.prevent="$store.feUi.toggle({{ $id }}, {{ $defaultOpen }})"
                 >
                     <span

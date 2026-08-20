@@ -283,6 +283,12 @@
 
                     <div
                         id="folder-container"
+                        data-fe-items
+                        tabindex="0"
+                        role="listbox"
+                        aria-multiselectable="true"
+                        aria-label="{{ __('filament-file-explorer::file-explorer.explorer') }}"
+                        @keydown="onKeydown($event)"
                         @mousedown.left="initiateDrawing($event)"
                         @if ($abilities['upload'])
                         x-on:drop="dropingFile = false"
@@ -367,7 +373,7 @@
                                         x-on:pointerdown="$store.feDrag.pointerDown($event, 'folder', {{ $folder->id }}, @js($folder->name), $wire)"
                                         x-on:click.stop="
                                             if ($store.feDrag.consumeClickSuppression()) return;
-                                            $store.feSel.toggle('folder', {{ $folder->id }}, $event.ctrlKey || $event.metaKey);
+                                            $store.feSel.click('folder', {{ $folder->id }}, $event, $el);
                                         "
                                         x-on:dblclick.stop="$wire.navigateToFolder({{ $folder->id }})"
                                     @endunless
@@ -398,6 +404,9 @@
                                     }"
                                     data-id="{{ $folder->id }}"
                                     data-fe-type="folder"
+                                    tabindex="-1"
+                                    role="option"
+                                    :aria-selected="$store.feSel.hasFolder({{ $folder->id }}) ? 'true' : 'false'"
                                 >
                                     <div class="flex min-w-0 items-center gap-2">
                                         <x-filament-file-explorer::file-explorer.folder-icon class="h-6 w-6 shrink-0" />
@@ -434,7 +443,7 @@
                                         x-on:pointerdown="$store.feDrag.pointerDown($event, 'file', {{ $media->id }}, @js($fileLabel), $wire)"
                                         x-on:click.stop="
                                             if ($store.feDrag.consumeClickSuppression()) return;
-                                            $store.feSel.toggle('file', {{ $media->id }}, $event.ctrlKey || $event.metaKey);
+                                            $store.feSel.click('file', {{ $media->id }}, $event, $el);
                                         "
                                         x-on:dblclick.stop="window.open(@js($this->mediaOpenUrl($media->id)), '_blank')"
                                     @endunless
@@ -456,6 +465,9 @@
                                     }"
                                     data-id="{{ $media->id }}"
                                     data-fe-type="file"
+                                    tabindex="-1"
+                                    role="option"
+                                    :aria-selected="$store.feSel.hasFile({{ $media->id }}) ? 'true' : 'false'"
                                 >
                                     <div class="flex min-w-0 items-center gap-2">
                                         @if ($listPreview)
@@ -542,16 +554,18 @@
 
                 <nav class="flex select-none items-center gap-0.5 border-t border-zinc-100 px-2 py-1.5 text-xs dark:border-zinc-700/80 dark:text-zinc-300">
                     @foreach ($breadcrumb as $index => $folder)
-                        <span
-                            class="flex cursor-default items-center gap-x-1 rounded-lg px-2 py-1 transition-colors hover:bg-zinc-100 dark:hover:bg-white/10"
+                        <button
+                            type="button"
+                            class="flex items-center gap-x-1 rounded-lg px-2 py-1 transition-colors hover:bg-zinc-100 dark:hover:bg-white/10"
                             @unless($loop->last)
                                 data-fe-drop-folder="{{ $folder->id }}"
                             @endunless
+                            @if ($loop->last) aria-current="location" @endif
                             :class="{ 'fe-side-item--drop bg-zinc-100 dark:bg-white/10': $store.feDrag.dropTargetId === {{ (int) $folder->id }} && {{ $loop->last ? 'false' : 'true' }} }"
                             wire:click.prevent="navigateToBreadcrumb({{ $index }})"
                         >
                             <x-filament-file-explorer::file-explorer.folder-icon class="h-3.5 w-3.5" /> <span>{{ $folder->name }}</span>
-                        </span>
+                        </button>
                         @if (!$loop->last)
                             @svg('heroicon-o-chevron-left', 'h-3 w-3 shrink-0 rotate-180 text-zinc-300 rtl:rotate-0')
                         @endif

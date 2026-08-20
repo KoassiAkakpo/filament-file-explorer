@@ -27,11 +27,14 @@
     data-id="{{ $media->id }}"
     data-fe-type="file"
     id="{{ $key }}"
+    tabindex="-1"
+    role="option"
+    :aria-selected="$store.feSel.hasFile({{ $media->id }}) ? 'true' : 'false'"
     @unless($isRenaming)
         x-on:pointerdown="$store.feDrag.pointerDown($event, 'file', {{ $media->id }}, @js($label), $wire)"
         x-on:click.stop="
             if ($store.feDrag.consumeClickSuppression()) return;
-            $store.feSel.toggle('file', {{ $media->id }}, $event.ctrlKey || $event.metaKey);
+            $store.feSel.click('file', {{ $media->id }}, $event, $el);
         "
         @if($openUrl)
             x-on:dblclick.stop="window.open(@js($openUrl), '_blank')"

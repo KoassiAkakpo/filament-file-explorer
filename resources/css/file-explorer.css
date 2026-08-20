@@ -536,6 +536,21 @@
         .dark .fe-tool-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); color: #fafafa; }
         .dark .fe-tool-btn--primary { background: #14b8a6; color: #042f2e; }
 
+        /* Keyboard navigation needs a visible focus ring: the items are the
+           only way to move a selection without a mouse. */
+        [data-fe-items]:focus-visible {
+            outline: 2px solid rgba(15, 118, 110, 0.35);
+            outline-offset: -2px;
+        }
+        .fe-icon-item:focus-visible,
+        .fe-list-row:focus-visible {
+            outline: 2px solid #0f766e;
+            outline-offset: -2px;
+            border-radius: 0.6rem;
+        }
+        .dark .fe-icon-item:focus-visible,
+        .dark .fe-list-row:focus-visible { outline-color: #2dd4bf; }
+
         .fe-load-more-bar { flex-basis: 100%; }
         .fe-load-more {
             display: inline-flex;

@@ -50,6 +50,8 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 files: [],
                 marqueeFolders: [],
                 marqueeFiles: [],
+                // Last item touched: where a shift-range starts from.
+                anchor: null,
                 _syncTimer: null,
                 setWire(wire) {
                     setFeWire(wire);
@@ -57,6 +59,70 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 replace(folders, files) {
                     this.folders = (folders || []).map(Number);
                     this.files = (files || []).map(Number);
+                },
+                // replace() is also used to mirror server state, so selecting
+                // from the UI goes through this instead: it syncs back.
+                select(folders, files) {
+                    this.replace(folders, files);
+                    this.queueSync();
+                },
+                setAnchor(type, id) {
+                    this.anchor = { type, id: Number(id) };
+                },
+                /**
+                 * Items in the order they are laid out, read from the DOM so the
+                 * grid and the row views need no separate handling. Scoped to the
+                 * clicked explorer, because a page can hold more than one.
+                 */
+                orderedItems(scope) {
+                    const container = scope?.closest?.('[data-fe-items]')
+                        || (scope?.matches?.('[data-fe-items]') ? scope : null)
+                        || scope?.querySelector?.('[data-fe-items]')
+                        || document.querySelector('[data-fe-items]');
+
+                    if (!container) return [];
+
+                    return [...container.querySelectorAll('[data-fe-type][data-id]')].map((el) => ({
+                        type: el.getAttribute('data-fe-type'),
+                        id: Number(el.getAttribute('data-id')),
+                        el,
+                    }));
+                },
+                click(type, id, event, scope) {
+                    if (event?.shiftKey) {
+                        this.selectRange(type, id, scope);
+                        return;
+                    }
+
+                    this.toggle(type, id, event?.ctrlKey || event?.metaKey);
+                },
+                selectRange(type, id, scope) {
+                    const items = this.orderedItems(scope);
+                    const anchor = this.anchor || { type, id: Number(id) };
+                    const from = items.findIndex((item) => item.type === anchor.type && item.id === anchor.id);
+                    const to = items.findIndex((item) => item.type === type && item.id === Number(id));
+
+                    if (from === -1 || to === -1) {
+                        this.toggle(type, id, false);
+                        return;
+                    }
+
+                    const range = items.slice(Math.min(from, to), Math.max(from, to) + 1);
+
+                    // The anchor stays put: dragging the shift selection back and
+                    // forth grows and shrinks the same range.
+                    this.select(
+                        range.filter((item) => item.type === 'folder').map((item) => item.id),
+                        range.filter((item) => item.type === 'file').map((item) => item.id),
+                    );
+                },
+                selectAll(scope) {
+                    const items = this.orderedItems(scope);
+
+                    this.select(
+                        items.filter((item) => item.type === 'folder').map((item) => item.id),
+                        items.filter((item) => item.type === 'file').map((item) => item.id),
+                    );
                 },
                 setMarquee(folders, files) {
                     this.marqueeFolders = (folders || []).map(Number);
@@ -83,6 +149,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 },
                 toggle(type, id, multi) {
                     id = Number(id);
+                    this.setAnchor(type, id);
                     let folders = [...this.folders];
                     let files = [...this.files];
 
@@ -107,6 +174,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     const sync = opts.sync !== false;
                     this.folders = [];
                     this.files = [];
+                    this.anchor = null;
                     this.clearMarquee();
                     if (this._syncTimer) clearTimeout(this._syncTimer);
                     this._syncTimer = null;
@@ -516,6 +584,151 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     await this.$wire.setSelection([...sel.folders], [...sel.files]);
                     await this.$wire.copySelection();
                 },
+                async toolbarCut() {
+                    const sel = Alpine.store('feSel');
+                    await this.$wire.setSelection([...sel.folders], [...sel.files]);
+                    await this.$wire.cutSelection();
+                },
+
+                /**
+                 * Bound on the items container rather than the window: shortcuts
+                 * must not fire for a second explorer on the page, nor while the
+                 * user is typing in the search or rename field.
+                 */
+                onKeydown(event) {
+                    if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+
+                    const sel = Alpine.store('feSel');
+                    const mod = event.ctrlKey || event.metaKey;
+                    const key = event.key || '';
+
+                    if (mod && (key === 'a' || key === 'A')) {
+                        event.preventDefault();
+                        sel.selectAll(this.$el);
+                        return;
+                    }
+
+                    if (mod && (key === 'c' || key === 'C')) {
+                        if (!this.abilities.copy || !sel.count()) return;
+                        event.preventDefault();
+                        this.toolbarCopy();
+                        return;
+                    }
+
+                    if (mod && (key === 'x' || key === 'X')) {
+                        if (!this.abilities.move || !sel.count()) return;
+                        event.preventDefault();
+                        this.toolbarCut();
+                        return;
+                    }
+
+                    if (mod && (key === 'v' || key === 'V')) {
+                        if (!this.abilities.move && !this.abilities.copy) return;
+                        event.preventDefault();
+                        this.$wire.pasteClipboard();
+                        return;
+                    }
+
+                    if (key === 'F2') {
+                        if (!this.abilities.rename || sel.count() !== 1) return;
+                        event.preventDefault();
+                        this.toolbarRename();
+                        return;
+                    }
+
+                    if (key === 'Delete' || key === 'Backspace') {
+                        if (!this.abilities.delete && !this.abilities.deleteFolder) return;
+                        if (!sel.count()) return;
+                        event.preventDefault();
+                        this.confirmDeleteSelected();
+                        return;
+                    }
+
+                    if (key === 'Enter') {
+                        if (sel.count() !== 1) return;
+                        event.preventDefault();
+                        this.openSelection();
+                        return;
+                    }
+
+                    if (key.startsWith('Arrow')) {
+                        event.preventDefault();
+                        this.moveSelection(key, event.shiftKey);
+                    }
+                },
+                openSelection() {
+                    const sel = Alpine.store('feSel');
+
+                    if (sel.folders.length === 1) {
+                        this.$wire.navigateToFolder(sel.folders[0]);
+                        return;
+                    }
+
+                    if (sel.files.length === 1) {
+                        window.open(this.fileUrl(sel.files[0], false), '_blank');
+                    }
+                },
+                moveSelection(key, extend) {
+                    const sel = Alpine.store('feSel');
+                    const items = sel.orderedItems(this.$el);
+
+                    if (!items.length) return;
+
+                    const current = sel.anchor
+                        ? items.findIndex((item) => item.type === sel.anchor.type && item.id === sel.anchor.id)
+                        : -1;
+
+                    let target;
+
+                    if (current === -1) {
+                        target = (key === 'ArrowUp' || key === 'ArrowLeft') ? items.length - 1 : 0;
+                    } else if (key === 'ArrowRight') {
+                        target = current + 1;
+                    } else if (key === 'ArrowLeft') {
+                        target = current - 1;
+                    } else {
+                        target = this.indexInAdjacentRow(items, current, key === 'ArrowDown' ? 1 : -1);
+                    }
+
+                    if (target === null || target < 0 || target >= items.length) return;
+
+                    const item = items[target];
+
+                    if (extend) {
+                        sel.selectRange(item.type, item.id, this.$el);
+                    } else {
+                        sel.toggle(item.type, item.id, false);
+                    }
+
+                    item.el.focus?.({ preventScroll: true });
+                    item.el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+                },
+                /**
+                 * Rows are read back from the layout, so vertical movement works
+                 * in the grid without knowing how many columns fit.
+                 */
+                indexInAdjacentRow(items, current, direction) {
+                    const from = items[current].el;
+                    const candidates = items.filter((item) => (direction > 0
+                        ? item.el.offsetTop > from.offsetTop
+                        : item.el.offsetTop < from.offsetTop));
+
+                    if (!candidates.length) return null;
+
+                    const tops = candidates.map((item) => item.el.offsetTop);
+                    const rowTop = direction > 0 ? Math.min(...tops) : Math.max(...tops);
+                    const row = candidates.filter((item) => item.el.offsetTop === rowTop);
+
+                    let best = row[0];
+
+                    row.forEach((item) => {
+                        if (Math.abs(item.el.offsetLeft - from.offsetLeft) < Math.abs(best.el.offsetLeft - from.offsetLeft)) {
+                            best = item;
+                        }
+                    });
+
+                    return items.indexOf(best);
+                },
                 async toolbarInfo() {
                     const sel = Alpine.store('feSel');
                     await this.$wire.setSelection([...sel.folders], [...sel.files]);
@@ -529,21 +742,20 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 },
                 toolbarDownload() {
                     const sel = Alpine.store('feSel');
-                    if (sel.folders.length === 1 && sel.files.length === 0) {
-                        window.location.href = this.folderZipUrl(sel.folders[0]);
+                    const total = sel.folders.length + sel.files.length;
+
+                    if (!total) return;
+
+                    if (total === 1) {
+                        window.location.href = sel.folders.length
+                            ? this.folderZipUrl(sel.folders[0])
+                            : this.fileUrl(sel.files[0], true);
+
                         return;
                     }
-                    if (sel.files.length === 1 && sel.folders.length === 0) {
-                        window.location.href = this.fileUrl(sel.files[0], true);
-                        return;
-                    }
-                    if (sel.folders.length === 1) {
-                        window.location.href = this.folderZipUrl(sel.folders[0]);
-                        return;
-                    }
-                    if (sel.files.length >= 1) {
-                        window.location.href = this.mediaZipUrl(sel.files[0]);
-                    }
+
+                    // Anything past the first item used to be dropped silently.
+                    window.location.href = this.selectionZipUrl(sel.folders, sel.files);
                 },
 
                 fileUrl(id, download) {
@@ -552,6 +764,14 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 },
                 mediaZipUrl(id) {
                     return `${this.mediaUrlBase}/${this.scopeKey}/files/${id}/zip`;
+                },
+                selectionZipUrl(folders, files) {
+                    const params = new URLSearchParams();
+
+                    if (folders.length) params.set('folders', folders.join(','));
+                    if (files.length) params.set('files', files.join(','));
+
+                    return `${this.mediaUrlBase}/${this.scopeKey}/selection/zip?${params.toString()}`;
                 },
                 folderZipUrl(id) {
                     return `${this.mediaUrlBase}/${this.scopeKey}/folders/${id}/zip`;

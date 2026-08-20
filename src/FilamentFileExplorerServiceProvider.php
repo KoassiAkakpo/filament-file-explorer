@@ -120,6 +120,8 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
                     ->name('zip-media');
                 Route::get('{scopeKey}/folders/{folder}/zip', [\Koassi\FilamentFileExplorer\Http\Controllers\MediaController::class, 'zipFolder'])
                     ->name('zip-folder');
+                Route::get('{scopeKey}/selection/zip', [\Koassi\FilamentFileExplorer\Http\Controllers\MediaController::class, 'zipSelection'])
+                    ->name('zip-selection');
             });
     }
 }

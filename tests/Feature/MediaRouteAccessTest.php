@@ -276,3 +276,83 @@ it('keeps only the most recent scopes in the registry', function (): void {
         ->and(ScopeRoots::resolve('project.7'))->toBe(7)
         ->and(ScopeRoots::resolve('project.6'))->toBeNull();
 });
+
+function feSelectionZipUrl(array $folders, array $files): string
+{
+    return route('filament-file-explorer.media.zip-selection', array_filter([
+        'scopeKey' => 'library',
+        'folders' => $folders === [] ? null : implode(',', $folders),
+        'files' => $files === [] ? null : implode(',', $files),
+    ]));
+}
+
+it('zips a whole selection of files and folders', function (): void {
+    $root = feStandaloneRoot();
+    $folder = Folder::query()->create(['name' => 'Invoices', 'slug' => 'invoices', 'parent_id' => $root->id]);
+
+    $first = feAttachFile($root, 'first.pdf', 'A');
+    $second = feAttachFile($root, 'second.pdf', 'B');
+    feAttachFile($folder, 'nested.pdf', 'C');
+
+    $response = $this->get(feSelectionZipUrl([$folder->id], [$first->id, $second->id]));
+
+    $response->assertOk();
+    $body = $response->streamedContent();
+
+    expect($response->headers->get('content-disposition'))->toContain('selection.zip')
+        ->and(substr($body, 0, 2))->toBe('PK');
+
+    $path = sys_get_temp_dir().'/'.uniqid('feselzip_').'.zip';
+    file_put_contents($path, $body);
+
+    $zip = new ZipArchive;
+    $zip->open($path);
+
+    $entries = [];
+
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $entries[] = $zip->statIndex($i)['name'];
+    }
+
+    $zip->close();
+    @unlink($path);
+
+    sort($entries);
+
+    // Every selected item lands in the archive: the toolbar used to download
+    // only the first one and drop the rest silently.
+    expect($entries)->toBe(['Invoices/nested.pdf', 'first.pdf', 'second.pdf']);
+});
+
+it('refuses a selection holding an id from another scope', function (): void {
+    $root = feStandaloneRoot();
+    $mine = feAttachFile($root, 'mine.pdf');
+
+    $foreignRoot = app(FileExplorerManager::class)->createRoot('Other', 'other');
+    $theirs = feAttachFile($foreignRoot, 'theirs.pdf');
+
+    $this->get(feSelectionZipUrl([], [$mine->id, $theirs->id]))->assertForbidden();
+});
+
+it('rejects an empty or oversized selection', function (): void {
+    feAttachFile(feStandaloneRoot(), 'a.pdf');
+
+    $this->get(route('filament-file-explorer.media.zip-selection', ['scopeKey' => 'library']))
+        ->assertStatus(400);
+
+    $this->get(feSelectionZipUrl([], range(1, 501)))->assertStatus(400);
+});
+
+it('honours the download ability for a selection', function (): void {
+    app()->instance(FileExplorerAuthorizer::class, new class extends AllowAllAuthorizer
+    {
+        public function abilities(string $scopeKey, int $rootFolderId): array
+        {
+            return [...parent::abilities($scopeKey, $rootFolderId), 'download' => false];
+        }
+    });
+
+    $media = feAttachFile(feStandaloneRoot(), 'a.pdf');
+
+    $this->get(feSelectionZipUrl([], [$media->id]))->assertForbidden();
+});

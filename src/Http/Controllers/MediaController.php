@@ -22,6 +22,12 @@ use ZipArchive;
 class MediaController extends Controller
 {
     /**
+     * Upper bound for a selection archive: the ids travel in the query string,
+     * and an unbounded selection is an easy way to tie up a worker.
+     */
+    protected const MAX_SELECTION = 500;
+
+    /**
      * Temp copies of remote-disk media staged for ZipArchive, deleted once the
      * archive is closed.
      *
@@ -47,6 +53,55 @@ class MediaController extends Controller
                 $this->addMediaToZip($zip, $media, $this->zipEntryName((string) $media->file_name));
             },
             $this->zipDownloadName(pathinfo((string) $media->file_name, PATHINFO_FILENAME), 'file'),
+        );
+    }
+
+    /**
+     * Archive of an arbitrary selection of folders and files.
+     *
+     * Downloading several items at once used to send only the first one.
+     */
+    public function zipSelection(Request $request, string $scopeKey): Response
+    {
+        $rootFolderId = $this->authorizeScope($scopeKey);
+
+        $folderIds = $this->idList($request->query('folders'));
+        $fileIds = $this->idList($request->query('files'));
+
+        abort_if($folderIds === [] && $fileIds === [], 400);
+        abort_if(count($folderIds) + count($fileIds) > self::MAX_SELECTION, 400);
+
+        return $this->streamZip(
+            function (ZipArchive $zip) use ($folderIds, $fileIds, $rootFolderId): void {
+                $tree = app(FolderTree::class);
+
+                foreach ($folderIds as $folderId) {
+                    $folder = Folder::query()->find($folderId);
+
+                    // A row that vanished since the selection was made is
+                    // skipped; one that was never in scope is a forged id.
+                    if (! $folder instanceof Folder) {
+                        continue;
+                    }
+
+                    abort_unless($tree->isUnderRoot($folder, $rootFolderId), 403);
+
+                    $this->addFolderToZip($zip, $folder, $this->zipEntryName((string) ($folder->name ?: 'folder')));
+                }
+
+                foreach ($fileIds as $fileId) {
+                    $media = Media::query()->find($fileId);
+
+                    if (! $media instanceof Media) {
+                        continue;
+                    }
+
+                    abort_unless($this->mediaBelongsToRoot($media, $rootFolderId), 403);
+
+                    $this->addMediaToZip($zip, $media, $this->zipEntryName((string) $media->file_name));
+                }
+            },
+            'selection.zip',
         );
     }
 
@@ -89,18 +144,42 @@ class MediaController extends Controller
     {
         $rootFolderId = $this->authorizeScope($scopeKey);
 
+        abort_unless($this->mediaBelongsToRoot($media, $rootFolderId), 403);
+
+        return $rootFolderId;
+    }
+
+    protected function mediaBelongsToRoot(Media $media, int $rootFolderId): bool
+    {
         // Explorer media always hangs off a Folder in the explorer collection.
         // Without these two checks, a media row belonging to another model whose
         // model_id happens to match an in-scope folder id would pass containment.
-        abort_unless($media->model_type === (new Folder)->getMorphClass(), 403);
-        abort_unless($media->collection_name === UploadRules::collection(), 403);
+        if ($media->model_type !== (new Folder)->getMorphClass()) {
+            return false;
+        }
+
+        if ($media->collection_name !== UploadRules::collection()) {
+            return false;
+        }
 
         $folder = Folder::query()->find($media->model_id);
 
-        abort_unless($folder instanceof Folder, 403);
-        abort_unless(app(FolderTree::class)->isUnderRoot($folder, $rootFolderId), 403);
+        return $folder instanceof Folder
+            && app(FolderTree::class)->isUnderRoot($folder, $rootFolderId);
+    }
 
-        return $rootFolderId;
+    /**
+     * @return list<int>
+     */
+    protected function idList(mixed $value): array
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $ids = array_map('intval', explode(',', $value));
+
+        return array_values(array_unique(array_filter($ids, fn (int $id): bool => $id > 0)));
     }
 
     protected function fileResponse(Media $media, string $disposition): Response

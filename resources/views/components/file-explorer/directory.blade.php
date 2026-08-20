@@ -17,11 +17,14 @@
     data-id="{{ $folder->id }}"
     data-fe-type="folder"
     data-fe-drop-folder="{{ $folder->id }}"
+    tabindex="-1"
+    role="option"
+    :aria-selected="$store.feSel.hasFolder({{ $folder->id }}) ? 'true' : 'false'"
     @unless($isRenaming)
         x-on:pointerdown="$store.feDrag.pointerDown($event, 'folder', {{ $folder->id }}, @js($folder->name), $wire)"
         x-on:click.stop="
             if ($store.feDrag.consumeClickSuppression()) return;
-            $store.feSel.toggle('folder', {{ $folder->id }}, $event.ctrlKey || $event.metaKey);
+            $store.feSel.click('folder', {{ $folder->id }}, $event, $el);
         "
         x-on:dblclick.stop="$wire.navigateToFolder({{ $folder->id }})"
     @endunless

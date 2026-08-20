@@ -48,6 +48,15 @@ The explorer never loads a folder's contents into memory to sort them. [Support/
 
 `resetListing()` is the single hook meaning "the listing may have changed" — every mutation and every navigation calls it — and it also flushes `FolderTree`. That flush matters: creating or deleting a folder changes the set of ids under the root, so a request that mutates and then re-renders would otherwise draw a stale sidebar and search the old scope.
 
+## Selection and keyboard
+
+Selection lives in the Alpine `feSel` store ([resources/js/file-explorer.js](resources/js/file-explorer.js)) and is mirrored to the component through a debounced `setSelection`. Two conventions hold it together:
+
+- Every rendered item carries `data-fe-type` (`folder`/`file`) and `data-id`, and the items container carries `data-fe-items`. `feSel.orderedItems(scope)` reads the DOM through those attributes — that is how shift-range and the arrow keys work in the grid *and* the row views without anyone knowing the column count (vertical movement groups items by `offsetTop`). A new view mode has to keep those attributes.
+- Keyboard shortcuts are bound on the items container (`@keydown="onKeydown($event)"`), never on the window. A page can hold more than one explorer — the `FileExplorerPicker` in a modal — and a window binding would fire for all of them, including while the user types in the search box.
+
+`feSel.click()` owns the modifier logic (shift extends from the anchor, ctrl/meta toggles) so the Blade files stay declarative, and `toggle()` moves the anchor. `replace()` mirrors server state without syncing back; `select()` is the one that syncs, so UI-driven selection must go through it.
+
 ## Security model
 
 Two independent guards, both required — never add an entry point that skips either:

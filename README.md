@@ -157,6 +157,24 @@ The explorer renders `listing.per_page` items at a time (100 by default), folder
 'listing' => ['per_page' => 100],
 ```
 
+## Keyboard
+
+The listing is a `listbox`: it takes focus, and the items are options.
+
+| Keys | Action |
+| --- | --- |
+| Arrows | Move the selection (rows and grid) |
+| Shift + click / Shift + arrows | Extend the selection to a range |
+| Ctrl/Cmd + click | Add or remove one item |
+| Ctrl/Cmd + A | Select everything on screen |
+| Enter | Open the selected folder or file |
+| F2 | Rename |
+| Ctrl/Cmd + C / X / V | Copy, cut, paste |
+| Delete / Backspace | Delete the selection |
+| Escape | Close the context menu, cancel a rename |
+
+Shortcuts only fire while the listing has focus, never while typing in the search or rename field, and each one still goes through its ability check. Downloading a multi-item selection produces a single archive (`selection/zip`, capped at 500 items).
+
 ## Authorization
 
 Implement `FileExplorerAuthorizer` to control access and per-ability permissions. `$scopeKey` tells you which explorer is being accessed — the configured scope key for the standalone page, `{model-kebab}.{id}` for a record page.
