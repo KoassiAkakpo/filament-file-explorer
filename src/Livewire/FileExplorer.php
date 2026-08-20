@@ -112,6 +112,7 @@ class FileExplorer extends \Livewire\Component
         ScopeRoots::remember($this->scopeKey, $this->rootFolderId);
 
         $this->clipboardReady = $this->hasClipboard();
+        $this->restoreViewPreferences();
 
         $sessionKey = $this->sessionKey();
         $requestedFolder = request()->integer('folder') ?: null;
@@ -134,6 +135,41 @@ class FileExplorer extends \Livewire\Component
     protected function sessionKey(): string
     {
         return 'currentFolderId.'.$this->scopeKey;
+    }
+
+    protected function viewKey(): string
+    {
+        return 'view.'.$this->scopeKey;
+    }
+
+    /**
+     * View mode and sort survive navigation and reloads, per scope, the same
+     * way the current folder does.
+     */
+    protected function restoreViewPreferences(): void
+    {
+        $prefs = session($this->viewKey());
+
+        if (! is_array($prefs)) {
+            return;
+        }
+
+        // Validated even though the session is server-side: a stored value can
+        // outlive the view mode it names.
+        $this->setViewMode((string) ($prefs['viewMode'] ?? $this->viewMode));
+        $this->setSort(
+            (string) ($prefs['sortBy'] ?? $this->sortBy),
+            (string) ($prefs['sortDir'] ?? $this->sortDir),
+        );
+    }
+
+    protected function rememberViewPreferences(): void
+    {
+        session([$this->viewKey() => [
+            'viewMode' => $this->viewMode,
+            'sortBy' => $this->sortBy,
+            'sortDir' => $this->sortDir,
+        ]]);
     }
 
     protected function clipboardKey(): string
@@ -177,6 +213,8 @@ class FileExplorer extends \Livewire\Component
         }
 
         $this->viewMode = in_array($mode, ['grid', 'list', 'table', 'details'], true) ? $mode : 'grid';
+
+        $this->rememberViewPreferences();
     }
 
     public function acceptAttribute(): string
@@ -330,11 +368,15 @@ class FileExplorer extends \Livewire\Component
                 $this->sortDir = 'asc';
             }
 
+            $this->rememberViewPreferences();
+
             return;
         }
 
         $this->sortBy = $by;
         $this->sortDir = $dir === 'desc' ? 'desc' : 'asc';
+
+        $this->rememberViewPreferences();
     }
 
     public function handleMediaClick($fileId): void

@@ -60,22 +60,65 @@ return [
     */
     'upload' => [
         'max_size_kb' => 51200,
+
+        /*
+         | Defaults cover every kind the shipped mime icons can render, so a
+         | file the explorer knows how to display is not rejected on upload.
+         | SVG is deliberately absent: the media route serves files inline, and
+         | an SVG runs script in the panel's own origin.
+         */
         'allowed_extensions' => [
-            'pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg', 'webp', 'zip', 'rar',
+            'pdf', 'doc', 'docx', 'rtf', 'odt', 'txt',
+            'xls', 'xlsx', 'csv', 'ods',
+            'ppt', 'pptx', 'odp',
+            'zip', 'rar', '7z', 'gz', 'tar',
+            'mp3', 'wav', 'ogg', 'm4a',
+            'mp4', 'mov', 'webm',
+            'png', 'jpg', 'jpeg', 'gif', 'webp',
         ],
         'allowed_mime_types' => [
             'application/pdf',
             'application/msword',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/rtf',
+            'text/rtf',
+            'application/vnd.oasis.opendocument.text',
             'text/plain',
-            'image/png',
-            'image/jpeg',
-            'image/webp',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'text/csv',
+            'application/vnd.oasis.opendocument.spreadsheet',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/vnd.oasis.opendocument.presentation',
             'application/zip',
             'application/x-zip-compressed',
             'application/x-rar-compressed',
             'application/vnd.rar',
+            'application/x-7z-compressed',
+            'application/gzip',
+            'application/x-tar',
+            'audio/mpeg',
+            'audio/wav',
+            'audio/x-wav',
+            'audio/ogg',
+            'audio/mp4',
+            'audio/x-m4a',
+            'video/mp4',
+            'video/quicktime',
+            'video/webm',
+            'image/png',
+            'image/jpeg',
+            'image/gif',
+            'image/webp',
         ],
+
+        /*
+         | What happens when the target folder already holds a file with the
+         | same name: 'rename' keeps both by suffixing " (2)", 'replace' drops
+         | the existing one, 'skip' refuses the new one.
+         */
+        'on_conflict' => 'rename',
     ],
 
     /*
