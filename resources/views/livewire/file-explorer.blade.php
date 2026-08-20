@@ -48,6 +48,30 @@
                             @svg('heroicon-o-folder', 'h-5 w-5 text-zinc-500')
                             <span class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{{ __('filament-file-explorer::file-explorer.explorer') }}</span>
                         </div>
+                        @php $rootOptions = $this->rootOptions(); @endphp
+                        @if ($rootOptions !== [])
+                            <div class="border-b border-zinc-200/80 px-1.5 py-2 dark:border-zinc-700" x-show="$store.feUi.sidebarOpen" x-cloak>
+                                <div class="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{{ __('filament-file-explorer::file-explorer.roots.label') }}</div>
+                                <ul class="flex flex-col gap-0.5" role="listbox" aria-label="{{ __('filament-file-explorer::file-explorer.roots.label') }}">
+                                    @foreach ($rootOptions as $rootOption)
+                                        <li>
+                                            <button
+                                                type="button"
+                                                class="fe-side-node flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-start text-[12px]"
+                                                role="option"
+                                                aria-selected="{{ (int) $rootOption['id'] === (int) $rootFolderId ? 'true' : 'false' }}"
+                                                @class(['bg-zinc-200/70 font-semibold dark:bg-zinc-700/60' => (int) $rootOption['id'] === (int) $rootFolderId])
+                                                wire:click="switchRoot({{ (int) $rootOption['id'] }})"
+                                                wire:key="fe-root-{{ $rootOption['id'] }}"
+                                            >
+                                                @svg('heroicon-o-server-stack', 'h-4 w-4 shrink-0 text-zinc-500')
+                                                <span class="truncate">{{ $rootOption['name'] }}</span>
+                                            </button>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
                         <div class="flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-2" x-show="$store.feUi.sidebarOpen" x-cloak>
                             <x-filament-file-explorer::file-explorer.sidebar-tree
                                 :nodes="$this->sidebarTree()"

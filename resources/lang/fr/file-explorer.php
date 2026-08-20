@@ -122,6 +122,9 @@ return [
     ],
 
     'added_by' => 'Ajouté par',
+    'roots' => [
+        'label' => 'Emplacements',
+    ],
     'quota' => [
         'label' => 'Stockage',
         'usage' => ':used utilisés sur :limit',

@@ -38,6 +38,24 @@ final class FolderTree
     }
 
     /**
+     * Containment against a scope that offers several roots. Still one root at a
+     * time underneath: the folder has to sit under one of them, not somewhere
+     * between them.
+     *
+     * @param  list<int>  $rootFolderIds
+     */
+    public function isUnderAnyRoot(Folder $folder, array $rootFolderIds): bool
+    {
+        foreach ($rootFolderIds as $rootFolderId) {
+            if ($this->isUnderRoot($folder, $rootFolderId)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return list<int>
      */
     public function descendantFolderIdsIncludingRoot(int $rootFolderId): array

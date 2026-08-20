@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Koassi\FilamentFileExplorer\Livewire;
 
 
+use Koassi\FilamentFileExplorer\Support\ActiveRoot;
 use Koassi\FilamentFileExplorer\Support\FileNames;
 use Koassi\FilamentFileExplorer\Support\FolderListing;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
@@ -158,9 +159,14 @@ class FileExplorer extends \Livewire\Component
         $this->perPage = $this->pageSize();
     }
 
+    /**
+     * Namespaced by root as well as by scope: a scope may offer several roots,
+     * and the folder remembered in one of them is not a folder of another —
+     * containment would reject it and send the user back to the root anyway.
+     */
     protected function sessionKey(): string
     {
-        return 'currentFolderId.'.$this->scopeKey;
+        return 'currentFolderId.'.$this->scopeKey.'.'.$this->rootFolderId;
     }
 
     protected function viewKey(): string
@@ -200,9 +206,13 @@ class FileExplorer extends \Livewire\Component
         ]]);
     }
 
+    /**
+     * Also per root: pasting into another root would fail the containment check
+     * with a 403 rather than a shrug.
+     */
     protected function clipboardKey(): string
     {
-        return 'clipboard.'.$this->scopeKey;
+        return 'clipboard.'.$this->scopeKey.'.'.$this->rootFolderId;
     }
 
 
@@ -1427,6 +1437,62 @@ class FileExplorer extends \Livewire\Component
             'window_seconds' => 0,
             'hint' => __('filament-file-explorer::file-explorer.nothing_selected'),
         ];
+    }
+
+    /**
+     * Roots the sidebar offers a switch between, empty when there is only one.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    public function rootOptions(): array
+    {
+        return ActiveRoot::options($this->scopeKey);
+    }
+
+    /**
+     * Moves the whole explorer to another root of the same scope.
+     *
+     * The id is checked against the list the resolver offers, not merely
+     * against the tree: every other action then compares containment with this
+     * one root, so this is the only place a root can change and it must not
+     * accept one from the request.
+     */
+    public function switchRoot(int $rootFolderId): void
+    {
+        abort_unless(ActiveRoot::offers($this->scopeKey, $rootFolderId), 403);
+        abort_unless(app(FileExplorerAuthorizer::class)->canAccess($this->scopeKey, $rootFolderId), 403);
+
+        if ($rootFolderId === $this->rootFolderId) {
+            return;
+        }
+
+        $this->rootFolderId = $rootFolderId;
+
+        ActiveRoot::choose($this->scopeKey, $rootFolderId);
+        ScopeRoots::remember($this->scopeKey, $rootFolderId);
+
+        // Each root remembers the folder it was left in, the way mount() does.
+        $remembered = Folder::with(['children', 'parent'])->find(session($this->sessionKey(), $rootFolderId));
+
+        $folder = $remembered !== null && app(FolderTree::class)->isUnderRoot($remembered, $rootFolderId)
+            ? $remembered
+            : Folder::with(['children', 'parent'])->findOrFail($rootFolderId);
+
+        $this->currentFolder = $folder;
+        $this->breadcrumb = $this->generateBreadcrumb($folder);
+        session([$this->sessionKey() => $folder->id]);
+
+        // Nothing selected, held or navigated in the old root means anything
+        // here.
+        $this->selectedFolders = [];
+        $this->selectedFiles = [];
+        $this->search = '';
+        $this->navHistory = [(int) $folder->id];
+        $this->navIndex = 0;
+        $this->clipboardReady = $this->hasClipboard();
+        $this->closeInfo();
+        $this->resetListing();
+        $this->dispatch('fe-sel-cleared');
     }
 
     /**

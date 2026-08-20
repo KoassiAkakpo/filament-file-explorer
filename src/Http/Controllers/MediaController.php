@@ -63,7 +63,7 @@ class MediaController extends Controller
      */
     public function zipSelection(Request $request, string $scopeKey): Response
     {
-        $rootFolderId = $this->authorizeScope($scopeKey);
+        $rootFolderIds = $this->authorizeScope($scopeKey);
 
         $folderIds = $this->idList($request->query('folders'));
         $fileIds = $this->idList($request->query('files'));
@@ -72,7 +72,7 @@ class MediaController extends Controller
         abort_if(count($folderIds) + count($fileIds) > self::MAX_SELECTION, 400);
 
         return $this->streamZip(
-            function (ZipArchive $zip) use ($folderIds, $fileIds, $rootFolderId): void {
+            function (ZipArchive $zip) use ($folderIds, $fileIds, $rootFolderIds): void {
                 $tree = app(FolderTree::class);
 
                 foreach ($folderIds as $folderId) {
@@ -84,7 +84,7 @@ class MediaController extends Controller
                         continue;
                     }
 
-                    abort_unless($tree->isUnderRoot($folder, $rootFolderId), 403);
+                    abort_unless($tree->isUnderAnyRoot($folder, $rootFolderIds), 403);
 
                     $this->addFolderToZip($zip, $folder, $this->zipEntryName((string) ($folder->name ?: 'folder')));
                 }
@@ -96,7 +96,7 @@ class MediaController extends Controller
                         continue;
                     }
 
-                    abort_unless($this->mediaBelongsToRoot($media, $rootFolderId), 403);
+                    abort_unless($this->mediaBelongsToRoot($media, $rootFolderIds), 403);
 
                     $this->addMediaToZip($zip, $media, $this->zipEntryName((string) $media->file_name));
                 }
@@ -110,9 +110,9 @@ class MediaController extends Controller
         // The root comes from the scope, never from the request. With an
         // attacker-supplied root the containment check below would prove
         // nothing, since every folder sits under its own ancestor.
-        $rootFolderId = $this->authorizeScope($scopeKey);
+        $rootFolderIds = $this->authorizeScope($scopeKey);
 
-        abort_unless(app(FolderTree::class)->isUnderRoot($folder, $rootFolderId), 403);
+        abort_unless(app(FolderTree::class)->isUnderAnyRoot($folder, $rootFolderIds), 403);
 
         return $this->streamZip(
             function (ZipArchive $zip) use ($folder): void {
@@ -123,33 +123,45 @@ class MediaController extends Controller
     }
 
     /**
-     * Root folder the caller may browse under $scopeKey, having passed both the
+     * Root folders the caller may browse under $scopeKey, having passed both the
      * access check and the download ability.
+     *
+     * @return list<int>
      */
-    protected function authorizeScope(string $scopeKey): int
+    protected function authorizeScope(string $scopeKey): array
     {
-        $rootFolderId = ScopeRoots::resolve($scopeKey);
+        $rootFolderIds = ScopeRoots::resolveAll($scopeKey);
 
-        abort_unless($rootFolderId !== null, 403);
+        abort_if($rootFolderIds === [], 403);
 
         $authorizer = app(FileExplorerAuthorizer::class);
 
-        abort_unless($authorizer->canAccess($scopeKey, $rootFolderId), 403);
-        abort_unless($authorizer->abilities($scopeKey, $rootFolderId)['download'] ?? false, 403);
+        // A scope is one authorization unit however many roots it offers: they
+        // share the scope key, so they share the decision and the ability set.
+        $primary = $rootFolderIds[0];
 
-        return $rootFolderId;
+        abort_unless($authorizer->canAccess($scopeKey, $primary), 403);
+        abort_unless($authorizer->abilities($scopeKey, $primary)['download'] ?? false, 403);
+
+        return $rootFolderIds;
     }
 
-    protected function authorizeMedia(string $scopeKey, Media $media): int
+    /**
+     * @return list<int>
+     */
+    protected function authorizeMedia(string $scopeKey, Media $media): array
     {
-        $rootFolderId = $this->authorizeScope($scopeKey);
+        $rootFolderIds = $this->authorizeScope($scopeKey);
 
-        abort_unless($this->mediaBelongsToRoot($media, $rootFolderId), 403);
+        abort_unless($this->mediaBelongsToRoot($media, $rootFolderIds), 403);
 
-        return $rootFolderId;
+        return $rootFolderIds;
     }
 
-    protected function mediaBelongsToRoot(Media $media, int $rootFolderId): bool
+    /**
+     * @param  list<int>  $rootFolderIds
+     */
+    protected function mediaBelongsToRoot(Media $media, array $rootFolderIds): bool
     {
         // Explorer media always hangs off a Folder in the explorer collection.
         // Without these two checks, a media row belonging to another model whose
@@ -165,7 +177,7 @@ class MediaController extends Controller
         $folder = Folder::query()->find($media->model_id);
 
         return $folder instanceof Folder
-            && app(FolderTree::class)->isUnderRoot($folder, $rootFolderId);
+            && app(FolderTree::class)->isUnderAnyRoot($folder, $rootFolderIds);
     }
 
     /**

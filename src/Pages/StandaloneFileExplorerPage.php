@@ -10,6 +10,7 @@ use Filament\Pages\Page;
 use Filament\Panel;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Pages\Concerns\InteractsWithFileExplorer;
+use Koassi\FilamentFileExplorer\Support\ActiveRoot;
 use Koassi\FilamentFileExplorer\Support\StandaloneAccess;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use UnitEnum;
@@ -86,7 +87,8 @@ abstract class StandaloneFileExplorerPage extends Page
 
     protected function resolveFileExplorerRootFolderId(): int
     {
-        return static::fileExplorerRootResolver()->rootFolderId();
+        // A resolver offering several roots remembers which one the user was in.
+        return ActiveRoot::idFor(static::fileExplorerRootResolver());
     }
 
     protected function getHeaderActions(): array
