@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Koassi\FilamentFileExplorer\Livewire;
 
 
+use Koassi\FilamentFileExplorer\Support\FileNames;
 use Koassi\FilamentFileExplorer\Support\FolderListing;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
@@ -508,12 +509,16 @@ class FileExplorer extends \Livewire\Component
             return;
         }
 
+        // A copy never overwrites, whatever the upload conflict policy says:
+        // duplicating something is not meant to replace it.
+        $index = FileNames::availableIndex($target, (string) $media->file_name);
+
         $actor = auth()->user();
         $target
             ->addMedia($path)
             ->preservingOriginal()
-            ->usingName($media->name)
-            ->usingFileName($media->file_name)
+            ->usingName(FileNames::applyIndexToLabel((string) $media->name, $index))
+            ->usingFileName(FileNames::applyIndex((string) $media->file_name, $index))
             ->withCustomProperties(array_merge($media->custom_properties ?? [], [
                 'user_id' => $actor?->getAuthIdentifier(),
                 'uploaded_by_type' => $actor ? $actor::class : null,
@@ -1449,6 +1454,8 @@ class FileExplorer extends \Livewire\Component
 
         $actor = auth()->user();
         $uploaded = 0;
+        $replaced = 0;
+        $skipped = [];
 
         foreach ($this->files as $file) {
             if (! $file) {
@@ -1462,10 +1469,35 @@ class FileExplorer extends \Livewire\Component
             $extension = strtolower(pathinfo($original, PATHINFO_EXTENSION) ?: 'bin');
             $name = pathinfo($original, PATHINFO_FILENAME);
             $safe = strtolower((Str::slug($name) ?: 'file').'.'.$extension);
+            $label = $original;
+
+            $clash = FileNames::existing($folder, $safe);
+
+            if ($clash !== null) {
+                $policy = UploadRules::onConflict();
+
+                if ($policy === 'skip') {
+                    $skipped[] = $original;
+
+                    continue;
+                }
+
+                if ($policy === 'replace') {
+                    $this->assertMediaUnderRoot($clash);
+                    $clash->delete();
+                    $replaced++;
+                } else {
+                    // Keep both, the way a desktop does: the stored name gets a
+                    // slug suffix, the label the reader sees gets " (2)".
+                    $index = FileNames::availableIndex($folder, $safe);
+                    $safe = FileNames::applyIndex($safe, $index);
+                    $label = FileNames::applyIndexToLabel($original, $index);
+                }
+            }
 
             $folder
                 ->addMedia($file)
-                ->usingName($original)
+                ->usingName($label)
                 ->usingFileName($safe)
                 ->withCustomProperties([
                     'user_id' => $actor?->getAuthIdentifier(),
@@ -1494,7 +1526,18 @@ class FileExplorer extends \Livewire\Component
             Notification::make()
                 ->success()
                 ->title(__('filament-file-explorer::file-explorer.uploaded'))
-                ->body(trans_choice('filament-file-explorer::file-explorer.uploaded_to_folder', $uploaded, ['folder' => $folder->name]))
+                ->body(
+                    trans_choice('filament-file-explorer::file-explorer.uploaded_to_folder', $uploaded, ['folder' => $folder->name])
+                    .($replaced > 0 ? ' · '.trans_choice('filament-file-explorer::file-explorer.upload_replaced', $replaced) : '')
+                )
+                ->send();
+        }
+
+        if ($skipped !== []) {
+            Notification::make()
+                ->warning()
+                ->title(trans_choice('filament-file-explorer::file-explorer.upload_skipped', count($skipped)))
+                ->body(implode(', ', array_slice($skipped, 0, 5)))
                 ->send();
         }
     }

@@ -24,6 +24,8 @@ return [
     'uploaded' => 'Téléversé',
     'uploaded_to_folder' => '{1} :count fichier dans « :folder »|[2,*] :count fichiers dans « :folder »',
     'upload_invalid' => 'Téléversement invalide',
+    'upload_replaced' => '{1} :count fichier remplacé|[2,*] :count fichiers remplacés',
+    'upload_skipped' => '{1} :count fichier existait déjà|[2,*] :count fichiers existaient déjà',
     'copied' => 'Copié',
     'cut' => 'Couper',
     'pasted' => 'Collé',

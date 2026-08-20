@@ -24,6 +24,8 @@ return [
     'uploaded' => 'Uploaded',
     'uploaded_to_folder' => '{1} :count file in “:folder”|[2,*] :count files in “:folder”',
     'upload_invalid' => 'Invalid upload',
+    'upload_replaced' => '{1} :count file replaced|[2,*] :count files replaced',
+    'upload_skipped' => '{1} :count file already existed|[2,*] :count files already existed',
     'copied' => 'Copied',
     'cut' => 'Cut',
     'pasted' => 'Pasted',

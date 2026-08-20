@@ -45,6 +45,16 @@ final class UploadRules
         ]));
     }
 
+    /**
+     * What to do when the target folder already holds that file name.
+     */
+    public static function onConflict(): string
+    {
+        $policy = (string) config('filament-file-explorer.upload.on_conflict', 'rename');
+
+        return in_array($policy, ['rename', 'replace', 'skip'], true) ? $policy : 'rename';
+    }
+
     public static function isAllowedUpload(UploadedFile $file): bool
     {
         $mime = (string) $file->getMimeType();
