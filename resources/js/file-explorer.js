@@ -52,6 +52,11 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 marqueeFiles: [],
                 // Last item touched: where a shift-range starts from.
                 anchor: null,
+                // Where the keyboard is. A shift-range runs from the anchor to
+                // here, so shift+arrow must move this and leave the anchor
+                // alone — reading the anchor for both is what made every
+                // shift+arrow re-select the same two items.
+                cursor: null,
                 _syncTimer: null,
                 setWire(wire) {
                     setFeWire(wire);
@@ -68,6 +73,10 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 },
                 setAnchor(type, id) {
                     this.anchor = { type, id: Number(id) };
+                    this.cursor = { type, id: Number(id) };
+                },
+                setCursor(type, id) {
+                    this.cursor = { type, id: Number(id) };
                 },
                 /**
                  * Items in the order they are laid out, read from the DOM so the
@@ -98,7 +107,12 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 },
                 selectRange(type, id, scope) {
                     const items = this.orderedItems(scope);
+
+                    // Extending without an anchor makes one here, so the next
+                    // extension has something to run from.
                     const anchor = this.anchor || { type, id: Number(id) };
+                    this.anchor = anchor;
+
                     const from = items.findIndex((item) => item.type === anchor.type && item.id === anchor.id);
                     const to = items.findIndex((item) => item.type === type && item.id === Number(id));
 
@@ -110,7 +124,10 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     const range = items.slice(Math.min(from, to), Math.max(from, to) + 1);
 
                     // The anchor stays put: dragging the shift selection back and
-                    // forth grows and shrinks the same range.
+                    // forth grows and shrinks the same range. The cursor follows
+                    // the far end, which is where the next extension starts.
+                    this.setCursor(type, id);
+
                     this.select(
                         range.filter((item) => item.type === 'folder').map((item) => item.id),
                         range.filter((item) => item.type === 'file').map((item) => item.id),
@@ -175,6 +192,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.folders = [];
                     this.files = [];
                     this.anchor = null;
+                    this.cursor = null;
                     this.clearMarquee();
                     if (this._syncTimer) clearTimeout(this._syncTimer);
                     this._syncTimer = null;
@@ -703,8 +721,12 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
 
                     if (!items.length) return;
 
-                    const current = sel.anchor
-                        ? items.findIndex((item) => item.type === sel.anchor.type && item.id === sel.anchor.id)
+                    // From the cursor, not the anchor: with shift held the anchor
+                    // is the fixed end of the range and never advances.
+                    const from = sel.cursor || sel.anchor;
+
+                    const current = from
+                        ? items.findIndex((item) => item.type === from.type && item.id === from.id)
                         : -1;
 
                     let target;

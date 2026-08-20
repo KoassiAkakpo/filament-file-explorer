@@ -15,7 +15,11 @@ composer install
 ./vendor/bin/pest --filter="registers a navigation entry"
 ./vendor/bin/pint                                    # format (laravel preset + declare_strict_types)
 ./vendor/bin/pint --test                             # check only
+
+node --test "tests/Js/*.test.mjs"                    # selection / keyboard logic
 ```
+
+`tests/Js/` has **no dependencies and no build step**: [tests/Js/harness.mjs](tests/Js/harness.mjs) runs `resources/js/file-explorer.js` in a `node:vm` context with just enough of Alpine and the DOM to drive the selection store. It exists because the keyboard and selection layer is where the bugs actually are and no PHP test can reach it. Objects cross the vm boundary, so their prototype is not the test realm's — compare them by value (`at()`), never with `deepStrictEqual`.
 
 `larastan`/`phpstan` are dev dependencies but there is **no `phpstan.neon`** — static analysis is not wired up. Running `./vendor/bin/pint` on the whole repo currently reports pre-existing style drift in several files (import order, strict-type declarations in `config/` and `resources/lang/`); scope formatting to the files you touch rather than reformatting the tree.
 
@@ -72,6 +76,8 @@ Selection lives in the Alpine `feSel` store ([resources/js/file-explorer.js](res
 - Keyboard shortcuts are bound on the items container (`@keydown="onKeydown($event)"`), never on the window. A page can hold more than one explorer — the `FileExplorerPicker` in a modal — and a window binding would fire for all of them, including while the user types in the search box.
 
 `feSel.click()` owns the modifier logic (shift extends from the anchor, ctrl/meta toggles) so the Blade files stay declarative, and `toggle()` moves the anchor. `replace()` mirrors server state without syncing back; `select()` is the one that syncs, so UI-driven selection must go through it.
+
+**`anchor` and `cursor` are two different things.** The anchor is the fixed end of a shift-range and moves only on a plain click or `toggle()`; the cursor is where the keyboard is, and `selectRange()` moves it to the far end. `moveSelection()` has to read the cursor — reading the anchor for both meant every `shift+arrow` recomputed the same two-item range, so a keyboard selection could never grow past two items.
 
 ## Dialogs
 

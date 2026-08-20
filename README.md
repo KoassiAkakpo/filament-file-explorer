@@ -275,8 +275,11 @@ There is no build step: `php artisan filament:assets` publishes the package's JS
 
 ```bash
 composer install
-./vendor/bin/pest
+./vendor/bin/pest                     # PHP suite
+node --test "tests/Js/*.test.mjs"     # selection and keyboard logic
 ```
+
+The JS tests need nothing installed: they run the shipped script in a `node:vm` context with a stubbed Alpine and DOM.
 
 > Provider order matters when booting Filament under Testbench: `Filament\Support\SupportServiceProvider` binds Livewire's `DataStore` mechanism non-shared, so it must register **before** `LivewireServiceProvider`. See `tests/TestCase.php`.
 
