@@ -34,12 +34,18 @@ Both share [Pages/Concerns/InteractsWithFileExplorer.php](src/Pages/Concerns/Int
 
 Standalone settings are read through [Support/StandaloneSettings.php](src/Support/StandaloneSettings.php), never from `config()` directly at call sites. It tries the panel's plugin instance first, then falls back to config. This keeps settings **panel-scoped** in multi-panel apps instead of mutating global config, and keeps things working outside a panel (console, tests) where `FilamentFileExplorerPlugin::get()` throws. Any new standalone setting must be added in three places: the config file, a fluent setter + accessor on the plugin, and a `StandaloneSettings` reader.
 
+Two wrinkles the newer settings introduced:
+
+- A setting whose "unset" value is a legal value needs its own flag. `quota` and `refresh` are nullable — null means *no limit* — so the value alone cannot say whether the panel had an opinion, and `->quota(null)` has to be able to lift a limit config had set. Hence `hasQuota()` / `hasRefreshInterval()` beside the getters.
+- `tableColumns()` takes a Closure, which cannot live in a config file, so it is plugin-only. `StandaloneSettings::tableColumns()` still exists as the single reader; it just has no config fallback. The trait keys its columns by name so the callback can add, drop or reorder them.
+
 ## Container bindings
 
 Registered in [FilamentFileExplorerServiceProvider.php](src/FilamentFileExplorerServiceProvider.php):
 
 - `FileExplorerAuthorizer` — singleton resolving `config('filament-file-explorer.authorizer')`; the plugin's `->authorizer()` overwrites that config key in `boot()`.
 - `FolderTree` — **`scoped`, not `singleton`**: it memoises containment checks, parent lookups and descendant sets for one request. A shared instance in a long-lived worker (Octane) would keep answering for a tree that has since been reorganised.
+- `Quota` and `Uploader` — **`scoped`**, for the same reason as `FolderTree`: one memoises how many bytes a scope holds, the other uploader names, and both would be wrong by the next request.
 - `FileExplorerRootResolver` — deliberately **`bind`, not `singleton`**: the resolver *class* is panel-scoped so it must be looked up per resolution. The three concrete resolvers are singletons, and that is what memoises the root-folder lookup (`canAccess()` runs on every navigation render, so an unmemoised resolver would hit the DB repeatedly and could create duplicate roots).
 
 ## Listing and tree walks
@@ -89,9 +95,41 @@ Media ids are the sharp edge of the containment check. `Livewire\FileExplorer::a
 
 The containment check is only worth anything if `$rootFolderId` is **not** derived from the thing being checked. The media routes take the scope key as a URL segment, so they resolve the root through [Support/ScopeRoots.php](src/Support/ScopeRoots.php) — the standalone resolver when the scope key is the one it owns, otherwise a session registry that pages and the Livewire component write once `canAccess()` has passed. Deriving the root from the requested media (walking up to its top-most ancestor) or reading it from a query parameter proves only that a folder sits under its own ancestor, which is always true. `MediaController` additionally checks `model_type` and `collection_name`: a media row from another model whose `model_id` collides with an in-scope folder id would otherwise pass containment.
 
-Session state (`currentFolderId.{scopeKey}`, `clipboard.{scopeKey}`, `filament-file-explorer.roots.{authId}`) is namespaced by scope key, which is why per-user/per-tenant resolvers include the user or tenant key in the scope key.
+Session state (`currentFolderId.{scopeKey}.{rootId}`, `clipboard.{scopeKey}.{rootId}`, `activeRoot.{scopeKey}`, `filament-file-explorer.roots.{authId}`) is namespaced by scope key, which is why per-user/per-tenant resolvers include the user or tenant key in the scope key. The current folder and the clipboard carry the root id as well, since one scope may offer several roots (see below) and a folder or a copied file of one root means nothing in another.
+
+The `ScopeRoots` registry maps a scope key to a **set** of roots, not one: a media link made under one root of a multi-root scope must keep working after the user switches to another. Every id in that set got there through a `canAccess()` that passed, and the bucket is keyed by the authenticated user, so widening the set never widens access.
+
+## Quotas
+
+`Support\Quota` caps a scope by root folder, not by application: with the per-user or per-tenant resolver each scope gets an allowance of the same size, which is the only reading of a quota that means anything when the resolver hands out one root each.
+
+Two details carry the weight. **Trashed files count** — they sit on the disk until purged, and a trash that stopped counting would be a way over the cap (delete, re-upload, repeat). And the check **reserves** within the request rather than re-reading the sum: an upload adds rows one at a time, so measuring every file of a multi-file upload against the same stale total would let them all through. `resetListing()` flushes the reservation along with the tree.
+
+Enforcement sits at the two places bytes appear: `updatedFiles()` (after the conflict policy is known, so replacing a file only counts the difference) and `duplicateMedia()`, which returns `false` when a copy does not fit. Both count into `$quotaRefused` and report once per action, not once per file.
+
+## Several roots for one scope
+
+`Contracts\ProvidesMultipleRoots` is optional, like `ResolvesExistingRoot`. The roots it names share the scope key, and therefore **one authorization decision and one ability set** — roots that must be authorized apart belong in separate scopes.
+
+Underneath, the explorer still browses exactly one root: every action compares containment against a single `$rootFolderId`, and that is what makes the check worth anything. `Livewire\FileExplorer::switchRoot()` is the only place the root changes, and it validates the id against `ActiveRoot::offers()` — the resolver's own list — not against the tree, which would let any folder pass as a root. `Support\ActiveRoot` also re-validates the stored choice on every page load, so a root the resolver has stopped offering cannot stay reachable through a stale session.
+
+`FolderTree::isUnderAnyRoot()` exists for one caller: the media routes, which take the scope key from their own URL and must accept a link made under any root of that scope.
+
+## Refresh and cross-component sync
+
+`refresh.seconds` is off by default. The polling is driven from Alpine rather than `wire:poll` so it can stand down while the tab is hidden or an item is being dragged — a morphed DOM cancels a drag in progress.
+
+Most freshness is free: Livewire re-reads models on every request and the listing is queried on every render. What `refreshExplorer()` actually adds is the fallback when the folder being browsed has been deleted or moved out of scope. It deliberately does **not** call `resetListing()`, which would send the window back to the first page and undo a "Load more".
+
+`afterMutation()` is `resetListing()` plus an announcement to the other explorers on the page (the picker in a modal beside the page). Navigation and search stay on `resetListing()` — nothing changed for anyone else. The announcement carries the component id so a component ignores its own event, and it is never dispatched from `refreshExplorer()`: that is what stops two components refreshing each other forever.
+
+Known gap: with the trash off, a folder purged by another session while a user is inside it leaves Livewire unable to restore the model at all (`newQueryForRestoration()->firstOrFail()`), and the component fails until the page is reloaded. Soft-deleted folders restore fine and take the fallback above.
 
 ## Root folder creation
+
+`canAccess()` must never create anything. Filament calls it on every navigation render, so resolving the root the creating way wrote a folder each time a menu was drawn, for every authenticated user, including the ones the check was about to deny. `Contracts\ResolvesExistingRoot` is the read-only escape hatch, and it is a **separate interface on purpose**: adding a method to `FileExplorerRootResolver` would break every resolver a host app has already written. `Support\StandaloneAccess` is the one place both standalone pages take that decision — it authorizes with `0` when the scope has no root yet, and mount() creates it. `ScopeRoots` uses the same read-only path: serving a media file must never create a folder.
+
+`StandaloneAccess` also distinguishes the two ways a resolver fails. An `HttpExceptionInterface` (the per-user and per-tenant resolvers abort without a user or tenant) is a plain "not for this request" and stays quiet; anything else is `report()`ed, because the only symptom otherwise is a page missing from the menu.
 
 `FileExplorerManager::ensureRoot()` is the only idempotent path. The folders table has `unique(['parent_id', 'slug'])`, but MySQL does not dedupe rows with `parent_id IS NULL`, so concurrent first hits could each create a root. A `Cache::lock` closes that window and falls through to the unlocked path if the cache store cannot lock. Use `ensureRoot()` rather than `createRoot()` for anything resolver-driven.
 
@@ -101,7 +139,9 @@ Session state (`currentFolderId.{scopeKey}`, `clipboard.{scopeKey}`, `filament-f
 
 ## Tests
 
-Pest + Orchestra Testbench, `RefreshDatabase` on sqlite `:memory:`. [tests/TestCase.php](tests/TestCase.php) lists Filament's providers manually and **provider order matters**: `Filament\Support\SupportServiceProvider` must register before `LivewireServiceProvider` (Support binds Livewire's `DataStore` non-shared; Livewire re-binds it shared). Reversing them hands every component a fresh WeakMap and breaks Livewire's error bag on render. The suite also creates the `projects` and `media` tables inline in `defineDatabaseMigrations()` — Media Library's own migration is not published here.
+Pest + Orchestra Testbench, `RefreshDatabase` on sqlite `:memory:`. [tests/TestCase.php](tests/TestCase.php) lists Filament's providers manually and **provider order matters**: `Filament\Support\SupportServiceProvider` must register before `LivewireServiceProvider` (Support binds Livewire's `DataStore` non-shared; Livewire re-binds it shared). Reversing them hands every component a fresh WeakMap and breaks Livewire's error bag on render. The suite also creates the `users`, `projects` and `media` tables inline in `defineDatabaseMigrations()` — Media Library's own migration is not published here.
+
+`UploadedFile::fake()->create()` fakes `getSize()` but writes an **empty** file, so Media Library stores a size of 0 — useless for anything measuring bytes (the quota tests use `createWithContent()` instead, with a `%PDF-1.4` header so the mime guess still passes the upload rules).
 
 Fixtures live in [tests/Fixtures/](tests/Fixtures/): `TestPanelProvider` boots a panel with the plugin, `Project` + `ProjectExplorerPage` cover the record-scoped mode.
 

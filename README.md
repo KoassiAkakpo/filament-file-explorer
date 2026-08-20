@@ -60,6 +60,17 @@ FilamentFileExplorerPlugin::make()
     ->authorizer(\App\Support\FileExplorerAuthorizer::class)
 ```
 
+Behaviour, not just chrome, is panel-scoped too:
+
+```php
+FilamentFileExplorerPlugin::make()
+    ->quota(10 * 1024 ** 3)                 // bytes a scope may hold
+    ->refreshEvery(20)                      // seconds between automatic refreshes
+    ->defaultViewMode('list')               // grid, list, table or details
+    ->maxFolderDepth(6)
+    ->tableColumns(fn (array $columns) => Arr::except($columns, ['preview']))
+```
+
 Other switches: `->withoutFilesPage()`, `->withoutNavigation()`, `->withoutPages()`, `->disabled()`.
 
 ### Choosing the root folder
@@ -94,6 +105,25 @@ class TeamRootResolver implements FileExplorerRootResolver
 ```
 
 Bind it as a singleton so the root is resolved once per request.
+
+Two optional companion interfaces are worth implementing:
+
+- **`ResolvesExistingRoot`** adds `existingRootFolderId(): ?int`, which must answer without writing. Filament calls `canAccess()` on every navigation render, so without it the first page of a session creates the root folder — for every user, including the ones about to be denied. The three shipped resolvers implement it. When the scope has no root yet the authorizer is asked with `0`, and the folder is created on the first real visit.
+- **`ProvidesMultipleRoots`** adds `roots(): array`, and the sidebar turns into a location switcher:
+
+```php
+public function roots(): array
+{
+    return [
+        ['id' => auth()->user()->ensureFileExplorerRoot()->id, 'name' => 'My files'],
+        ['id' => $this->sharedRootId(), 'name' => 'Shared'],
+    ];
+}
+```
+
+The roots of one scope share its scope key, so they share one authorization decision and one ability set — roots that must be authorized apart belong in separate scopes. The explorer still browses one root at a time; the current folder and the clipboard are namespaced per root, and each location remembers where it was left. A switch is validated against `roots()`, never against an id from the request.
+
+Anything a resolver throws that is not an abort is reported, so a missing migration or a mistyped class does not just make the page vanish from the menu.
 
 ### Replacing the pages
 
@@ -156,6 +186,24 @@ The explorer renders `listing.per_page` items at a time (100 by default), folder
 // config/filament-file-explorer.php
 'listing' => ['per_page' => 100],
 ```
+
+## Quotas
+
+`quota.bytes` (null by default) caps what a scope may hold. The cap is per root folder, so with the per-user or per-tenant resolver each user or tenant gets an allowance of that size, and the sidebar shows the usage — amber past 85%, red when full.
+
+Uploads and copies that would go over are refused before anything is written, and the reason is reported. Replacing a file only counts the difference. Trashed files still count: they sit on the disk until they are purged, and a trash that stopped counting would be a way over the cap.
+
+## Who added a file
+
+The uploader is recorded on every upload and shown in the inspector and in the files table. It is resolved from the model each time rather than stored as a name, so a renamed account does not leave stale names behind, and memoised per request: a page costs one query per distinct uploader. When the account is gone, the id is still shown.
+
+## Several sessions on the same tree
+
+Nothing is broadcast, so two people browsing the same root see nothing of each other until they navigate. `refresh.seconds` (or `->refreshEvery()`) closes that: off by default, floored at five seconds.
+
+The polling is driven from Alpine rather than `wire:poll`, so it stands down while the tab is hidden, while an item is being dragged, and while the user is renaming, creating a folder, uploading or reading a dialog. A "Load more" survives a refresh. If the folder you are standing in is deleted by someone else, the explorer falls back to the root instead of rendering a folder that is no longer there — with the trash off, a folder *purged* under you leaves Livewire unable to restore the model at all, and the page has to be reloaded.
+
+Mutations also announce themselves to the other explorers on the same page, which is what keeps a `FileExplorerPicker` in a modal in step with the page behind it.
 
 ## Trash
 
