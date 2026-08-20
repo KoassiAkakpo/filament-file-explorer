@@ -7,6 +7,7 @@ namespace Koassi\FilamentFileExplorer\Tables\Concerns;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
+use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Actions\Action;
@@ -55,8 +56,8 @@ trait InteractsWithFileExplorerTable
                     ->icon('heroicon-o-folder-open')
                     ->url(fn (): string => $this->fileExplorerExplorerUrl()),
             ])
-            ->columns([
-                ImageColumn::make('preview')
+            ->columns(StandaloneSettings::tableColumns([
+                'preview' => ImageColumn::make('preview')
                     ->label(__('filament-file-explorer::file-explorer.preview'))
                     ->getStateUsing(function (Media $record): ?string {
                         if (! str_starts_with((string) $record->mime_type, 'image/')) {
@@ -73,20 +74,20 @@ trait InteractsWithFileExplorerTable
                     ->imageSize(36)
                     ->toggleable(),
 
-                TextColumn::make('file_name')
+                'file_name' => TextColumn::make('file_name')
                     ->label(__('filament-file-explorer::file-explorer.file_name'))
                     ->searchable()
                     ->sortable()
                     ->weight('bold')
                     ->limit(60),
 
-                TextColumn::make('size')
+                'size' => TextColumn::make('size')
                     ->label(__('filament-file-explorer::file-explorer.size'))
                     ->sortable()
                     ->formatStateUsing(fn ($state): string => Number::fileSize((int) $state, precision: 1))
                     ->alignEnd(),
 
-                TextColumn::make('mime_type')
+                'mime_type' => TextColumn::make('mime_type')
                     ->label(__('filament-file-explorer::file-explorer.type'))
                     ->badge()
                     ->formatStateUsing(function (Media $record): string {
@@ -97,7 +98,7 @@ trait InteractsWithFileExplorerTable
                     ->color('gray')
                     ->toggleable(),
 
-                TextColumn::make('added_by')
+                'added_by' => TextColumn::make('added_by')
                     ->label(__('filament-file-explorer::file-explorer.added_by'))
                     // custom_properties is JSON, so there is nothing to sort or
                     // search on here; the uploader is resolved per row and
@@ -106,11 +107,11 @@ trait InteractsWithFileExplorerTable
                     ->placeholder('—')
                     ->toggleable(),
 
-                TextColumn::make('created_at')
+                'created_at' => TextColumn::make('created_at')
                     ->label(__('filament-file-explorer::file-explorer.created_at'))
                     ->sortable()
                     ->toggleable(),
-            ])
+            ]))
             ->recordActions([
                 ActionGroup::make([
                     Action::make('download')

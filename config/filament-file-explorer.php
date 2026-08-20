@@ -202,10 +202,28 @@ return [
     |--------------------------------------------------------------------------
     | Folders
     |--------------------------------------------------------------------------
+    |
+    | max_depth is also settable per panel, with
+    | FilamentFileExplorerPlugin::make()->maxFolderDepth(...).
+    |
     */
     'folders' => [
         'max_depth' => 12,
         'table' => 'file_explorer_folders',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default view
+    |--------------------------------------------------------------------------
+    |
+    | The view the explorer opens in: grid, list, table or details. Whatever the
+    | user picks afterwards is remembered per scope, so this only applies until
+    | they choose. Per panel: ->defaultViewMode('list').
+    |
+    */
+    'view' => [
+        'default' => 'grid',
     ],
 
     /*

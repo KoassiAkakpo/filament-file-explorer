@@ -63,6 +63,12 @@ class FilamentFileExplorerPlugin implements Plugin
 
     protected bool $refreshSet = false;
 
+    protected ?string $defaultViewMode = null;
+
+    protected ?int $maxFolderDepth = null;
+
+    protected ?\Closure $tableColumns = null;
+
     public function getId(): string
     {
         return 'filament-file-explorer';
@@ -184,6 +190,41 @@ class FilamentFileExplorerPlugin implements Plugin
     {
         $this->refreshSeconds = $seconds;
         $this->refreshSet = true;
+
+        return $this;
+    }
+
+    /**
+     * View the explorer opens in until the user picks another: grid, list,
+     * table or details.
+     */
+    public function defaultViewMode(string $mode): static
+    {
+        $this->defaultViewMode = $mode;
+
+        return $this;
+    }
+
+    /**
+     * How deep folders may nest in this panel.
+     */
+    public function maxFolderDepth(int $depth): static
+    {
+        $this->maxFolderDepth = $depth;
+
+        return $this;
+    }
+
+    /**
+     * Rewrites the columns of the flat files table. The callback receives the
+     * default columns, keyed by name, and returns what to show:
+     *
+     *   ->tableColumns(fn (array $columns) => [...$columns, TextColumn::make(...)])
+     *   ->tableColumns(fn (array $columns) => Arr::except($columns, ['preview']))
+     */
+    public function tableColumns(\Closure $callback): static
+    {
+        $this->tableColumns = $callback;
 
         return $this;
     }
@@ -335,6 +376,21 @@ class FilamentFileExplorerPlugin implements Plugin
     public function getRefreshSeconds(): ?int
     {
         return $this->refreshSeconds;
+    }
+
+    public function getDefaultViewMode(): ?string
+    {
+        return $this->defaultViewMode;
+    }
+
+    public function getMaxFolderDepth(): ?int
+    {
+        return $this->maxFolderDepth;
+    }
+
+    public function getTableColumnsCallback(): ?\Closure
+    {
+        return $this->tableColumns;
     }
 
     public function shouldRegisterStandaloneNavigation(): ?bool

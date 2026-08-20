@@ -174,6 +174,8 @@ class FileExplorer extends \Livewire\Component
      */
     protected function restoreViewPreferences(): void
     {
+        $this->viewMode = StandaloneSettings::defaultViewMode();
+
         $prefs = session($this->viewKey());
 
         if (! is_array($prefs)) {
@@ -238,7 +240,9 @@ class FileExplorer extends \Livewire\Component
             $mode = 'grid';
         }
 
-        $this->viewMode = in_array($mode, ['grid', 'list', 'table', 'details'], true) ? $mode : 'grid';
+        $this->viewMode = in_array($mode, StandaloneSettings::VIEW_MODES, true)
+            ? $mode
+            : StandaloneSettings::defaultViewMode();
 
         $this->rememberViewPreferences();
     }
@@ -1663,7 +1667,7 @@ class FileExplorer extends \Livewire\Component
                         $fail(__('filament-file-explorer::file-explorer.folder_already_exists'));
                     }
 
-                    $maxDepth = config('filament-file-explorer.folders.max_depth');
+                    $maxDepth = StandaloneSettings::maxFolderDepth();
 
                     if ($maxDepth !== null && $this->currentFolder) {
                         if ($this->currentFolder->getDepth() >= $maxDepth - 1) {
@@ -1968,7 +1972,7 @@ class FileExplorer extends \Livewire\Component
         // The last segment is the file itself.
         array_pop($segments);
 
-        $maxDepth = config('filament-file-explorer.folders.max_depth');
+        $maxDepth = StandaloneSettings::maxFolderDepth();
         $current = $target;
 
         foreach (array_slice($segments, 0, 20) as $segment) {

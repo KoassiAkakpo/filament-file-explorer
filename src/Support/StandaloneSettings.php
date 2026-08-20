@@ -19,6 +19,12 @@ use UnitEnum;
  */
 final class StandaloneSettings
 {
+    /**
+     * The views the explorer knows how to render. Kept here so the default and
+     * the component's own validation cannot drift apart.
+     */
+    public const VIEW_MODES = ['grid', 'list', 'table', 'details'];
+
     public static function plugin(): ?FilamentFileExplorerPlugin
     {
         try {
@@ -124,6 +130,39 @@ final class StandaloneSettings
             : config('filament-file-explorer.refresh.seconds');
 
         return is_numeric($seconds) && (int) $seconds > 0 ? max(5, (int) $seconds) : 0;
+    }
+
+    /**
+     * View the explorer opens in until the user picks another.
+     */
+    public static function defaultViewMode(): string
+    {
+        $mode = self::plugin()?->getDefaultViewMode()
+            ?? config('filament-file-explorer.view.default', 'grid');
+
+        return in_array($mode, self::VIEW_MODES, true) ? (string) $mode : 'grid';
+    }
+
+    /**
+     * How deep folders may nest, or null for no limit.
+     */
+    public static function maxFolderDepth(): ?int
+    {
+        $depth = self::plugin()?->getMaxFolderDepth()
+            ?? config('filament-file-explorer.folders.max_depth');
+
+        return is_numeric($depth) && (int) $depth > 0 ? (int) $depth : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $columns
+     * @return array<array-key, mixed>
+     */
+    public static function tableColumns(array $columns): array
+    {
+        $callback = self::plugin()?->getTableColumnsCallback();
+
+        return $callback === null ? array_values($columns) : array_values($callback($columns));
     }
 
     public static function navigationLabel(): ?string
