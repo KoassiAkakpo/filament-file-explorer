@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer\Pages\Concerns;
 
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
+use Koassi\FilamentFileExplorer\Support\ScopeRoots;
+
 trait InteractsWithFileExplorer
 {
     public int $rootFolderId = 0;
@@ -16,10 +19,17 @@ trait InteractsWithFileExplorer
     {
         $this->rootFolderId = $this->resolveFileExplorerRootFolderId();
 
+        $scopeKey = $this->fileExplorerScopeKey();
+
         abort_unless(
-            app(\Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer::class)
-                ->canAccess($this->fileExplorerScopeKey(), $this->rootFolderId),
+            app(FileExplorerAuthorizer::class)
+                ->canAccess($scopeKey, $this->rootFolderId),
             403
         );
+
+        // Media and zip URLs rendered by this page (and by its table) carry the
+        // scope key only, so the routes serving them need a trustworthy record
+        // of the root it maps to. See Support\ScopeRoots.
+        ScopeRoots::remember($scopeKey, $this->rootFolderId);
     }
 }

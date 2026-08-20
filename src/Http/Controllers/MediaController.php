@@ -4,132 +4,269 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer\Http\Controllers;
 
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
-use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
-use Illuminate\Support\Str;
+use Koassi\FilamentFileExplorer\Support\ScopeRoots;
+use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use ZipArchive;
 
 class MediaController extends Controller
 {
-    public function show(Request $request, string $scopeKey, Media $media): StreamedResponse
+    /**
+     * Temp copies of remote-disk media staged for ZipArchive, deleted once the
+     * archive is closed.
+     *
+     * @var list<string>
+     */
+    protected array $stagedFiles = [];
+
+    public function show(Request $request, string $scopeKey, Media $media): Response
     {
         $this->authorizeMedia($scopeKey, $media);
 
-        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
-
-        return response()->stream(function () use ($media): void {
-            $stream = fopen($media->getPath(), 'rb');
-            if ($stream) {
-                fpassthru($stream);
-                fclose($stream);
-            }
-        }, 200, [
-            'Content-Type' => $media->mime_type ?: 'application/octet-stream',
-            'Content-Disposition' => $disposition.'; filename="'.$media->file_name.'"',
-        ]);
+        return $this->fileResponse($media, $request->boolean('download')
+            ? ResponseHeaderBag::DISPOSITION_ATTACHMENT
+            : ResponseHeaderBag::DISPOSITION_INLINE);
     }
 
-    public function zipMedia(Request $request, string $scopeKey, Media $media): StreamedResponse
+    public function zipMedia(Request $request, string $scopeKey, Media $media): Response
     {
         $this->authorizeMedia($scopeKey, $media);
 
-        $tmp = tempnam(sys_get_temp_dir(), 'fezip_');
-        $zip = new ZipArchive;
-        $zip->open($tmp, ZipArchive::OVERWRITE);
-        $path = $media->getPath();
-        if (is_file($path)) {
-            $zip->addFile($path, $media->file_name);
-        }
-        $zip->close();
-
-        $slug = Str::slug(pathinfo($media->file_name, PATHINFO_FILENAME) ?: 'file');
-        $name = ($slug !== '' ? $slug : 'file').'.zip';
-
-        return response()->streamDownload(function () use ($tmp): void {
-            echo file_get_contents($tmp);
-            @unlink($tmp);
-        }, $name, [
-            'Content-Type' => 'application/zip',
-        ]);
-    }
-
-    public function zipFolder(Request $request, string $scopeKey, Folder $folder): StreamedResponse
-    {
-        $rootFolderId = (int) $request->integer('root');
-        abort_unless($rootFolderId > 0, 400);
-
-        $authorizer = app(FileExplorerAuthorizer::class);
-        abort_unless($authorizer->canAccess($scopeKey, $rootFolderId), 403);
-        abort_unless($authorizer->abilities($scopeKey, $rootFolderId)['download'] ?? false, 403);
-
-        abort_unless(
-            app(FolderTree::class)->isUnderRoot($folder, $rootFolderId),
-            403
+        return $this->streamZip(
+            function (ZipArchive $zip) use ($media): void {
+                $this->addMediaToZip($zip, $media, $this->zipEntryName((string) $media->file_name));
+            },
+            $this->zipDownloadName(pathinfo((string) $media->file_name, PATHINFO_FILENAME), 'file'),
         );
-
-        $tmp = tempnam(sys_get_temp_dir(), 'fezip_');
-        $zip = new ZipArchive;
-        $zip->open($tmp, ZipArchive::OVERWRITE);
-        $this->addFolderToZip($zip, $folder, $folder->name ?: 'folder');
-        $zip->close();
-
-        $slug = Str::slug($folder->name ?: 'archive');
-        $name = ($slug !== '' ? $slug : 'archive').'.zip';
-
-        return response()->streamDownload(function () use ($tmp): void {
-            echo file_get_contents($tmp);
-            @unlink($tmp);
-        }, $name, [
-            'Content-Type' => 'application/zip',
-        ]);
     }
 
-    protected function authorizeMedia(string $scopeKey, Media $media): void
+    public function zipFolder(Request $request, string $scopeKey, Folder $folder): Response
     {
-        $folder = Folder::query()->find($media->model_id);
-        abort_unless($folder instanceof Folder, 403);
+        // The root comes from the scope, never from the request. With an
+        // attacker-supplied root the containment check below would prove
+        // nothing, since every folder sits under its own ancestor.
+        $rootFolderId = $this->authorizeScope($scopeKey);
 
-        $rootFolderId = $this->resolveRootFolderId($scopeKey, $folder);
+        abort_unless(app(FolderTree::class)->isUnderRoot($folder, $rootFolderId), 403);
+
+        return $this->streamZip(
+            function (ZipArchive $zip) use ($folder): void {
+                $this->addFolderToZip($zip, $folder, $this->zipEntryName((string) ($folder->name ?: 'folder')));
+            },
+            $this->zipDownloadName((string) $folder->name, 'archive'),
+        );
+    }
+
+    /**
+     * Root folder the caller may browse under $scopeKey, having passed both the
+     * access check and the download ability.
+     */
+    protected function authorizeScope(string $scopeKey): int
+    {
+        $rootFolderId = ScopeRoots::resolve($scopeKey);
+
+        abort_unless($rootFolderId !== null, 403);
+
         $authorizer = app(FileExplorerAuthorizer::class);
 
         abort_unless($authorizer->canAccess($scopeKey, $rootFolderId), 403);
         abort_unless($authorizer->abilities($scopeKey, $rootFolderId)['download'] ?? false, 403);
-        abort_unless(app(FolderTree::class)->isUnderRoot($folder, $rootFolderId), 403);
+
+        return $rootFolderId;
     }
 
-    protected function resolveRootFolderId(string $scopeKey, Folder $folder): int
+    protected function authorizeMedia(string $scopeKey, Media $media): int
     {
-        $current = $folder;
+        $rootFolderId = $this->authorizeScope($scopeKey);
 
-        while ($current->parent_id !== null) {
-            $parent = Folder::query()->find($current->parent_id);
-            if (! $parent) {
-                break;
-            }
-            $current = $parent;
+        // Explorer media always hangs off a Folder in the explorer collection.
+        // Without these two checks, a media row belonging to another model whose
+        // model_id happens to match an in-scope folder id would pass containment.
+        abort_unless($media->model_type === (new Folder)->getMorphClass(), 403);
+        abort_unless($media->collection_name === UploadRules::collection(), 403);
+
+        $folder = Folder::query()->find($media->model_id);
+
+        abort_unless($folder instanceof Folder, 403);
+        abort_unless(app(FolderTree::class)->isUnderRoot($folder, $rootFolderId), 403);
+
+        return $rootFolderId;
+    }
+
+    protected function fileResponse(Media $media, string $disposition): Response
+    {
+        $fileName = basename((string) $media->file_name) ?: 'file';
+        $contentType = $media->mime_type ?: 'application/octet-stream';
+
+        // Local disks go out as a file response so Symfony handles Range and
+        // If-Range — video seeking, resumable downloads — plus Content-Length.
+        if ($media->getDiskDriverName() === 'local') {
+            $path = $media->getPath();
+
+            abort_unless(is_file($path), 404);
+
+            $response = new BinaryFileResponse($path, Response::HTTP_OK, [
+                'Content-Type' => $contentType,
+            ]);
+
+            $response->setContentDisposition($disposition, $fileName);
+            $response->setAutoLastModified();
+
+            return $response;
         }
 
-        return (int) $current->id;
+        // Remote disk: stream the object instead of assuming a local path.
+        $path = $media->getPathRelativeToRoot();
+        $disk = Storage::disk($media->disk);
+
+        abort_unless($disk->exists($path), 404);
+
+        return $disk->response($path, $fileName, ['Content-Type' => $contentType], $disposition);
+    }
+
+    /**
+     * @param  callable(ZipArchive): void  $fill
+     */
+    protected function streamZip(callable $fill, string $downloadName): Response
+    {
+        $archive = tempnam(sys_get_temp_dir(), 'fezip_');
+
+        abort_unless($archive !== false, 500);
+
+        // The archive outlives this method: the callback below streams it after
+        // the response is sent, and unlinks it there. A client aborting
+        // mid-download never reaches that point, hence the shutdown backstop.
+        register_shutdown_function(static function () use ($archive): void {
+            @unlink($archive);
+        });
+
+        try {
+            $zip = new ZipArchive;
+
+            abort_unless($zip->open($archive, ZipArchive::OVERWRITE | ZipArchive::CREATE) === true, 500);
+
+            $fill($zip);
+            $zip->close();
+        } finally {
+            $this->cleanStagedFiles();
+        }
+
+        $size = filesize($archive);
+
+        // Streamed in chunks rather than read into a string: a folder archive is
+        // routinely larger than the memory limit.
+        return response()->streamDownload(function () use ($archive): void {
+            $handle = fopen($archive, 'rb');
+
+            if ($handle === false) {
+                return;
+            }
+
+            try {
+                while (! feof($handle)) {
+                    echo fread($handle, 512 * 1024);
+                    flush();
+                }
+            } finally {
+                fclose($handle);
+                @unlink($archive);
+            }
+        }, $downloadName, array_filter([
+            'Content-Type' => 'application/zip',
+            'Content-Length' => $size === false ? null : (string) $size,
+        ]));
     }
 
     protected function addFolderToZip(ZipArchive $zip, Folder $folder, string $prefix): void
     {
-        $collection = config('filament-file-explorer.collection', 'file-explorer');
-
-        foreach ($folder->getMedia($collection) as $media) {
-            $path = $media->getPath();
-            if (is_file($path)) {
-                $zip->addFile($path, trim($prefix.'/'.$media->file_name, '/'));
-            }
+        foreach ($folder->getMedia(UploadRules::collection()) as $media) {
+            $this->addMediaToZip($zip, $media, $prefix.'/'.$this->zipEntryName((string) $media->file_name));
         }
 
         foreach ($folder->children as $child) {
-            $this->addFolderToZip($zip, $child, $prefix.'/'.$child->name);
+            $this->addFolderToZip($zip, $child, $prefix.'/'.$this->zipEntryName((string) ($child->name ?: 'folder')));
         }
+    }
+
+    protected function addMediaToZip(ZipArchive $zip, Media $media, string $entryName): void
+    {
+        if ($media->getDiskDriverName() === 'local') {
+            $path = $media->getPath();
+
+            if (is_file($path)) {
+                $zip->addFile($path, $entryName);
+            }
+
+            return;
+        }
+
+        // ZipArchive needs a local file, so a remote object is copied through a
+        // stream — never into memory — and kept until the archive is closed.
+        $source = $media->stream();
+
+        if (! is_resource($source)) {
+            return;
+        }
+
+        $staged = tempnam(sys_get_temp_dir(), 'femedia_');
+        $target = $staged === false ? false : fopen($staged, 'wb');
+
+        if ($target === false) {
+            fclose($source);
+
+            if ($staged !== false) {
+                @unlink($staged);
+            }
+
+            return;
+        }
+
+        stream_copy_to_stream($source, $target);
+        fclose($source);
+        fclose($target);
+
+        $this->stagedFiles[] = $staged;
+        $zip->addFile($staged, $entryName);
+    }
+
+    protected function cleanStagedFiles(): void
+    {
+        foreach ($this->stagedFiles as $path) {
+            @unlink($path);
+        }
+
+        $this->stagedFiles = [];
+    }
+
+    /**
+     * Folder and file names are user input, so each becomes a single archive
+     * path segment: a name containing "../" must not escape on extraction.
+     *
+     * Separators are what make traversal possible; once they are gone the name
+     * is one segment, and only an all-dots segment still means anything to an
+     * extractor.
+     */
+    protected function zipEntryName(string $name): string
+    {
+        $name = trim(str_replace(['/', '\\', "\0"], '-', $name));
+
+        return trim($name, '.') === '' ? 'item' : $name;
+    }
+
+    protected function zipDownloadName(string $name, string $fallback): string
+    {
+        $slug = Str::slug($name);
+
+        return ($slug !== '' ? $slug : $fallback).'.zip';
     }
 }

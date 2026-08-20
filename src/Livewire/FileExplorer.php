@@ -9,6 +9,7 @@ use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 
 use Koassi\FilamentFileExplorer\Support\MediaLabel;
+use Koassi\FilamentFileExplorer\Support\ScopeRoots;
 use Koassi\FilamentFileExplorer\Support\MimeIcon;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Notifications\Notification;
@@ -87,6 +88,11 @@ class FileExplorer extends \Livewire\Component
         $authorizer = app(FileExplorerAuthorizer::class);
 
         abort_unless($authorizer->canAccess($this->scopeKey, $this->rootFolderId), 403);
+
+        // The media routes take the scope key from their own URL and cannot
+        // trust it, so record the root it resolved to while it is still
+        // trustworthy. See Support\ScopeRoots.
+        ScopeRoots::remember($this->scopeKey, $this->rootFolderId);
 
         $this->clipboardReady = $this->hasClipboard();
 
@@ -790,7 +796,7 @@ class FileExplorer extends \Livewire\Component
 
     public function folderZipUrl(int $folderId): string
     {
-        return route('filament-file-explorer.media.zip-folder', ['scopeKey' => $this->scopeKey, 'folder' => $folderId, 'root' => $this->rootFolderId]);
+        return route('filament-file-explorer.media.zip-folder', ['scopeKey' => $this->scopeKey, 'folder' => $folderId]);
     }
 
     protected function folderPathString(Folder $folder): string

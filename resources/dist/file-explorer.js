@@ -554,7 +554,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     return `${this.mediaUrlBase}/${this.scopeKey}/files/${id}/zip`;
                 },
                 folderZipUrl(id) {
-                    return `${this.mediaUrlBase}/${this.scopeKey}/folders/${id}/zip?root=${this.rootFolderId}`;
+                    return `${this.mediaUrlBase}/${this.scopeKey}/folders/${id}/zip`;
                 },
                 positionMenu(x, y) {
                     const pad = 8;
