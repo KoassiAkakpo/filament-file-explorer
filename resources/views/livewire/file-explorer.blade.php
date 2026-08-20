@@ -18,6 +18,7 @@
                 abilities: @js($abilities),
                 mediaUrlBase: @js(url(config('filament-file-explorer.routes.prefix'))),
                 refreshInterval: {{ $this->refreshInterval() }},
+                componentId: @js($this->getId()),
                 translations: @js($i18n),
                 selectedFolders: @js($selectedFolders),
                 selectedFiles: @js($selectedFiles),
@@ -34,6 +35,8 @@
             @fe-upload-files.window="uploadDroppedFiles($event.detail.files)"
             @fe-sel-cleared.window="Alpine.store('feSel').replace([], [])"
             @fe-folder-created.window="Alpine.store('feSel').replace([Number($event.detail.folderId)], [])"
+            @new-folder-created.window="focusInput('[data-fe-new-folder-input]', $event.detail)"
+            @focus-rename-input.window="focusInput('[data-fe-rename-input]', $event.detail)"
             @click.window="closeContext()"
             @keydown.escape.window="closeContext(); $wire.cancelRename(); $wire.cancelNewFolder(); $wire.closeInfo(); $wire.cancelDelete(); $wire.closePreview()"
         >
@@ -132,7 +135,7 @@
                         <input
                             type="file"
                             name="files"
-                            id="fileInput"
+                            x-ref="fileInput"
                             multiple
                             class="hidden"
                             accept="{{ $this->acceptAttribute() }}"
@@ -140,7 +143,7 @@
                             @change="pickAndUploadFiles($event)"
                         >
 
-                        <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.upload') }}" @click="document.getElementById('fileInput').click()">
+                        <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.upload') }}" @click="openFilePicker()">
                             @svg('heroicon-o-arrow-up-tray', 'h-4 w-4')
                         </button>
 
@@ -149,7 +152,7 @@
                              file arrives with a relative path the server rebuilds. --}}
                         <input
                             type="file"
-                            id="folderInput"
+                            x-ref="folderInput"
                             multiple
                             webkitdirectory
                             directory
@@ -158,7 +161,7 @@
                             @change="pickAndUploadFolder($event)"
                         >
 
-                        <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.upload_folder') }}" @click="document.getElementById('folderInput').click()">
+                        <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.upload_folder') }}" @click="openFolderPicker()">
                             @svg('heroicon-o-folder-arrow-down', 'h-4 w-4')
                         </button>
                         @endif
@@ -353,7 +356,7 @@
                     </div>
                 </div>
 
-                <div id="filemanager-area" class="fe-browser relative overflow-x-hidden dark:bg-zinc-800/50" x-bind:class="dropingFile ? 'fe-browser--drop' : ''">
+                <div class="fe-browser relative overflow-x-hidden dark:bg-zinc-800/50" x-bind:class="dropingFile ? 'fe-browser--drop' : ''">
                     @if ($showTrash)
                         @php $trashRows = $this->trashItems(); @endphp
                         <div class="flex items-center justify-between gap-2 border-b border-zinc-200/80 px-3 py-2 dark:border-zinc-700">
@@ -405,7 +408,6 @@
                     @endif
 
                     <div
-                        id="folder-container"
                         data-fe-items
                         tabindex="0"
                         role="listbox"
@@ -445,14 +447,14 @@
                             @if (in_array($viewMode, ['list', 'table', 'details'], true))
                                 <div class="flex items-center gap-3 rounded-lg bg-teal-50/70 px-3 py-2 dark:bg-teal-950/20" @click.outside="$wire.cancelNewFolder">
                                     <x-filament-file-explorer::file-explorer.folder-icon class="h-7 w-7 shrink-0" />
-                                    <input type="text" id="new-folder-name" wire:model="newFolderName" wire:keydown.enter.prevent="saveNewFolder" wire:keydown.escape.prevent="cancelNewFolder" class="fe-input w-full px-2 py-1 text-sm">
+                                    <input type="text" data-fe-new-folder-input wire:model="newFolderName" wire:keydown.enter.prevent="saveNewFolder" wire:keydown.escape.prevent="cancelNewFolder" class="fe-input w-full px-2 py-1 text-sm">
                                 </div>
                             @else
                                 <div class="fe-icon-item relative z-30 mx-0.5 flex w-[96px] flex-col items-center px-0.5 pt-0.5 pb-0.5 text-center" @click.outside="$wire.cancelNewFolder">
                                     <div class="fe-icon-well fe-icon-well--selected flex h-[68px] w-[76px] items-center justify-center rounded-xl">
                                         <x-filament-file-explorer::file-explorer.folder-icon class="h-[3.35rem] w-[3.35rem]" />
                                     </div>
-                                    <input type="text" id="new-folder-name" wire:model="newFolderName" wire:keydown.enter.prevent="saveNewFolder" wire:keydown.escape.prevent="cancelNewFolder" class="fe-input fe-rename-input mt-1.5 w-full px-1 py-0.5 text-center text-[11px]">
+                                    <input type="text" data-fe-new-folder-input wire:model="newFolderName" wire:keydown.enter.prevent="saveNewFolder" wire:keydown.escape.prevent="cancelNewFolder" class="fe-input fe-rename-input mt-1.5 w-full px-1 py-0.5 text-center text-[11px]">
                                     @error('newFolderName')
                                         <span class="text-xs text-red-500">{{ $message }}</span>
                                     @enderror
@@ -534,7 +536,7 @@
                                     <div class="flex min-w-0 items-center gap-2">
                                         <x-filament-file-explorer::file-explorer.folder-icon class="h-6 w-6 shrink-0" />
                                         @if ($folderRenaming)
-                                            <input type="text" id="rename-input" wire:model="renameValue" wire:keydown.enter.prevent="saveRename" wire:keydown.escape.prevent="cancelRename" wire:blur="saveRename" class="fe-input fe-rename-input w-full px-1.5 py-0.5 text-[13px]" @click.stop @mousedown.stop>
+                                            <input type="text" data-fe-rename-input wire:model="renameValue" wire:keydown.enter.prevent="saveRename" wire:keydown.escape.prevent="cancelRename" wire:blur="saveRename" class="fe-input fe-rename-input w-full px-1.5 py-0.5 text-[13px]" @click.stop @mousedown.stop>
                                         @else
                                             <span class="truncate font-medium text-zinc-800 dark:text-zinc-100">{{ $folder->name }}</span>
                                         @endif
@@ -599,7 +601,7 @@
                                             <x-filament-file-explorer::file-explorer.mime-icon :icon="$mimeIcon" size="sm" />
                                         @endif
                                         @if ($fileRenaming)
-                                            <input type="text" id="rename-input" wire:model="renameValue" wire:keydown.enter.prevent="saveRename" wire:keydown.escape.prevent="cancelRename" wire:blur="saveRename" class="fe-input fe-rename-input w-full px-1.5 py-0.5 text-[13px]" @click.stop @mousedown.stop>
+                                            <input type="text" data-fe-rename-input wire:model="renameValue" wire:keydown.enter.prevent="saveRename" wire:keydown.escape.prevent="cancelRename" wire:blur="saveRename" class="fe-input fe-rename-input w-full px-1.5 py-0.5 text-[13px]" @click.stop @mousedown.stop>
                                         @else
                                             <span class="truncate text-zinc-800 dark:text-zinc-100">{{ $fileLabel }}</span>
                                         @endif
@@ -632,7 +634,6 @@
                                     :previewUrl="$this->mediaOpenUrl($media->id)"
                                     :renamingType="$renamingType"
                                     :renamingId="$renamingId"
-                                    :key="'file-' . $media->id"
                                     wire:key="file-{{ $media->id }}"
                                 />
                             @endforeach
@@ -911,7 +912,7 @@
                             </button>
                         </template>
                         <template x-if="abilities.upload">
-                            <button type="button" class="fe-ctx-item" @click="run(() => document.getElementById('fileInput')?.click())">
+                            <button type="button" class="fe-ctx-item" @click="run(() => openFilePicker())">
                                 @svg('heroicon-o-arrow-up-tray', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.context.upload_files') }}
                             </button>
                         </template>

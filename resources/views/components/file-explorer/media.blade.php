@@ -2,7 +2,6 @@
     'media',
     'selectedFiles',
     'selectedFolders' => [],
-    'key',
     'openUrl' => null,
     'previewUrl' => null,
     'renamingType' => null,
@@ -26,7 +25,6 @@
     x-data
     data-id="{{ $media->id }}"
     data-fe-type="file"
-    id="{{ $key }}"
     tabindex="-1"
     role="option"
     :aria-selected="$store.feSel.hasFile({{ $media->id }}) ? 'true' : 'false'"
@@ -78,7 +76,7 @@
         @if ($isRenaming)
             <input
                 type="text"
-                id="rename-input"
+                data-fe-rename-input
                 wire:model="renameValue"
                 wire:keydown.enter.prevent="saveRename"
                 wire:keydown.escape.prevent="cancelRename"

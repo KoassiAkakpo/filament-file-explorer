@@ -475,6 +475,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 abilities: config.abilities || {},
                 mediaUrlBase: config.mediaUrlBase || '/file-explorer/media',
                 refreshInterval: Number(config.refreshInterval || 0),
+                componentId: config.componentId || '',
                 translations: config.translations || {},
                 ctx: { open: false, type: 'empty', id: null, name: '', x: 0, y: 0, canDelete: true, deleteHint: '' },
 
@@ -821,8 +822,16 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     fn();
                 },
 
+                /**
+                 * The items container of *this* explorer. A page can hold more
+                 * than one, so nothing here may reach for the document.
+                 */
+                itemsContainer() {
+                    return this.$root?.querySelector('[data-fe-items]') || null;
+                },
                 localPoint(clientX, clientY) {
-                    const container = document.getElementById('folder-container');
+                    const container = this.itemsContainer();
+                    if (!container) return { x: 0, y: 0 };
                     const rect = container.getBoundingClientRect();
                     return {
                         x: clientX - rect.left + container.scrollLeft,
@@ -935,7 +944,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.drawnArea = null;
                 },
                 updateHoveredElements() {
-                    const container = document.getElementById('folder-container');
+                    const container = this.itemsContainer();
                     if (!container || !this.drawnArea) return;
                     const drawnRect = {
                         left: this.drawnArea.left,
@@ -1056,8 +1065,41 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                         (event) => { this.onUploadProgress(event.detail.progress); }
                     );
                 },
+                /**
+                 * Focuses an input this component is about to render.
+                 *
+                 * The event travels through the window, so the component id it
+                 * carries is what keeps a second explorer on the page from
+                 * stealing the focus. Bounded, because the input never appears
+                 * if the user cancels before the render lands, and an interval
+                 * left polling for it would outlive the page.
+                 */
+                focusInput(selector, detail) {
+                    if (detail?.id && detail.id !== this.componentId) return;
+
+                    let attempts = 0;
+                    const timer = setInterval(() => {
+                        const input = this.$root?.querySelector(selector);
+
+                        if (input) {
+                            input.focus();
+                            input.select();
+                            clearInterval(timer);
+
+                            return;
+                        }
+
+                        if (++attempts > 40) clearInterval(timer);
+                    }, 50);
+                },
+                openFilePicker() {
+                    this.$refs.fileInput?.click();
+                },
+                openFolderPicker() {
+                    this.$refs.folderInput?.click();
+                },
                 isAllowedFile(file) {
-                    const accept = (document.getElementById('fileInput')?.accept || '')
+                    const accept = (this.$refs.fileInput?.accept || '')
                         .split(',')
                         .map(s => s.trim().toLowerCase())
                         .filter(Boolean);
@@ -1074,30 +1116,6 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 },
             };
         }
-
-        document.addEventListener('livewire:initialized', () => {
-            Livewire.on('new-folder-created', function () {
-                const checkExist = setInterval(function() {
-                    let input = document.getElementById('new-folder-name');
-                    if (input) {
-                        input.focus();
-                        input.select();
-                        clearInterval(checkExist);
-                    }
-                }, 100);
-            });
-
-            Livewire.on('focus-rename-input', function () {
-                const checkExist = setInterval(function() {
-                    let input = document.getElementById('rename-input');
-                    if (input) {
-                        input.focus();
-                        input.select();
-                        clearInterval(checkExist);
-                    }
-                }, 50);
-            });
-        });
 
         window.qfCtxFlyout = qfCtxFlyout;
         window.FileExplorerUi = FileExplorerUi;

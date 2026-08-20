@@ -110,11 +110,19 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         $this->registerRoutes();
     }
 
+    /**
+     * Registered straight from the sources.
+     *
+     * There is no build step, so a resources/dist copy only meant the shipped
+     * asset and the edited one could drift — and they did, silently, since
+     * nothing fails when the copy is forgotten. filament:assets publishes these
+     * to the host's public directory either way.
+     */
     protected function registerFilamentAssets(): void
     {
         FilamentAsset::register([
-            Css::make('filament-file-explorer', __DIR__.'/../resources/dist/file-explorer.css'),
-            Js::make('filament-file-explorer', __DIR__.'/../resources/dist/file-explorer.js'),
+            Css::make('filament-file-explorer', __DIR__.'/../resources/css/file-explorer.css'),
+            Js::make('filament-file-explorer', __DIR__.'/../resources/js/file-explorer.js'),
         ], 'Koassi/filament-file-explorer');
     }
 

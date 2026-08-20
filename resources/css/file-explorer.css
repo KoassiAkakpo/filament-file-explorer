@@ -733,7 +733,7 @@
         }
         .dark .fe-load-more:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); color: #fafafa; }
 
-        #folder-container { background: transparent; }
+        [data-fe-items] { background: transparent; }
 
         @keyframes fe-fade-in {
             from { opacity: 0; }

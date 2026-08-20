@@ -19,7 +19,7 @@ composer install
 
 `larastan`/`phpstan` are dev dependencies but there is **no `phpstan.neon`** — static analysis is not wired up. Running `./vendor/bin/pint` on the whole repo currently reports pre-existing style drift in several files (import order, strict-type declarations in `config/` and `resources/lang/`); scope formatting to the files you touch rather than reformatting the tree.
 
-There is no `package.json` and no JS/CSS build step. `resources/dist/file-explorer.{js,css}` are byte-identical **manual copies** of `resources/{js,css}/file-explorer.{js,css}` — the `dist` files are what `FilamentAsset::register()` ships, so after editing a source asset you must copy it into `resources/dist/` or the change never reaches host apps.
+There is no `package.json` and no JS/CSS build step. `FilamentAsset::register()` ships `resources/{js,css}/file-explorer.{js,css}` **directly** — there is no `resources/dist`, and re-adding one would only reintroduce the silent drift it used to cause (nothing fails when a copy is forgotten; the change simply never reaches host apps). `filament:assets` publishes the sources to the host's public directory. Host apps re-run it on upgrade, as they do for every Filament plugin.
 
 ## Two operating modes
 
@@ -54,11 +54,21 @@ The explorer never loads a folder's contents into memory to sort them. [Support/
 
 `resetListing()` is the single hook meaning "the listing may have changed" — every mutation and every navigation calls it — and it also flushes `FolderTree`. That flush matters: creating or deleting a folder changes the set of ids under the root, so a request that mutates and then re-renders would otherwise draw a stale sidebar and search the old scope.
 
+## One page, several explorers
+
+The `FileExplorerPicker` puts an explorer in a modal, so a page can hold two of them. Nothing in the views or the JS may therefore be addressed globally:
+
+- **No `id` attributes**, except ones built from `$this->getId()` (the delete dialog's `aria-labelledby` is the only survivor). `fileInput`, `folderInput`, `folder-container`, `rename-input`, `new-folder-name` and `filemanager-area` were all global: the upload button of one explorer opened the other's file dialog, the marquee measured the wrong container, and the rename focus landed in whichever input the document happened to hold first. Inputs are reached with `x-ref` through a component method (`openFilePicker()`), containers with `this.$root.querySelector('[data-fe-items]')`, and the focus targets with `data-fe-rename-input` / `data-fe-new-folder-input`.
+- **Nothing calls `document.getElementById`**, and a test asserts it stays that way.
+- **Server-dispatched focus events carry `id: $this->getId()`**, which `focusInput()` compares against its own `componentId` before acting — they travel through the window, so both explorers hear them. It also gives up after 40 attempts: the input never appears if the user cancels before the render lands, and the old handler polled for it forever.
+
+Still shared, and worth knowing before adding anything to it: the Alpine `feSel` store and its `feWireRef` are **global**. Two explorers on one page share selection state, and `setSelection` goes to whichever component initialised last. Fixing that means moving the selection out of the store and into the component (or keying the store by scope), which no PHP test can cover.
+
 ## Selection and keyboard
 
 Selection lives in the Alpine `feSel` store ([resources/js/file-explorer.js](resources/js/file-explorer.js)) and is mirrored to the component through a debounced `setSelection`. Two conventions hold it together:
 
-- Every rendered item carries `data-fe-type` (`folder`/`file`) and `data-id`, and the items container carries `data-fe-items`. `feSel.orderedItems(scope)` reads the DOM through those attributes — that is how shift-range and the arrow keys work in the grid *and* the row views without anyone knowing the column count (vertical movement groups items by `offsetTop`). A new view mode has to keep those attributes.
+- Every rendered item carries `data-fe-type` (`folder`/`file`) and `data-id`, and the items container carries `data-fe-items` — which is also how the JS and the CSS address that container now that it has no id. `feSel.orderedItems(scope)` reads the DOM through those attributes — that is how shift-range and the arrow keys work in the grid *and* the row views without anyone knowing the column count (vertical movement groups items by `offsetTop`). A new view mode has to keep those attributes.
 - Keyboard shortcuts are bound on the items container (`@keydown="onKeydown($event)"`), never on the window. A page can hold more than one explorer — the `FileExplorerPicker` in a modal — and a window binding would fire for all of them, including while the user types in the search box.
 
 `feSel.click()` owns the modifier logic (shift extends from the anchor, ctrl/meta toggles) so the Blade files stay declarative, and `toggle()` moves the anchor. `replace()` mirrors server state without syncing back; `select()` is the one that syncs, so UI-driven selection must go through it.

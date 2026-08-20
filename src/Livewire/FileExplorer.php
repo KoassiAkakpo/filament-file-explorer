@@ -625,7 +625,7 @@ class FileExplorer extends \Livewire\Component
             $this->renamingType = 'folder';
             $this->renamingId = $id;
             $this->renameValue = $folder->name;
-            $this->dispatch('focus-rename-input');
+            $this->dispatch('focus-rename-input', id: $this->getId());
 
             return;
         }
@@ -636,7 +636,7 @@ class FileExplorer extends \Livewire\Component
             $this->renamingType = 'file';
             $this->renamingId = $id;
             $this->renameValue = $media->name ?: pathinfo($media->file_name, PATHINFO_FILENAME);
-            $this->dispatch('focus-rename-input');
+            $this->dispatch('focus-rename-input', id: $this->getId());
 
             return;
         }
@@ -1691,7 +1691,7 @@ class FileExplorer extends \Livewire\Component
 
         $this->isCreatingNewFolder = true;
         $this->newFolderName = __('filament-file-explorer::file-explorer.folder_without_title');
-        $this->dispatch('new-folder-created');
+        $this->dispatch('new-folder-created', id: $this->getId());
     }
 
     public function cancelNewFolder(): void

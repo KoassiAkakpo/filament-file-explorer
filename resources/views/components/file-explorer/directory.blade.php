@@ -64,7 +64,7 @@
         @if ($isRenaming)
             <input
                 type="text"
-                id="rename-input"
+                data-fe-rename-input
                 wire:model="renameValue"
                 wire:keydown.enter.prevent="saveRename"
                 wire:keydown.escape.prevent="cancelRename"
