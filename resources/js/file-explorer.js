@@ -474,10 +474,12 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 scopeKey: config.scopeKey,
                 abilities: config.abilities || {},
                 mediaUrlBase: config.mediaUrlBase || '/file-explorer/media',
+                refreshInterval: Number(config.refreshInterval || 0),
                 translations: config.translations || {},
                 ctx: { open: false, type: 'empty', id: null, name: '', x: 0, y: 0, canDelete: true, deleteHint: '' },
 
                 init() {
+                    this.startAutoRefresh();
                     registerQfUiStore();
                     registerQfSelStore();
                     registerQfUploadStore();
@@ -832,6 +834,27 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this._onMarqueeUp = (event) => this.stopDrawing(event);
                     window.addEventListener('mousemove', this._onMarqueeMove, true);
                     window.addEventListener('mouseup', this._onMarqueeUp, true);
+                },
+                /**
+                 * Driven here rather than with wire:poll so it can stand down
+                 * while the user is doing something a re-render would ruin: a
+                 * morphed DOM cancels a drag in progress, and a hidden tab has
+                 * nobody watching it.
+                 */
+                startAutoRefresh() {
+                    if (!this.refreshInterval) return;
+
+                    this._refreshTimer = setInterval(() => {
+                        if (document.hidden) return;
+                        if (this.isDraggingItems || Alpine.store('feDrag')?.active || Alpine.store('feDrag')?.pointerDown) return;
+                        if (this.isDrawing || this.ctx.open) return;
+                        if (this.uploading) return;
+
+                        this.$wire.refreshExplorer();
+                    }, this.refreshInterval * 1000);
+                },
+                destroy() {
+                    if (this._refreshTimer) clearInterval(this._refreshTimer);
                 },
                 unbindMarqueeListeners() {
                     if (this._onMarqueeMove) window.removeEventListener('mousemove', this._onMarqueeMove, true);

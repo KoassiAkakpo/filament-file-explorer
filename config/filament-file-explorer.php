@@ -160,6 +160,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Automatic refresh
+    |--------------------------------------------------------------------------
+    |
+    | Seconds between two automatic refreshes of the explorer, or null for none
+    | (the default). Two people browsing the same root see nothing of each
+    | other's uploads, renames and deletions until they navigate; a value here
+    | closes that gap without any broadcasting to set up.
+    |
+    | The refresh is skipped while the tab is hidden, while an item is being
+    | dragged, and while the user is renaming, creating a folder, uploading or
+    | looking at a dialog — and it keeps the window a "Load more" has widened.
+    |
+    | Set it per panel instead with FilamentFileExplorerPlugin::make()->refreshEvery(...).
+    |
+    */
+    'refresh' => [
+        'seconds' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Trash
     |--------------------------------------------------------------------------
     |

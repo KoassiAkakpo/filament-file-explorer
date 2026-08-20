@@ -17,6 +17,7 @@
                 rootFolderId: {{ $rootFolderId }},
                 abilities: @js($abilities),
                 mediaUrlBase: @js(url(config('filament-file-explorer.routes.prefix'))),
+                refreshInterval: {{ $this->refreshInterval() }},
                 translations: @js($i18n),
                 selectedFolders: @js($selectedFolders),
                 selectedFiles: @js($selectedFiles),

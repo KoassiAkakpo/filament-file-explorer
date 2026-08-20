@@ -12,12 +12,14 @@ use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 
 use Koassi\FilamentFileExplorer\Support\MediaLabel;
 use Koassi\FilamentFileExplorer\Support\ScopeRoots;
+use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\MimeIcon;
 use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Notifications\Notification;
+use Livewire\Attributes\On;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Illuminate\Support\Str;
@@ -110,6 +112,9 @@ class FileExplorer extends \Livewire\Component
 
     /** Copies or uploads the quota refused, for the summary notification. */
     private int $quotaRefused = 0;
+
+    /** Announced at most once per request, however many mutations it made. */
+    private bool $announced = false;
 
     public int $fileInputKey = 0;
 
@@ -520,7 +525,7 @@ class FileExplorer extends \Livewire\Component
         }
 
         $this->currentFolder = $this->currentFolder->fresh(['children']);
-        $this->resetListing();
+        $this->afterMutation();
         Notification::make()->success()->title(__('filament-file-explorer::file-explorer.pasted'))->send();
         $this->notifyQuotaRefused();
     }
@@ -678,7 +683,7 @@ class FileExplorer extends \Livewire\Component
 
         $this->cancelRename();
         $this->currentFolder = $this->currentFolder->fresh(['children']);
-        $this->resetListing();
+        $this->afterMutation();
     }
 
     /**
@@ -890,7 +895,7 @@ class FileExplorer extends \Livewire\Component
             $trash->restoreMedia($media);
         }
 
-        $this->resetListing();
+        $this->afterMutation();
 
         Notification::make()
             ->success()
@@ -966,7 +971,7 @@ class FileExplorer extends \Livewire\Component
             $purged++;
         }
 
-        $this->resetListing();
+        $this->afterMutation();
 
         if ($purged > 0) {
             Notification::make()
@@ -1477,6 +1482,93 @@ class FileExplorer extends \Livewire\Component
     }
 
     /**
+     * Called after a mutation: same as resetListing(), plus telling the other
+     * explorers on the page. A navigation or a search calls resetListing()
+     * instead — nothing changed for anyone else.
+     */
+    protected function afterMutation(): void
+    {
+        $this->resetListing();
+
+        if ($this->announced) {
+            return;
+        }
+
+        $this->announced = true;
+
+        // A page can hold more than one explorer over the same tree — the
+        // picker in a modal beside the page itself — and each keeps its own
+        // copy of the listing. Never dispatched from refreshExplorer(), which
+        // is what stops two components refreshing each other in a loop.
+        $this->dispatch('fe-tree-changed', scopeKey: $this->scopeKey, origin: $this->getId());
+    }
+
+    #[On('fe-tree-changed')]
+    public function onTreeChanged(string $scopeKey = '', string $origin = ''): void
+    {
+        if ($scopeKey !== $this->scopeKey || $origin === $this->getId()) {
+            return;
+        }
+
+        $this->refreshExplorer();
+    }
+
+    /**
+     * Re-reads what the render is built from, so a change made elsewhere — by
+     * another user, or by another explorer on this page — shows up.
+     *
+     * Deliberately not resetListing(): that sends the window back to the first
+     * page, which would undo a "load more" the user just asked for.
+     */
+    public function refreshExplorer(): void
+    {
+        if (! $this->ability('browse') || $this->isMidAction()) {
+            return;
+        }
+
+        app(FolderTree::class)->flush();
+        app(Quota::class)->flush();
+        app(Uploader::class)->flush();
+        $this->listingCache = null;
+
+        $folder = $this->currentFolder === null
+            ? null
+            : Folder::query()->find($this->currentFolder->id);
+
+        // Someone else may have deleted the folder being browsed. Falling back
+        // to the root beats rendering a folder that is no longer there.
+        if ($folder === null || ! app(FolderTree::class)->isUnderRoot($folder, $this->rootFolderId)) {
+            $this->navigateToFolder($this->rootFolderId);
+
+            return;
+        }
+
+        $this->currentFolder = $folder->fresh(['children', 'parent']);
+        $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
+    }
+
+    /**
+     * Whether the user is in the middle of something a refresh would interrupt.
+     */
+    protected function isMidAction(): bool
+    {
+        return $this->isCreatingNewFolder
+            || $this->renamingType !== null
+            || $this->deleteRequest !== null
+            || $this->previewItem !== null
+            || $this->files !== [];
+    }
+
+    /**
+     * Seconds between automatic refreshes, or 0 when the panel did not ask for
+     * any. Two users on the same root see nothing of each other otherwise.
+     */
+    public function refreshInterval(): int
+    {
+        return StandaloneSettings::refreshSeconds();
+    }
+
+    /**
      * Nested folder tree for the explorer sidebar — root is the primary folder.
      *
      * @return list<array{id:int,name:string,primary?:bool,children:list<array>}>
@@ -1597,7 +1689,7 @@ class FileExplorer extends \Livewire\Component
         $this->currentFolder = $parent->fresh(['children', 'parent']);
         $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
         session([$this->sessionKey() => $parent->id]);
-        $this->resetListing();
+        $this->afterMutation();
         $this->dispatch('fe-folder-created', folderId: (int) $newFolder->id);
     }
 
@@ -1797,7 +1889,7 @@ class FileExplorer extends \Livewire\Component
             $this->currentFolder = $this->currentFolder->fresh(['children', 'parent']);
         }
 
-        $this->resetListing();
+        $this->afterMutation();
 
         $this->dispatch('fe-upload-settled');
 
@@ -2037,7 +2129,7 @@ class FileExplorer extends \Livewire\Component
             $this->currentFolder = $this->currentFolder->fresh(['children', 'parent']);
         }
 
-        $this->resetListing();
+        $this->afterMutation();
     }
 
     /**
@@ -2114,7 +2206,7 @@ class FileExplorer extends \Livewire\Component
         $this->dispatch('reset-folder');
         $this->dispatch('fe-sel-cleared');
         $this->currentFolder = $this->currentFolder->fresh(['children']);
-        $this->resetListing();
+        $this->afterMutation();
     }
 
     public function copyItemsToFolder($targetFolderId, $folderIds = [], $fileIds = []): void
@@ -2169,7 +2261,7 @@ class FileExplorer extends \Livewire\Component
 
         $this->dispatch('fe-sel-cleared');
         $this->currentFolder = $this->currentFolder->fresh(['children']);
-        $this->resetListing();
+        $this->afterMutation();
         Notification::make()->success()->title(__('filament-file-explorer::file-explorer.copied'))->send();
         $this->notifyQuotaRefused();
     }

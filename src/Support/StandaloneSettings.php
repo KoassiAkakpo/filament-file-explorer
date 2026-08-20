@@ -112,6 +112,20 @@ final class StandaloneSettings
         return is_numeric($bytes) && (int) $bytes > 0 ? (int) $bytes : null;
     }
 
+    /**
+     * Seconds between two automatic refreshes, or 0 for none.
+     */
+    public static function refreshSeconds(): int
+    {
+        $plugin = self::plugin();
+
+        $seconds = $plugin?->hasRefreshInterval() === true
+            ? $plugin->getRefreshSeconds()
+            : config('filament-file-explorer.refresh.seconds');
+
+        return is_numeric($seconds) && (int) $seconds > 0 ? max(5, (int) $seconds) : 0;
+    }
+
     public static function navigationLabel(): ?string
     {
         $label = self::plugin()?->getNavigationLabel()

@@ -59,6 +59,10 @@ class FilamentFileExplorerPlugin implements Plugin
     // limit that config had set.
     protected bool $quotaSet = false;
 
+    protected ?int $refreshSeconds = null;
+
+    protected bool $refreshSet = false;
+
     public function getId(): string
     {
         return 'filament-file-explorer';
@@ -169,6 +173,17 @@ class FilamentFileExplorerPlugin implements Plugin
     {
         $this->quotaBytes = $bytes;
         $this->quotaSet = true;
+
+        return $this;
+    }
+
+    /**
+     * Seconds between two automatic refreshes, or null for none.
+     */
+    public function refreshEvery(?int $seconds): static
+    {
+        $this->refreshSeconds = $seconds;
+        $this->refreshSet = true;
 
         return $this;
     }
@@ -310,6 +325,16 @@ class FilamentFileExplorerPlugin implements Plugin
     public function getQuotaBytes(): ?int
     {
         return $this->quotaBytes;
+    }
+
+    public function hasRefreshInterval(): bool
+    {
+        return $this->refreshSet;
+    }
+
+    public function getRefreshSeconds(): ?int
+    {
+        return $this->refreshSeconds;
     }
 
     public function shouldRegisterStandaloneNavigation(): ?bool
