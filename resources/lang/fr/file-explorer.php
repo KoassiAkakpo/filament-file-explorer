@@ -132,6 +132,9 @@ return [
         'refused' => '{1} :count fichier ne tient pas dans le quota de stockage|[2,*] :count fichiers ne tiennent pas dans le quota de stockage',
     ],
     'inspector' => [
+        'selected_items' => '{1} :count élément sélectionné|[2,*] :count éléments sélectionnés',
+        'folders_count' => '{0} aucun dossier|{1} :count dossier|[2,*] :count dossiers',
+        'files_count' => '{0} aucun fichier|{1} :count fichier|[2,*] :count fichiers',
         'added_by' => 'Ajouté par',
         'title' => 'Obtenir les informations',
         'close' => 'Fermer',

@@ -83,6 +83,8 @@ Selection lives in the Alpine `feSel` store ([resources/js/file-explorer.js](res
 
 The delete confirmation and the preview lightbox live **inside** the Livewire component, not in the host panel's modal stack, because the component is also embedded by `FileExplorerPicker` where no page-level modal exists.
 
+The Get Info inspector **follows the selection**: `refreshInfo()` runs from every entry point that changes it — `setSelection()`, `clearSelection()` and the public `selectFolder()`/`selectFile()` — re-reading the panel for the new selection and closing it with the last item. It is deliberately not called from the render, so a panel the user closed stays closed. `$infoItem['scope']` is what tells the two panels apart: `'selection'` follows, `'current'` (Get Info on empty space, describing the folder being browsed) has no selection behind it and stays put. A refresh that finds the row gone, or the ability revoked, closes the panel rather than turning an ordinary click into a 404 or a 403.
+
 Both keep their state on the server (`$deleteRequest`, `$previewItem`) rather than in Alpine. For the confirmation that is what lets it use real `trans_choice` and report what a recursive delete actually takes with it (`folderContentCount()`) plus the items the authorizer refuses — a `window.confirm` could say none of that, and none of it would be testable. `confirmDelete()` re-enters `deleteItems()`, which stays the only place enforcing the delete rules; the dialog is informative, never authoritative. The lightbox is gated on the `download` ability because it streams the same bytes through the same media route.
 
 Escape is handled once, on the component root (`@keydown.escape.window`), and `trapTab()` in the JS keeps Tab inside whichever dialog is open.

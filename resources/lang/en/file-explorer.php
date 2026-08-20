@@ -132,6 +132,9 @@ return [
         'refused' => '{1} :count file did not fit in the storage quota|[2,*] :count files did not fit in the storage quota',
     ],
     'inspector' => [
+        'selected_items' => '{1} :count item selected|[2,*] :count items selected',
+        'folders_count' => '{0} no folder|{1} :count folder|[2,*] :count folders',
+        'files_count' => '{0} no file|{1} :count file|[2,*] :count files',
         'added_by' => 'Added by',
         'title' => 'Get Info',
         'close' => 'Close',

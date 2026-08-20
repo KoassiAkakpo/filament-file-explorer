@@ -20,6 +20,7 @@ use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Livewire\Attributes\On;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -433,12 +434,16 @@ class FileExplorer extends \Livewire\Component
     {
         $this->selectedFolders = array_values(array_map('intval', (array) $folders));
         $this->selectedFiles = array_values(array_map('intval', (array) $files));
+
+        $this->refreshInfo();
     }
 
     public function clearSelection(): void
     {
         $this->selectedFolders = [];
         $this->selectedFiles = [];
+
+        $this->refreshInfo();
     }
 
     public function hasClipboard(): bool
@@ -1136,7 +1141,24 @@ class FileExplorer extends \Livewire\Component
         $this->navigateToFolder($folderId);
     }
 
+    /**
+     * Nothing in the shipped UI calls this — selection is mirrored from the
+     * Alpine store through setSelection — but it is public API a host app can
+     * wire a button to, so the inspector has to follow it just the same.
+     */
     public function selectFolder(int $folderId, bool $multi = false): void
+    {
+        $this->applyFolderSelection($folderId, $multi);
+        $this->refreshInfo();
+    }
+
+    public function selectFile(int $fileId, bool $multi = false): void
+    {
+        $this->applyFileSelection($fileId, $multi);
+        $this->refreshInfo();
+    }
+
+    protected function applyFolderSelection(int $folderId, bool $multi): void
     {
         if (! $multi) {
             $this->selectedFolders = [$folderId];
@@ -1157,7 +1179,7 @@ class FileExplorer extends \Livewire\Component
         $this->selectedFolders[] = $folderId;
     }
 
-    public function selectFile(int $fileId, bool $multi = false): void
+    protected function applyFileSelection(int $fileId, bool $multi): void
     {
         if (! $multi) {
             $this->selectedFiles = [$fileId];
@@ -1199,11 +1221,14 @@ class FileExplorer extends \Livewire\Component
                 $count = count($this->selectedFolders) + count($this->selectedFiles);
                 $this->infoItem = [
                     'type' => 'multi',
+                    'scope' => 'selection',
                     'id' => null,
-                    'name' => $count.' items selected',
+                    'name' => trans_choice('filament-file-explorer::file-explorer.inspector.selected_items', $count),
                     'size' => '—',
                     'path' => $this->folderPathString($this->currentFolder),
-                    'mime' => count($this->selectedFolders).' folders · '.count($this->selectedFiles).' files',
+                    'mime' => trans_choice('filament-file-explorer::file-explorer.inspector.folders_count', count($this->selectedFolders))
+                        .' · '
+                        .trans_choice('filament-file-explorer::file-explorer.inspector.files_count', count($this->selectedFiles)),
                     'permissions' => '—',
                     'created' => '—',
                     'updated' => '—',
@@ -1222,6 +1247,7 @@ class FileExplorer extends \Livewire\Component
             $items = (int) $folder->children()->count() + (int) $folder->media()->where('collection_name', UploadRules::collection())->count();
             $this->infoItem = [
                 'type' => 'folder',
+                'scope' => 'selection',
                 'id' => $folder->id,
                 'name' => $folder->name,
                 'size' => $this->formatBytes($size),
@@ -1244,6 +1270,7 @@ class FileExplorer extends \Livewire\Component
             $deleteState = app(FileExplorerAuthorizer::class)->mediaDeleteState($this->scopeKey, $media);
             $this->infoItem = [
                 'type' => 'file',
+                'scope' => 'selection',
                 'id' => $media->id,
                 'name' => MediaLabel::display($media),
                 'size' => $this->formatBytes((int) $media->size),
@@ -1272,6 +1299,9 @@ class FileExplorer extends \Livewire\Component
         $items = (int) $folder->children()->count() + (int) $folder->media()->where('collection_name', UploadRules::collection())->count();
         $this->infoItem = [
             'type' => 'folder',
+            // Not 'selection': this panel describes the folder being browsed,
+            // so it has no selection to follow and nothing to close with.
+            'scope' => 'current',
             'id' => $folder->id,
             'name' => $folder->name,
             'size' => $this->formatBytes($size),
@@ -1284,6 +1314,36 @@ class FileExplorer extends \Livewire\Component
             'delete_note' => $this->folderDeleteNote($folder),
         ];
         $this->showInfoModal = true;
+    }
+
+    /**
+     * Keeps the inspector on the selection: it re-reads when the selection
+     * moves, and closes with the last selected item.
+     *
+     * Called from every entry point that changes the selection rather than from
+     * the render, so a panel the user closed stays closed.
+     */
+    protected function refreshInfo(): void
+    {
+        if (! $this->showInfoModal || ($this->infoItem['scope'] ?? null) !== 'selection') {
+            return;
+        }
+
+        if (($this->selectedFolders === [] && $this->selectedFiles === []) || ! $this->ability('getInfo')) {
+            // Closing beats leaving the panel describing something the user no
+            // longer has selected — and an ability revoked mid-session must not
+            // turn an ordinary click into a 403.
+            $this->closeInfo();
+
+            return;
+        }
+
+        try {
+            $this->showInfo();
+        } catch (ModelNotFoundException) {
+            // The selection can still name a row another session has deleted.
+            $this->closeInfo();
+        }
     }
 
     public function closeInfo(): void
