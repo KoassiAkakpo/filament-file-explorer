@@ -1,0 +1,17 @@
+/vendor/
+composer.lock
+.phpunit.result.cache
+.phpunit.cache
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+node_modules/
+
+# Graphify (local analysis only)
+/graphify-out/
+.graphify_labels.json
+.graphify_root
+
+# Published stubs during local QA (optional publish in host apps)
+/stubs/filament-file-explorer/
