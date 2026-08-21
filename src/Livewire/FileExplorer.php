@@ -4,32 +4,49 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer\Livewire;
 
-
+use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
+use Koassi\FilamentFileExplorer\Events\FileCopied;
+use Koassi\FilamentFileExplorer\Events\FileDeleted;
+use Koassi\FilamentFileExplorer\Events\FileMoved;
+use Koassi\FilamentFileExplorer\Events\FileRenamed;
+use Koassi\FilamentFileExplorer\Events\FileRestored;
+use Koassi\FilamentFileExplorer\Events\FileTrashed;
+use Koassi\FilamentFileExplorer\Events\FileUploaded;
+use Koassi\FilamentFileExplorer\Events\FolderCopied;
+use Koassi\FilamentFileExplorer\Events\FolderCreated;
+use Koassi\FilamentFileExplorer\Events\FolderDeleted;
+use Koassi\FilamentFileExplorer\Events\FolderMoved;
+use Koassi\FilamentFileExplorer\Events\FolderRenamed;
+use Koassi\FilamentFileExplorer\Events\FolderRestored;
+use Koassi\FilamentFileExplorer\Events\FolderTrashed;
+use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\ActiveRoot;
 use Koassi\FilamentFileExplorer\Support\FileNames;
 use Koassi\FilamentFileExplorer\Support\FolderListing;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
-use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
-
 use Koassi\FilamentFileExplorer\Support\MediaLabel;
+use Koassi\FilamentFileExplorer\Support\MimeIcon;
+use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\ScopeRoots;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
-use Koassi\FilamentFileExplorer\Support\MimeIcon;
-use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
-use Filament\Notifications\Notification;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Spatie\Image\Exceptions\CouldNotLoadImage;
 use Livewire\Attributes\On;
-use Livewire\Features\SupportFileUploads\WithFileUploads;
+use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
-use Illuminate\Support\Str;
-use Koassi\FilamentFileExplorer\Models\Folder;
+use Livewire\Features\SupportFileUploads\WithFileUploads;
+use Spatie\Image\Exceptions\CouldNotLoadImage;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
-class FileExplorer extends \Livewire\Component
+class FileExplorer extends Component
 {
     use WithFileUploads;
 
@@ -65,7 +82,7 @@ class FileExplorer extends \Livewire\Component
      */
     public int $perPage = 0;
 
-    /** @var array{folders: \Illuminate\Database\Eloquent\Collection<int, Folder>, files: \Illuminate\Database\Eloquent\Collection<int, Media>, shown: int, total: int, hasMore: bool}|null */
+    /** @var array{folders: Collection<int, Folder>, files: Collection<int, Media>, shown: int, total: int, hasMore: bool}|null */
     private ?array $listingCache = null;
 
     public string $sortBy = 'name';
@@ -217,7 +234,6 @@ class FileExplorer extends \Livewire\Component
         return 'clipboard.'.$this->scopeKey.'.'.$this->rootFolderId;
     }
 
-
     protected function assertUnderRoot(?Folder $folder): void
     {
         abort_unless(
@@ -301,7 +317,7 @@ class FileExplorer extends \Livewire\Component
                 'file',
                 'max:'.UploadRules::maxSizeKb(),
                 function (string $attribute, mixed $value, \Closure $fail): void {
-                    if (! $value instanceof \Illuminate\Http\UploadedFile) {
+                    if (! $value instanceof UploadedFile) {
                         $fail(__('filament-file-explorer::file-explorer.validation.invalid_file'));
 
                         return;
@@ -532,7 +548,10 @@ class FileExplorer extends \Livewire\Component
                 continue;
             }
             $this->assertUnderRoot($source);
-            $this->copyFolderRecursive($source, $this->currentFolder);
+
+            $copy = $this->copyFolderRecursive($source, $this->currentFolder);
+
+            event(new FolderCopied($this->scopeKey, $this->rootFolderId, auth()->user(), $copy, $source));
         }
 
         foreach ($fileIds as $fileId) {
@@ -573,12 +592,15 @@ class FileExplorer extends \Livewire\Component
 
         $actor = auth()->user();
 
+        $fileName = FileNames::applyIndex((string) $media->file_name, $index);
+        $copy = null;
+
         try {
-            $target
+            $copy = $target
                 ->addMedia($path)
                 ->preservingOriginal()
                 ->usingName(FileNames::applyIndexToLabel((string) $media->name, $index))
-                ->usingFileName(FileNames::applyIndex((string) $media->file_name, $index))
+                ->usingFileName($fileName)
                 ->withCustomProperties(array_merge($media->custom_properties ?? [], [
                     'user_id' => $actor?->getAuthIdentifier(),
                     'uploaded_by_type' => $actor ? $actor::class : null,
@@ -588,6 +610,12 @@ class FileExplorer extends \Livewire\Component
         } catch (CouldNotLoadImage $e) {
             // As on upload: the copy exists, only its thumbnail does not.
             report($e);
+
+            $copy = $this->mediaJustAdded($target, $fileName);
+        }
+
+        if ($copy instanceof Media) {
+            event(new FileCopied($this->scopeKey, $this->rootFolderId, $actor, $copy, $media, $target));
         }
 
         return true;
@@ -697,14 +725,31 @@ class FileExplorer extends \Livewire\Component
 
                 return;
             }
+            $previousName = (string) $folder->name;
+            $previousSlug = (string) $folder->slug;
+
             $folder->name = $name;
             $folder->slug = $slug;
             $folder->save();
+
+            event(new FolderRenamed(
+                $this->scopeKey,
+                $this->rootFolderId,
+                auth()->user(),
+                $folder,
+                $previousName,
+                $previousSlug,
+            ));
         } else {
             $media = Media::query()->findOrFail($this->renamingId);
             $this->assertMediaUnderRoot($media);
+
+            $previousName = (string) $media->name;
+
             $media->name = $name;
             $media->save();
+
+            event(new FileRenamed($this->scopeKey, $this->rootFolderId, auth()->user(), $media, $previousName));
         }
 
         $this->cancelRename();
@@ -887,7 +932,7 @@ class FileExplorer extends \Livewire\Component
                 'name' => MediaLabel::display($media),
                 'path' => $this->trashOriginPath((int) $media->model_id),
                 'deleted_at' => is_string($trashedAt)
-                    ? \Illuminate\Support\Carbon::parse($trashedAt)->format('Y/m/d H:i')
+                    ? Carbon::parse($trashedAt)->format('Y/m/d H:i')
                     : '—',
                 'meta' => $this->formatBytes((int) $media->size),
                 'icon' => MimeIcon::forMedia($media),
@@ -913,12 +958,16 @@ class FileExplorer extends \Livewire\Component
             $folder = Folder::withTrashed()->findOrFail($id);
             $this->assertUnderRoot($folder);
             $trash->restoreFolder($folder);
+
+            event(new FolderRestored($this->scopeKey, $this->rootFolderId, auth()->user(), $folder));
         } else {
             abort_unless($this->ability('delete'), 403);
 
             $media = Media::query()->findOrFail($id);
             $this->assertTrashedMediaUnderRoot($media);
             $trash->restoreMedia($media);
+
+            event(new FileRestored($this->scopeKey, $this->rootFolderId, auth()->user(), $media));
         }
 
         $this->afterMutation();
@@ -979,8 +1028,23 @@ class FileExplorer extends \Livewire\Component
             }
 
             $this->assertUnderRoot($folder);
+
+            $purgedId = (int) $folder->id;
+            $purgedName = (string) $folder->name;
+            $purgedParentId = $folder->parent_id === null ? null : (int) $folder->parent_id;
+
             $trash->purgeFolder($folder);
             $purged++;
+
+            event(new FolderDeleted(
+                $this->scopeKey,
+                $this->rootFolderId,
+                auth()->user(),
+                $purgedId,
+                $purgedName,
+                $purgedParentId,
+                purgedFromTrash: true,
+            ));
         }
 
         foreach ($fileIds as $fileId) {
@@ -993,8 +1057,27 @@ class FileExplorer extends \Livewire\Component
             }
 
             $this->assertTrashedMediaUnderRoot($media);
+
+            $purgedMediaId = (int) $media->id;
+            $purgedMediaName = (string) $media->name;
+            $purgedFileName = (string) $media->file_name;
+            $purgedFolderId = (int) $media->model_id;
+            $purgedSize = (int) $media->size;
+
             $trash->purgeMedia($media);
             $purged++;
+
+            event(new FileDeleted(
+                $this->scopeKey,
+                $this->rootFolderId,
+                auth()->user(),
+                $purgedMediaId,
+                $purgedMediaName,
+                $purgedFileName,
+                $purgedFolderId,
+                $purgedSize,
+                purgedFromTrash: true,
+            ));
         }
 
         $this->afterMutation();
@@ -1596,7 +1679,7 @@ class FileExplorer extends \Livewire\Component
     /**
      * The folders and files to render, sorted and windowed in SQL.
      *
-     * @return array{folders: \Illuminate\Database\Eloquent\Collection<int, Folder>, files: \Illuminate\Database\Eloquent\Collection<int, Media>, shown: int, total: int, hasMore: bool}
+     * @return array{folders: Collection<int, Folder>, files: Collection<int, Media>, shown: int, total: int, hasMore: bool}
      */
     public function listing(): array
     {
@@ -1639,6 +1722,25 @@ class FileExplorer extends \Livewire\Component
      * explorers on the page. A navigation or a search calls resetListing()
      * instead — nothing changed for anyone else.
      */
+    /**
+     * The media row an add() just wrote, when the object never came back.
+     *
+     * CouldNotLoadImage is thrown while generating the thumbnail, which runs
+     * after the row and the original are written — the file is there. A
+     * listener that never heard about it would leave a hole in an audit trail
+     * exactly where an upload went half-wrong.
+     */
+    protected function mediaJustAdded(Folder $folder, string $fileName): ?Media
+    {
+        return Media::query()
+            ->where('model_type', $folder->getMorphClass())
+            ->where('model_id', $folder->id)
+            ->where('collection_name', UploadRules::collection())
+            ->where('file_name', $fileName)
+            ->latest('id')
+            ->first();
+    }
+
     protected function afterMutation(): void
     {
         $this->resetListing();
@@ -1835,6 +1937,8 @@ class FileExplorer extends \Livewire\Component
         $newFolder->parent_id = $parent->id;
         $newFolder->save();
 
+        event(new FolderCreated($this->scopeKey, $this->rootFolderId, auth()->user(), $newFolder));
+
         $this->newFolderName = '';
         $this->isCreatingNewFolder = false;
         $this->selectedFolders = [(int) $newFolder->id];
@@ -1937,7 +2041,7 @@ class FileExplorer extends \Livewire\Component
 
         try {
             $this->validate();
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->reset('files');
             $this->fileInputKey++;
             $this->dispatch('fe-upload-settled');
@@ -2015,12 +2119,33 @@ class FileExplorer extends \Livewire\Component
             }
 
             if ($replacing !== null) {
+                $replacedId = (int) $replacing->id;
+                $replacedName = (string) $replacing->name;
+                $replacedFileName = (string) $replacing->file_name;
+                $replacedSize = (int) $replacing->size;
+
                 $replacing->delete();
                 $replaced++;
+
+                // Replacing destroys the old file outright, trash or no trash:
+                // a listener has to hear that as a deletion of its own.
+                event(new FileDeleted(
+                    $this->scopeKey,
+                    $this->rootFolderId,
+                    $actor,
+                    $replacedId,
+                    $replacedName,
+                    $replacedFileName,
+                    (int) $folder->id,
+                    $replacedSize,
+                    purgedFromTrash: false,
+                ));
             }
 
+            $stored = null;
+
             try {
-                $folder
+                $stored = $folder
                     ->addMedia($file)
                     ->usingName($label)
                     ->usingFileName($safe)
@@ -2037,6 +2162,12 @@ class FileExplorer extends \Livewire\Component
                 // it; the media route serves the original when the conversion is
                 // missing.
                 report($e);
+
+                $stored = $this->mediaJustAdded($folder, $safe);
+            }
+
+            if ($stored instanceof Media) {
+                event(new FileUploaded($this->scopeKey, $this->rootFolderId, $actor, $stored, $folder));
             }
 
             $uploaded++;
@@ -2220,8 +2351,30 @@ class FileExplorer extends \Livewire\Component
 
             if (Trash::enabled()) {
                 app(Trash::class)->trashMedia($media);
+
+                event(new FileTrashed($this->scopeKey, $this->rootFolderId, auth()->user(), $media, withFolder: false));
             } else {
+                // Read before the delete: Media Library takes the row and the
+                // bytes with it, and the size is only knowable now.
+                $mediaId = (int) $media->id;
+                $name = (string) $media->name;
+                $fileName = (string) $media->file_name;
+                $folderId = (int) $media->model_id;
+                $size = (int) $media->size;
+
                 $media->delete();
+
+                event(new FileDeleted(
+                    $this->scopeKey,
+                    $this->rootFolderId,
+                    auth()->user(),
+                    $mediaId,
+                    $name,
+                    $fileName,
+                    $folderId,
+                    $size,
+                    purgedFromTrash: false,
+                ));
             }
 
             $deleted++;
@@ -2258,8 +2411,24 @@ class FileExplorer extends \Livewire\Component
 
             if (Trash::enabled()) {
                 app(Trash::class)->trashFolder($folder);
+
+                event(new FolderTrashed($this->scopeKey, $this->rootFolderId, auth()->user(), $folder));
             } else {
+                $deletedId = (int) $folder->id;
+                $deletedName = (string) $folder->name;
+                $deletedParentId = $folder->parent_id === null ? null : (int) $folder->parent_id;
+
                 $this->deleteFolderRecursive($folder);
+
+                event(new FolderDeleted(
+                    $this->scopeKey,
+                    $this->rootFolderId,
+                    auth()->user(),
+                    $deletedId,
+                    $deletedName,
+                    $deletedParentId,
+                    purgedFromTrash: false,
+                ));
             }
 
             $deleted++;
@@ -2345,8 +2514,20 @@ class FileExplorer extends \Livewire\Component
             }
 
             $this->assertUnderRoot($folder);
+
+            $fromParentId = $folder->parent_id === null ? null : (int) $folder->parent_id;
+
             $folder->parent_id = $targetFolderId;
             $folder->save();
+
+            event(new FolderMoved(
+                $this->scopeKey,
+                $this->rootFolderId,
+                auth()->user(),
+                $folder,
+                $fromParentId,
+                (int) $targetFolderId,
+            ));
         }
 
         foreach ($fileIds as $fileId) {
@@ -2358,8 +2539,19 @@ class FileExplorer extends \Livewire\Component
 
             $this->assertMediaUnderRoot($media);
 
+            $fromFolderId = (int) $media->model_id;
+
             $media->model_id = $targetFolderId;
             $media->save();
+
+            event(new FileMoved(
+                $this->scopeKey,
+                $this->rootFolderId,
+                auth()->user(),
+                $media,
+                $fromFolderId,
+                (int) $targetFolderId,
+            ));
         }
 
         $this->selectedFolders = [];
@@ -2406,7 +2598,10 @@ class FileExplorer extends \Livewire\Component
             }
 
             $this->assertUnderRoot($source);
-            $this->copyFolderRecursive($source, $targetFolder);
+
+            $copy = $this->copyFolderRecursive($source, $targetFolder);
+
+            event(new FolderCopied($this->scopeKey, $this->rootFolderId, auth()->user(), $copy, $source));
         }
 
         foreach ($fileIds as $fileId) {
@@ -2451,7 +2646,6 @@ class FileExplorer extends \Livewire\Component
 
         return false;
     }
-
 
     /**
      * @return array{scopeKey: string, rootFolderId: int, routePrefix: string}

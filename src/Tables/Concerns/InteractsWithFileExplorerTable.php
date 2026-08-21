@@ -4,12 +4,6 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer\Tables\Concerns;
 
-use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
-use Koassi\FilamentFileExplorer\Models\Folder;
-use Koassi\FilamentFileExplorer\Support\FolderTree;
-use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
-use Koassi\FilamentFileExplorer\Support\Uploader;
-use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Notifications\Notification;
@@ -18,6 +12,15 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Number;
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
+use Koassi\FilamentFileExplorer\Events\FileDeleted;
+use Koassi\FilamentFileExplorer\Events\FileTrashed;
+use Koassi\FilamentFileExplorer\Models\Folder;
+use Koassi\FilamentFileExplorer\Support\FolderTree;
+use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
+use Koassi\FilamentFileExplorer\Support\Trash;
+use Koassi\FilamentFileExplorer\Support\Uploader;
+use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 trait InteractsWithFileExplorerTable
@@ -136,12 +139,43 @@ trait InteractsWithFileExplorerTable
                         ->color('danger')
                         ->requiresConfirmation()
                         ->visible(fn (Media $record): bool => $authorizer->mediaDeleteState($scopeKey, $record)['allowed'])
-                        ->action(function (Media $record): void {
-                            $record->delete();
+                        ->action(function (Media $record) use ($scopeKey, $rootId): void {
+                            // Through Trash, like the explorer's own delete.
+                            // Calling $record->delete() here destroyed the file
+                            // outright even with the trash on, so the same
+                            // button meant two different things depending on
+                            // which page it was pressed from.
+                            if (Trash::enabled()) {
+                                app(Trash::class)->trashMedia($record);
+
+                                event(new FileTrashed($scopeKey, $rootId, auth()->user(), $record, withFolder: false));
+                            } else {
+                                $mediaId = (int) $record->id;
+                                $name = (string) $record->name;
+                                $fileName = (string) $record->file_name;
+                                $folderId = (int) $record->model_id;
+                                $size = (int) $record->size;
+
+                                $record->delete();
+
+                                event(new FileDeleted(
+                                    $scopeKey,
+                                    $rootId,
+                                    auth()->user(),
+                                    $mediaId,
+                                    $name,
+                                    $fileName,
+                                    $folderId,
+                                    $size,
+                                    purgedFromTrash: false,
+                                ));
+                            }
 
                             Notification::make()
                                 ->success()
-                                ->title(__('filament-file-explorer::file-explorer.deleted'))
+                                ->title(Trash::enabled()
+                                    ? trans_choice('filament-file-explorer::file-explorer.trash.moved', 1)
+                                    : __('filament-file-explorer::file-explorer.deleted'))
                                 ->send();
                         }),
                 ])

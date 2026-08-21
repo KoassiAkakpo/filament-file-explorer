@@ -327,6 +327,51 @@ FilamentFileExplorerPlugin::make()->authorizer(\App\Support\FileExplorerAuthoriz
 
 The media routes (`show`, `zip-media`, `zip-folder`) never trust the scope key in their own URL: they resolve the scope's root folder through the standalone resolver, or from the roots the current session has legitimately opened, and then require the media to sit under it. A media link is therefore only served to someone whose session has a claim to that scope — a URL kept from an expired session returns 403 until the explorer page is opened again.
 
+## Events
+
+Every mutation fires an event, so an application can keep an audit trail, notify, scan, index or replicate without extending the component.
+
+```php
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerEvent;
+use Koassi\FilamentFileExplorer\Events\FileUploaded;
+
+// One listener for everything that happens in the explorer.
+Event::listen(FileExplorerEvent::class, function (FileExplorerEvent $event): void {
+    Log::info($event::class, ['scope' => $event->scopeKey]);
+});
+
+// Or one kind at a time.
+Event::listen(FileUploaded::class, ScanUpload::class);
+```
+
+`FileExplorerEvent` is an **interface**, not a shared base class, because Laravel's dispatcher resolves listeners for the interfaces an event implements but not for its parent classes — so listening to it really does catch all of them.
+
+| Event | Payload beside the scope |
+| --- | --- |
+| `FileUploaded` | `media`, `folder` |
+| `FolderCreated` | `folder` |
+| `FileRenamed` | `media`, `previousName` |
+| `FolderRenamed` | `folder`, `previousName`, `previousSlug` |
+| `FileMoved` | `media`, `fromFolderId`, `toFolderId` |
+| `FolderMoved` | `folder`, `fromParentId`, `toParentId` |
+| `FileCopied` | `copy`, `source`, `folder` |
+| `FolderCopied` | `copy`, `source` |
+| `FileTrashed` | `media`, `withFolder` |
+| `FolderTrashed` | `folder` |
+| `FileRestored` | `media` |
+| `FolderRestored` | `folder` |
+| `FileDeleted` | `mediaId`, `name`, `fileName`, `folderId`, `size`, `purgedFromTrash` |
+| `FolderDeleted` | `folderId`, `name`, `parentId`, `purgedFromTrash` |
+
+All of them carry `scopeKey`, `rootFolderId` and `actor` (nullable — a console command has none). The scope is on every event because it is the only way to tell two explorers apart: the same tree is reachable from a page and from a picker in a modal, and the per-user and per-tenant resolvers run the same code for every scope.
+
+Four things worth knowing about the shape:
+
+- **The deletions carry a snapshot, not a model.** By the time a listener runs the row is gone and the bytes are off the disk — which is also why `size` is on `FileDeleted`, as the last moment it can be known.
+- **`FileUploaded` fires per file**, so a multi-file upload fires several times, and an upload that replaces an existing file fires `FileDeleted` for what it destroyed.
+- **`FolderCopied` fires once** for the folder that was asked for, never per descendant — but each file the copy created does fire `FileCopied`, because every new file row is a new object to index or scan.
+- **An upload whose thumbnail failed still fires.** `CouldNotLoadImage` is thrown after the row and the original are written, so the file is there; the event would otherwise be missing exactly where an upload went half-wrong.
+
 ## Assets
 
 There is no build step: `php artisan filament:assets` publishes the package's JS and CSS straight from its sources. Re-run it after upgrading, as you would for any Filament plugin — and keep the `@source` line from the installation steps so your theme still sees the Tailwind classes the views use.

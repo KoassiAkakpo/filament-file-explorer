@@ -21,6 +21,8 @@ Everything a host app writes code against:
 
 ## Before 1.0 — decisions that cannot be deferred
 
+One down: **domain events** shipped. The three that remain all change something a host app has written against, which is why they cannot wait.
+
 ### An ability set that can grow
 
 `abilities()` returns a fixed array of eleven keys. Any new key is a **silent denial** for every authorizer a host app has already written: the package reads a key the implementation never returned, gets nothing, and refuses the action. This is already documented as the reason trash restore and purge reuse `delete` / `deleteFolder` rather than asking for abilities of their own.
@@ -41,13 +43,13 @@ The Alpine `feSel` store and its `feWireRef` are global. Two explorers on one pa
 
 This is the last global left after the `id` sweep, and it is the one no PHP test can reach. The fix is to move the selection into the component or key the store by scope; both change the JS contract, so it belongs before the freeze.
 
-### Domain events
+### ~~Domain events~~ — done
 
-Nothing is dispatched today: there is no `src/Events/`, and an app that needs to react to an upload, a move or a deletion has to extend the Livewire component.
+Fourteen events, dispatched from both mutation entry points, all implementing the `Contracts\FileExplorerEvent` marker interface so one listener can see everything. See [the README](README.md#events) for the payloads.
 
-Adding events is additive and would not break anything after 1.0 — but their **payload shape** is API from the first release that has them, and they are the prerequisite for everything a host app would otherwise ask the package to build in: audit trails, notifications, virus scanning, external indexing, replication.
+An interface rather than a shared base class because Laravel's dispatcher resolves listeners for interfaces but not for parent classes — the difference between an audit trail that works with one listener and one that has to enumerate fourteen.
 
-Cheap, too: `afterMutation()` is already the single funnel every mutation passes through. Highest value for the least code on this list.
+Closing this also fixed a data-loss bug it uncovered: the files table's delete called `$record->delete()` directly, destroying the file even with the trash on, so the same button meant two different things depending on the page it was pressed from. It now routes through `Support\Trash` like the explorer's own delete.
 
 ## Features planned before 1.0
 
