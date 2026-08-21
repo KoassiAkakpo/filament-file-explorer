@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer\Models\Concerns;
 
-use Koassi\FilamentFileExplorer\Facades\FileExplorer;
-use Koassi\FilamentFileExplorer\Models\Folder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
+use Koassi\FilamentFileExplorer\Facades\FileExplorer;
+use Koassi\FilamentFileExplorer\Models\Folder;
+use Koassi\FilamentFileExplorer\Support\FolderModel;
 
 /**
  * @mixin Model
@@ -40,7 +41,7 @@ trait HasFileExplorer
 
     public function folder(): BelongsTo
     {
-        return $this->belongsTo(Folder::class, $this->fileExplorerFolderForeignKey());
+        return $this->belongsTo(FolderModel::class(), $this->fileExplorerFolderForeignKey());
     }
 
     public function fileExplorerFolderForeignKey(): string
@@ -88,7 +89,7 @@ trait HasFileExplorer
     public function ensureFileExplorerRoot(): Folder
     {
         if ($id = $this->fileExplorerRootFolderId()) {
-            return Folder::query()->findOrFail($id);
+            return FolderModel::query()->findOrFail($id);
         }
 
         $folder = FileExplorer::createRoot(

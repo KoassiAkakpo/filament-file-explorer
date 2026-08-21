@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\Abilities;
+use Koassi\FilamentFileExplorer\Support\FolderModel;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\ScopeRoots;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
@@ -103,7 +104,7 @@ class MediaController extends Controller
                 $tree = app(FolderTree::class);
 
                 foreach ($folderIds as $folderId) {
-                    $folder = Folder::query()->find($folderId);
+                    $folder = FolderModel::query()->find($folderId);
 
                     // A row that vanished since the selection was made is
                     // skipped; one that was never in scope is a forged id.
@@ -193,7 +194,7 @@ class MediaController extends Controller
         // Explorer media always hangs off a Folder in the explorer collection.
         // Without these two checks, a media row belonging to another model whose
         // model_id happens to match an in-scope folder id would pass containment.
-        if ($media->model_type !== (new Folder)->getMorphClass()) {
+        if ($media->model_type !== FolderModel::morphClass()) {
             return false;
         }
 
@@ -201,7 +202,7 @@ class MediaController extends Controller
             return false;
         }
 
-        $folder = Folder::query()->find($media->model_id);
+        $folder = FolderModel::query()->find($media->model_id);
 
         return $folder instanceof Folder
             && app(FolderTree::class)->isUnderAnyRoot($folder, $rootFolderIds);

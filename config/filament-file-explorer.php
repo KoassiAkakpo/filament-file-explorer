@@ -240,6 +240,21 @@ return [
     'folders' => [
         'max_depth' => 12,
         'table' => 'file_explorer_folders',
+
+        /*
+         | Swap in your own model to add columns, a global scope or a different
+         | table strategy. It must extend the package's Folder — the media
+         | collection, the conversions, the soft deletes and the containment
+         | walk all live on it.
+         |
+         | Media rows keep storing the package's class in model_type whatever
+         | this is set to, so switching does not orphan a library already
+         | uploaded.
+         |
+         | Config only, not a plugin setting: a model cannot know which panel it
+         | is being browsed from.
+         */
+        'model' => Koassi\FilamentFileExplorer\Models\Folder::class,
     ],
 
     /*

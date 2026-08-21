@@ -341,6 +341,31 @@ Nothing ever defaults to allowed — an ability nobody declared is refused. Your
 
 The media routes (`show`, `zip-media`, `zip-folder`) never trust the scope key in their own URL: they resolve the scope's root folder through the standalone resolver, or from the roots the current session has legitimately opened, and then require the media to sit under it. A media link is therefore only served to someone whose session has a claim to that scope — a URL kept from an expired session returns 403 until the explorer page is opened again.
 
+## Your own folder model
+
+The tree is built from `Koassi\FilamentFileExplorer\Models\Folder`. Point the config at a subclass to add columns, a global scope, a factory or anything else:
+
+```php
+// config/filament-file-explorer.php
+'folders' => [
+    'model' => \App\Models\Folder::class,
+],
+```
+
+```php
+class Folder extends \Koassi\FilamentFileExplorer\Models\Folder
+{
+    // whatever you need
+}
+```
+
+It has to extend the package's model — the media collection, the thumbnail conversion, the soft deletes and the containment walk all live on it — and a class that does not is refused with a clear message at the first query rather than failing three layers down.
+
+Two things this deliberately does *not* change:
+
+- **Media rows keep storing the package's class in `model_type`.** `getMorphClass()` answers for the base model on purpose, so switching does not orphan a library already uploaded: every row still passes the containment guard, which checks that value. Set `morph_class` only if you are migrating from some other implementation.
+- **Config, not a plugin setting.** A model cannot know which panel it is being browsed from — the same reason the thumbnail conversion is config only.
+
 ## Events
 
 Every mutation fires an event, so an application can keep an audit trail, notify, scan, index or replicate without extending the component.

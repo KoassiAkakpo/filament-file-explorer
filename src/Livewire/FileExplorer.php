@@ -31,6 +31,7 @@ use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\ActiveRoot;
 use Koassi\FilamentFileExplorer\Support\FileNames;
 use Koassi\FilamentFileExplorer\Support\FolderListing;
+use Koassi\FilamentFileExplorer\Support\FolderModel;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\MediaLabel;
 use Koassi\FilamentFileExplorer\Support\MimeIcon;
@@ -165,10 +166,10 @@ class FileExplorer extends Component
         $requestedFolder = request()->integer('folder') ?: null;
         $currentId = $requestedFolder ?: session($sessionKey, $this->rootFolderId);
 
-        $folder = Folder::with(['children', 'parent'])->find($currentId);
+        $folder = FolderModel::query()->with(['children', 'parent'])->find($currentId);
 
         if (! $folder || ! app(FolderTree::class)->isUnderRoot($folder, $this->rootFolderId)) {
-            $folder = Folder::with(['children', 'parent'])->findOrFail($this->rootFolderId);
+            $folder = FolderModel::query()->with(['children', 'parent'])->findOrFail($this->rootFolderId);
             session([$sessionKey => $folder->id]);
         }
 
@@ -251,10 +252,10 @@ class FileExplorer extends Component
      */
     protected function assertMediaUnderRoot(Media $media): Folder
     {
-        abort_unless($media->model_type === (new Folder)->getMorphClass(), 403);
+        abort_unless($media->model_type === FolderModel::morphClass(), 403);
         abort_unless($media->collection_name === UploadRules::collection(), 403);
 
-        $folder = Folder::query()->find($media->model_id);
+        $folder = FolderModel::query()->find($media->model_id);
 
         // Aborts when the folder is missing or out of scope, so what comes back
         // is always the media's in-scope folder.
@@ -396,7 +397,7 @@ class FileExplorer extends Component
 
     protected function openFolderFromHistory(int $folderId): void
     {
-        $folder = Folder::query()->findOrFail($folderId);
+        $folder = FolderModel::query()->findOrFail($folderId);
         $this->assertUnderRoot($folder);
 
         $this->search = '';
@@ -544,7 +545,7 @@ class FileExplorer extends Component
         $this->quotaRefused = 0;
 
         foreach ($folderIds as $folderId) {
-            $source = Folder::query()->find($folderId);
+            $source = FolderModel::query()->find($folderId);
             if (! $source || (int) $source->id === $this->rootFolderId) {
                 continue;
             }
@@ -628,13 +629,13 @@ class FileExplorer extends Component
         $slug = Str::slug($name) ?: ('folder-'.Str::lower(Str::random(6)));
         $baseSlug = $slug;
         $i = 1;
-        while (Folder::query()->where('parent_id', $parent->id)->where('slug', $slug)->exists()) {
+        while (FolderModel::query()->where('parent_id', $parent->id)->where('slug', $slug)->exists()) {
             $slug = $baseSlug.'-'.$i;
             $name = $source->name.' ('.$i.')';
             $i++;
         }
 
-        $folder = new Folder;
+        $folder = FolderModel::new();
         $folder->name = $name;
         $folder->slug = $slug;
         $folder->parent_id = $parent->id;
@@ -661,7 +662,7 @@ class FileExplorer extends Component
 
                 return;
             }
-            $folder = Folder::query()->findOrFail($id);
+            $folder = FolderModel::query()->findOrFail($id);
             $this->assertUnderRoot($folder);
             $this->renamingType = 'folder';
             $this->renamingId = $id;
@@ -713,10 +714,10 @@ class FileExplorer extends Component
 
                 return;
             }
-            $folder = Folder::query()->findOrFail($this->renamingId);
+            $folder = FolderModel::query()->findOrFail($this->renamingId);
             $this->assertUnderRoot($folder);
             $slug = Str::slug($name) ?: ('folder-'.Str::lower(Str::random(6)));
-            $exists = Folder::query()
+            $exists = FolderModel::query()
                 ->where('parent_id', $folder->parent_id)
                 ->where('slug', $slug)
                 ->where('id', '!=', $folder->id)
@@ -788,7 +789,7 @@ class FileExplorer extends Component
         $deletable = 0;
 
         foreach ($folderIds as $folderId) {
-            $folder = Folder::query()->find($folderId);
+            $folder = FolderModel::query()->find($folderId);
 
             if (! $folder) {
                 continue;
@@ -956,7 +957,7 @@ class FileExplorer extends Component
             // Restoring is the mirror of deleting, so it takes the same ability.
             abort_unless($this->ability('deleteFolder'), 403);
 
-            $folder = Folder::withTrashed()->findOrFail($id);
+            $folder = FolderModel::query()->withTrashed()->findOrFail($id);
             $this->assertUnderRoot($folder);
             $trash->restoreFolder($folder);
 
@@ -1022,7 +1023,7 @@ class FileExplorer extends Component
         foreach ($folderIds as $folderId) {
             abort_unless($this->ability('deleteFolder'), 403);
 
-            $folder = Folder::withTrashed()->find($folderId);
+            $folder = FolderModel::query()->withTrashed()->find($folderId);
 
             if (! $folder || ! $folder->trashed()) {
                 continue;
@@ -1097,10 +1098,10 @@ class FileExplorer extends Component
      */
     protected function assertTrashedMediaUnderRoot(Media $media): void
     {
-        abort_unless($media->model_type === (new Folder)->getMorphClass(), 403);
+        abort_unless($media->model_type === FolderModel::morphClass(), 403);
         abort_unless($media->collection_name === Trash::collection(), 403);
 
-        $this->assertUnderRoot(Folder::withTrashed()->find($media->model_id));
+        $this->assertUnderRoot(FolderModel::query()->withTrashed()->find($media->model_id));
     }
 
     protected function trashOriginPath(?int $folderId): string
@@ -1109,7 +1110,7 @@ class FileExplorer extends Component
             return '—';
         }
 
-        $folder = Folder::withTrashed()->find($folderId);
+        $folder = FolderModel::query()->withTrashed()->find($folderId);
 
         return $folder ? $this->folderPathString($folder) : '—';
     }
@@ -1129,7 +1130,7 @@ class FileExplorer extends Component
 
         $files = (int) Media::query()
             ->where('collection_name', UploadRules::collection())
-            ->where('model_type', (new Folder)->getMorphClass())
+            ->where('model_type', FolderModel::morphClass())
             ->whereIn('model_id', $ids)
             ->count();
 
@@ -1332,7 +1333,7 @@ class FileExplorer extends Component
         }
 
         if ($type === 'folder' && $id) {
-            $folder = Folder::query()->findOrFail($id);
+            $folder = FolderModel::query()->findOrFail($id);
             $this->assertUnderRoot($folder);
             $size = $this->folderSizeBytes($folder);
             $items = (int) $folder->children()->count() + (int) $folder->media()->where('collection_name', UploadRules::collection())->count();
@@ -1500,7 +1501,7 @@ class FileExplorer extends Component
     {
         return (int) Media::query()
             ->where('collection_name', UploadRules::collection())
-            ->where('model_type', (new Folder)->getMorphClass())
+            ->where('model_type', FolderModel::morphClass())
             ->whereIn('model_id', app(FolderTree::class)->descendantFolderIdsIncludingRoot((int) $folder->id))
             ->sum('size');
     }
@@ -1586,7 +1587,7 @@ class FileExplorer extends Component
         }
 
         if ($type === 'folder' && $id) {
-            $folder = Folder::query()->findOrFail($id);
+            $folder = FolderModel::query()->findOrFail($id);
             $this->assertUnderRoot($folder);
             $state = $docs->folderDeleteState($this->scopeKey, $folder);
             $state['hint'] = $state['allowed']
@@ -1639,11 +1640,11 @@ class FileExplorer extends Component
         ScopeRoots::remember($this->scopeKey, $rootFolderId);
 
         // Each root remembers the folder it was left in, the way mount() does.
-        $remembered = Folder::with(['children', 'parent'])->find(session($this->sessionKey(), $rootFolderId));
+        $remembered = FolderModel::query()->with(['children', 'parent'])->find(session($this->sessionKey(), $rootFolderId));
 
         $folder = $remembered !== null && app(FolderTree::class)->isUnderRoot($remembered, $rootFolderId)
             ? $remembered
-            : Folder::with(['children', 'parent'])->findOrFail($rootFolderId);
+            : FolderModel::query()->with(['children', 'parent'])->findOrFail($rootFolderId);
 
         $this->currentFolder = $folder;
         $this->breadcrumb = $this->generateBreadcrumb($folder);
@@ -1789,7 +1790,7 @@ class FileExplorer extends Component
 
         $folder = $this->currentFolder === null
             ? null
-            : Folder::query()->find($this->currentFolder->id);
+            : FolderModel::query()->find($this->currentFolder->id);
 
         // Someone else may have deleted the folder being browsed. Falling back
         // to the root beats rendering a folder that is no longer there.
@@ -1832,7 +1833,7 @@ class FileExplorer extends Component
     public function sidebarTree(): array
     {
         $ids = $this->descendantFolderIdsIncludingRoot();
-        $folders = Folder::query()
+        $folders = FolderModel::query()
             ->whereIn('id', $ids)
             ->orderBy('name')
             ->get(['id', 'name', 'parent_id']);
@@ -1910,7 +1911,7 @@ class FileExplorer extends Component
                 'max:255',
                 function ($attribute, $value, $fail) {
                     $slug = Str::slug(trim($value));
-                    $existingFolder = Folder::query()
+                    $existingFolder = FolderModel::query()
                         ->where('slug', $slug)
                         ->where('parent_id', $this->currentFolder?->id)
                         ->first();
@@ -1931,7 +1932,7 @@ class FileExplorer extends Component
         ]);
 
         $parent = $this->currentFolder;
-        $newFolder = new Folder;
+        $newFolder = FolderModel::new();
         $newFolder->name = $name;
         $slug = Str::slug($name);
         $newFolder->slug = $slug !== '' ? $slug : ('folder-'.Str::lower(Str::random(8)));
@@ -1966,7 +1967,7 @@ class FileExplorer extends Component
             return;
         }
 
-        $parentFolder = Folder::query()->find($this->currentFolder->parent_id);
+        $parentFolder = FolderModel::query()->find($this->currentFolder->parent_id);
         $this->assertUnderRoot($parentFolder);
 
         $this->currentFolder = $parentFolder;
@@ -1978,7 +1979,7 @@ class FileExplorer extends Component
 
     public function navigateToFolder($folderId): void
     {
-        $folder = Folder::query()->findOrFail($folderId);
+        $folder = FolderModel::query()->findOrFail($folderId);
         $this->assertUnderRoot($folder);
 
         $this->search = '';
@@ -2037,7 +2038,7 @@ class FileExplorer extends Component
         $targetId = $this->uploadTargetFolderId ?? (int) $this->currentFolder->id;
         $this->uploadTargetFolderId = null;
 
-        $target = Folder::query()->findOrFail($targetId);
+        $target = FolderModel::query()->findOrFail($targetId);
         $this->assertUnderRoot($target);
 
         try {
@@ -2280,7 +2281,7 @@ class FileExplorer extends Component
     {
         $slug = Str::slug($name) ?: ('folder-'.Str::lower(Str::random(8)));
 
-        $existing = Folder::query()
+        $existing = FolderModel::query()
             ->where('parent_id', $parent->id)
             ->where('slug', $slug)
             ->first();
@@ -2289,7 +2290,7 @@ class FileExplorer extends Component
             return $existing;
         }
 
-        $folder = new Folder;
+        $folder = FolderModel::new();
         $folder->name = Str::limit($name, 255, '');
         $folder->slug = $slug;
         $folder->parent_id = $parent->id;
@@ -2302,7 +2303,7 @@ class FileExplorer extends Component
 
     public function prepareUploadToFolder(int $folderId): void
     {
-        $folder = Folder::query()->findOrFail($folderId);
+        $folder = FolderModel::query()->findOrFail($folderId);
         $this->assertUnderRoot($folder);
         abort_unless($this->ability('upload'), 403);
         $this->uploadTargetFolderId = $folderId;
@@ -2391,7 +2392,7 @@ class FileExplorer extends Component
                 continue;
             }
 
-            $folder = Folder::query()->find($folderId);
+            $folder = FolderModel::query()->find($folderId);
 
             if (! $folder) {
                 continue;
@@ -2453,8 +2454,8 @@ class FileExplorer extends Component
         $this->dispatch('clear-all-selections');
         $this->dispatch('fe-sel-cleared');
 
-        if (! Folder::query()->find($this->currentFolder->id)) {
-            $this->currentFolder = Folder::with(['children', 'parent'])->findOrFail($this->rootFolderId);
+        if (! FolderModel::query()->find($this->currentFolder->id)) {
+            $this->currentFolder = FolderModel::query()->with(['children', 'parent'])->findOrFail($this->rootFolderId);
             session([$this->sessionKey() => $this->rootFolderId]);
             $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
         } else {
@@ -2488,7 +2489,7 @@ class FileExplorer extends Component
 
         abort_unless($this->ability('move'), 403);
 
-        $targetFolder = Folder::query()->find($targetFolderId);
+        $targetFolder = FolderModel::query()->find($targetFolderId);
 
         if (! $targetFolder) {
             return;
@@ -2508,7 +2509,7 @@ class FileExplorer extends Component
                 continue;
             }
 
-            $folder = Folder::query()->find($folderId);
+            $folder = FolderModel::query()->find($folderId);
 
             if (! $folder) {
                 continue;
@@ -2572,7 +2573,7 @@ class FileExplorer extends Component
 
         $this->quotaRefused = 0;
 
-        $targetFolder = Folder::query()->find($targetFolderId);
+        $targetFolder = FolderModel::query()->find($targetFolderId);
 
         if (! $targetFolder) {
             return;
@@ -2592,7 +2593,7 @@ class FileExplorer extends Component
                 continue;
             }
 
-            $source = Folder::query()->find($folderId);
+            $source = FolderModel::query()->find($folderId);
 
             if (! $source) {
                 continue;
@@ -2633,7 +2634,7 @@ class FileExplorer extends Component
             return true;
         }
 
-        $folder = Folder::query()->find($descendantId);
+        $folder = FolderModel::query()->find($descendantId);
         $depth = 0;
 
         while ($folder && $folder->parent_id && $depth < 50) {
@@ -2641,7 +2642,7 @@ class FileExplorer extends Component
                 return true;
             }
 
-            $folder = Folder::query()->find($folder->parent_id);
+            $folder = FolderModel::query()->find($folder->parent_id);
             $depth++;
         }
 

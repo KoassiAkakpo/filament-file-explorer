@@ -7,6 +7,7 @@ namespace Koassi\FilamentFileExplorer\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
@@ -36,21 +37,34 @@ class Folder extends Model implements HasMedia
         // withTrashed so a trashed item can still say where it came from. A
         // live folder never has a trashed parent — trashing cascades — so
         // nothing else sees a difference.
-        return $this->belongsTo(self::class, 'parent_id')->withTrashed();
+        return $this->belongsTo(static::class, 'parent_id')->withTrashed();
     }
 
     public function children(): HasMany
     {
-        return $this->hasMany(self::class, 'parent_id');
+        return $this->hasMany(static::class, 'parent_id');
     }
 
+    /**
+     * What media rows store in model_type.
+     *
+     * Answered for this class, never for a subclass: an application may swap in
+     * its own model through `folders.model`, and letting the value follow the
+     * subclass would orphan every media row already written — none of them
+     * would pass the model_type check the containment guard makes. The morph map
+     * still gets its say, so an alias keeps working.
+     */
     public function getMorphClass(): string
     {
         $legacy = config('filament-file-explorer.morph_class');
 
-        return is_string($legacy) && $legacy !== ''
-            ? $legacy
-            : parent::getMorphClass();
+        if (is_string($legacy) && $legacy !== '') {
+            return $legacy;
+        }
+
+        $alias = array_search(self::class, Relation::morphMap(), true);
+
+        return $alias === false ? self::class : (string) $alias;
     }
 
     public function registerMediaCollections(): void

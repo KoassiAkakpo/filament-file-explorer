@@ -21,7 +21,7 @@ Everything a host app writes code against:
 
 ## Before 1.0 — decisions that cannot be deferred
 
-Two down: **domain events** and **the ability set**. The two that remain both change something a host app has written against, which is why they cannot wait.
+Three down: **domain events**, **the ability set** and **the folder model**. What remains is the selection store — the one no PHP test can reach.
 
 ### ~~An ability set that can grow~~ — done
 
@@ -33,11 +33,13 @@ It also stopped asking the authorizer on every read. `ability()` runs dozens of 
 
 The signed share links can now be built without smuggling them onto an existing ability.
 
-### A swappable folder model
+### ~~A swappable folder model~~ — done
 
-`Folder::` is referenced 57 times across 8 files, and no config key points at the class. A host app cannot substitute its own model — to add columns, a global scope, or a different table strategy — without forking.
+`folders.model` names the class, and [Support/FolderModel.php](src/Support/FolderModel.php) is the only place it is built. Seventy-two static usages across ten files became resolver calls, and the relations moved from `self::class` to `static::class` so a host app does not get its own class from a query and the package's from a relation.
 
-Every comparable Filament and Spatie package lets the model be swapped. Adding that later means changing the type of everything the package hands back, so it is a 1.0 decision.
+The sharp edge was the morph class. `getMorphClass()` now answers for the base model rather than `static`, so a swap does not orphan a library already uploaded: media rows keep the same `model_type`, which is the value the containment guard checks. Had it followed the subclass, every existing row would have started failing that check — silently, and only for the apps that took the new feature up.
+
+A test asserts the static forms never come back, since they creep in the moment someone adds a query without thinking about it.
 
 ### Selection state per component, not per page
 

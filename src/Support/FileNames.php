@@ -24,7 +24,7 @@ final class FileNames
     {
         $taken = Media::query()
             ->where('collection_name', UploadRules::collection())
-            ->where('model_type', (new Folder)->getMorphClass())
+            ->where('model_type', FolderModel::morphClass())
             ->where('model_id', $folder->id)
             ->pluck('file_name')
             ->map(fn ($name): string => strtolower((string) $name))
@@ -77,7 +77,7 @@ final class FileNames
     {
         return Media::query()
             ->where('collection_name', UploadRules::collection())
-            ->where('model_type', (new Folder)->getMorphClass())
+            ->where('model_type', FolderModel::morphClass())
             ->where('model_id', $folder->id)
             ->whereRaw('LOWER(file_name) = ?', [strtolower($fileName)])
             ->first();

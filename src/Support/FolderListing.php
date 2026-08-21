@@ -86,11 +86,11 @@ final class FolderListing
     private function foldersQuery(): Builder
     {
         if ($this->search === '') {
-            return Folder::query()->where('parent_id', $this->currentFolderId);
+            return FolderModel::query()->where('parent_id', $this->currentFolderId);
         }
 
         return $this->applySearch(
-            Folder::query()
+            FolderModel::query()
                 ->whereIn('id', $this->scopeFolderIds())
                 ->where('id', '!=', $this->rootFolderId)
         );
@@ -103,7 +103,7 @@ final class FolderListing
     {
         $query = Media::query()
             ->where('collection_name', UploadRules::collection())
-            ->where('model_type', (new Folder)->getMorphClass());
+            ->where('model_type', FolderModel::morphClass());
 
         if ($this->search === '') {
             return $query->where('model_id', $this->currentFolderId);

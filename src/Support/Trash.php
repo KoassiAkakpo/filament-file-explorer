@@ -14,7 +14,7 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * Moving things aside instead of destroying them.
  *
  * Folders rely on soft deletes, so a trashed folder drops out of every
- * `Folder::query()` the explorer runs. Media Library has no soft deletes, so a
+ * `FolderModel::query()` the explorer runs. Media Library has no soft deletes, so a
  * trashed file moves to a separate collection instead: every listing and every
  * containment check already filters on the explorer collection, which makes
  * trashed files disappear from them for free — and keeps the file on disk,
@@ -56,12 +56,12 @@ final class Trash
             $this->trashMedia($media, withFolder: true);
         }
 
-        Folder::query()->whereIn('id', $ids)->delete();
+        FolderModel::query()->whereIn('id', $ids)->delete();
     }
 
     public function restoreMedia(Media $media): void
     {
-        $folder = Folder::withTrashed()->find($media->model_id);
+        $folder = FolderModel::query()->withTrashed()->find($media->model_id);
 
         // A new upload may have taken the name while this one sat in the trash,
         // so restoring must not reintroduce the duplicate. Media Library renames
@@ -87,7 +87,7 @@ final class Trash
     {
         $ids = $this->subtreeIds((int) $folder->id);
 
-        Folder::withTrashed()->whereIn('id', $ids)->restore();
+        FolderModel::query()->withTrashed()->whereIn('id', $ids)->restore();
 
         foreach ($this->mediaIn($ids, self::collection())->get() as $media) {
             if ($media->getCustomProperty('trashed_with_folder') === true) {
@@ -107,13 +107,13 @@ final class Trash
 
         // Media Library removes the files from the disk on delete.
         foreach (Media::query()
-            ->where('model_type', (new Folder)->getMorphClass())
+            ->where('model_type', FolderModel::morphClass())
             ->whereIn('model_id', $ids)
             ->get() as $media) {
             $media->delete();
         }
 
-        Folder::withTrashed()->whereIn('id', $ids)->forceDelete();
+        FolderModel::query()->withTrashed()->whereIn('id', $ids)->forceDelete();
     }
 
     /**
@@ -126,9 +126,9 @@ final class Trash
     {
         $ids = $this->subtreeIds($rootFolderId);
 
-        $trashedIds = Folder::onlyTrashed()->whereIn('id', $ids)->pluck('id')->all();
+        $trashedIds = FolderModel::query()->onlyTrashed()->whereIn('id', $ids)->pluck('id')->all();
 
-        $folders = Folder::onlyTrashed()
+        $folders = FolderModel::query()->onlyTrashed()
             ->whereIn('id', $trashedIds)
             // A folder inside another trashed folder is reachable through it.
             // NOT IN would also drop a null parent, hence the explicit branch.
@@ -164,10 +164,10 @@ final class Trash
         $cutoff = Carbon::now()->subDays(max(0, $days));
         $purged = 0;
 
-        foreach (Folder::onlyTrashed()->where('deleted_at', '<', $cutoff)->get() as $folder) {
+        foreach (FolderModel::query()->onlyTrashed()->where('deleted_at', '<', $cutoff)->get() as $folder) {
             // Skip the ones reachable through an older trashed ancestor: the
             // ancestor's own purge takes them.
-            if ($folder->parent_id !== null && Folder::onlyTrashed()->whereKey($folder->parent_id)->exists()) {
+            if ($folder->parent_id !== null && FolderModel::query()->onlyTrashed()->whereKey($folder->parent_id)->exists()) {
                 continue;
             }
 
@@ -201,7 +201,7 @@ final class Trash
         $frontier = [$rootFolderId];
 
         while ($frontier !== []) {
-            $children = Folder::withTrashed()
+            $children = FolderModel::query()->withTrashed()
                 ->whereIn('parent_id', $frontier)
                 ->pluck('id')
                 ->map(fn ($id): int => (int) $id)
@@ -222,7 +222,7 @@ final class Trash
     {
         return Media::query()
             ->where('collection_name', $collection)
-            ->where('model_type', (new Folder)->getMorphClass())
+            ->where('model_type', FolderModel::morphClass())
             ->whereIn('model_id', $folderIds === [] ? [0] : $folderIds);
     }
 }

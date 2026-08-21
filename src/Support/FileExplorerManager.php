@@ -19,7 +19,7 @@ class FileExplorerManager
     {
         $slug ??= Str::slug($name) ?: ('folder-'.Str::lower(Str::random(8)));
 
-        return Folder::query()->create([
+        return FolderModel::query()->create([
             'name' => $name,
             'slug' => $slug,
             'parent_id' => null,
@@ -51,7 +51,7 @@ class FileExplorerManager
 
     public function findRoot(string $slug): ?Folder
     {
-        return Folder::query()
+        return FolderModel::query()
             ->whereNull('parent_id')
             ->where('slug', $slug)
             ->first();
@@ -61,7 +61,7 @@ class FileExplorerManager
     {
         $slug ??= Str::slug($name) ?: ('folder-'.Str::lower(Str::random(8)));
 
-        return Folder::query()->create([
+        return FolderModel::query()->create([
             'name' => $name,
             'slug' => $slug,
             'parent_id' => $parent->id,

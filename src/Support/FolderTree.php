@@ -140,7 +140,7 @@ final class FolderTree
         // withTrashed: containment is about where a folder sits, not about
         // whether it is currently visible. A trashed ancestor must not let a
         // folder look as though it had escaped its root.
-        $parentId = Folder::withTrashed()->whereKey($folderId)->value('parent_id');
+        $parentId = FolderModel::query()->withTrashed()->whereKey($folderId)->value('parent_id');
 
         return $this->parents[$folderId] = $parentId === null ? null : (int) $parentId;
     }
@@ -169,7 +169,7 @@ final class FolderTree
         $frontier = [$rootFolderId];
 
         while ($frontier !== []) {
-            $children = Folder::query()
+            $children = FolderModel::query()
                 ->whereIn('parent_id', $frontier)
                 ->pluck('id')
                 ->map(fn ($id): int => (int) $id)

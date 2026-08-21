@@ -15,8 +15,8 @@ use Illuminate\Support\Number;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Events\FileDeleted;
 use Koassi\FilamentFileExplorer\Events\FileTrashed;
-use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\Abilities;
+use Koassi\FilamentFileExplorer\Support\FolderModel;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
@@ -38,7 +38,7 @@ trait InteractsWithFileExplorerTable
         $folderIds = app(FolderTree::class)->descendantFolderIdsIncludingRoot($rootId);
 
         return Media::query()
-            ->where('model_type', (new Folder)->getMorphClass())
+            ->where('model_type', FolderModel::morphClass())
             ->whereIn('model_id', $folderIds)
             ->where('collection_name', UploadRules::collection())
             ->latest('id');

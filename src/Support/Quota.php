@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Koassi\FilamentFileExplorer\Support;
 
 use Illuminate\Support\Number;
-use Koassi\FilamentFileExplorer\Models\Folder;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 /**
@@ -38,7 +37,7 @@ final class Quota
     public function usedBytes(int $rootFolderId): int
     {
         $used = $this->used[$rootFolderId] ??= (int) Media::query()
-            ->where('model_type', (new Folder)->getMorphClass())
+            ->where('model_type', FolderModel::morphClass())
             ->whereIn('collection_name', [UploadRules::collection(), Trash::collection()])
             ->whereIn('model_id', app(FolderTree::class)->descendantFolderIdsIncludingRoot($rootFolderId))
             ->sum('size');
