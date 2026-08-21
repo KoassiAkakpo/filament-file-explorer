@@ -102,6 +102,18 @@ Restore and purge take the same ability that trashing took (`delete` for files, 
 
 With the trash **off**, `deleteFolderRecursive()` must `forceDelete()`: the model soft-deletes now, so `delete()` would leave rows nothing ever shows again and nothing ever purges.
 
+## Thumbnails
+
+`Folder::registerMediaConversions()` declares one conversion, `thumbnail`, driven from config alone — conversions are registered on the model, which knows nothing about the panel it is browsed from, so this is the one setting `StandaloneSettings` does not own.
+
+Three decisions worth keeping:
+
+- **Served through the media route**, with `?conversion=thumbnail`. `$media->getUrl('thumbnail')` is a raw disk URL: on a public disk it hands the file to anyone with the link, past both guards. The controller only honours a name the media *has generated* (so the value can never be a path from the query string) and falls back to the original when the conversion is missing, which is what keeps a library uploaded before this existed rendering.
+- **Content type comes from the conversion**, not the original: Media Library writes a JPG thumbnail for a PNG, and a PDF thumbnail is a JPG too.
+- **Not queued by default.** Media Library queues conversions unless told otherwise, and a host with no worker would never get one — the explorer would keep serving originals, which is the whole point of this.
+
+Two ways a conversion can take an upload down with it, both handled: Media Library picks its image generator from the **extension**, so a file merely named `.png` is skipped on its sniffed mime type; and an image GD cannot decode (a truncated upload sniffs as `image/png` all the same) throws `CouldNotLoadImage` *after* the row and the original are written, so it is caught and reported rather than losing an upload that in fact succeeded. Non-image thumbnails (PDF, video) are deliberately not attempted: they need Imagick or ffmpeg on the host, and a failing generator costs more than the icon the explorer already draws.
+
 ## Security model
 
 Two independent guards, both required — never add an entry point that skips either:
@@ -168,6 +180,7 @@ Fixtures live in [tests/Fixtures/](tests/Fixtures/): `TestPanelProvider` boots a
 - `declare(strict_types=1);` in every PHP file (enforced by `pint.json`).
 - User-facing strings go through `__('filament-file-explorer::file-explorer.…')` with entries in both `resources/lang/en` and `resources/lang/fr`.
 - Non-obvious decisions are documented as short comments explaining *why* (see the provider-order and resolver-binding comments) — match that style rather than describing what the code does.
+- The finder is rendered `dir="ltr"` on purpose (the layout, the drag geometry and the marquee all assume it), so **`rtl:` variants can never match** — there were none left after the last one was removed, and adding one is dead code until the whole layout is made direction-aware.
 - Host apps must add `@source '…/vendor/koassi/filament-file-explorer/resources/views/**/*.blade.php';` to their Filament theme, so Tailwind classes used in Blade must be literal, not built from variables.
 - The toolbar is `flex-wrap: nowrap` in a column that shrinks by 300px when the inspector opens, so **something in it has to give**: the selection count truncates and the search narrows (`min-w-0`, and `min-width: 0` on the input, which otherwise keeps an intrinsic width). Putting `shrink-0` back on `.fe-toolbar__end` makes the toolbar overflow its column, and since the search sits in a `position: relative` wrapper, what overflows paints *over* the inspector instead of under it.
 

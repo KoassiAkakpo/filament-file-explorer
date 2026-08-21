@@ -187,6 +187,25 @@ The explorer renders `listing.per_page` items at a time (100 by default), folder
 'listing' => ['per_page' => 100],
 ```
 
+## Thumbnails
+
+Images are rendered from a `thumbnail` conversion instead of the original, so a folder of photos costs kilobytes rather than megabytes. Nothing to install: Media Library already requires `spatie/image`, which drives GD or Imagick.
+
+```php
+'thumbnails' => [
+    'enabled' => true,
+    'width' => 320,
+    'height' => 320,
+    'queued' => false,   // a host with no worker would never get one
+],
+```
+
+Thumbnails go out through the media route like everything else, so they are subject to the same ability and containment checks — and a file uploaded before this existed keeps rendering, because the route serves the original when the conversion is missing. To fill those in:
+
+```bash
+php artisan media-library:regenerate --only-conversions=thumbnail
+```
+
 ## Quotas
 
 `quota.bytes` (null by default) caps what a scope may hold. The cap is per root folder, so with the per-user or per-tenant resolver each user or tenant gets an allowance of that size, and the sidebar shows the usage — amber past 85%, red when full.

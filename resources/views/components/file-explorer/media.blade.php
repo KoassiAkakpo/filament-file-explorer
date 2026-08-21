@@ -1,4 +1,5 @@
 @props([
+    'thumbUrl' => null,
     'media',
     'selectedFiles',
     'selectedFolders' => [],
@@ -12,12 +13,10 @@
     $isRenaming = $renamingType === 'file' && (int) $renamingId === (int) $media->id;
     $label = \Koassi\FilamentFileExplorer\Support\MediaLabel::display($media);
     $isImage = str_starts_with((string) $media->mime_type, 'image/');
-    $thumb = null;
-    if ($isImage) {
-        $thumb = $media->hasGeneratedConversion('thumbnail')
-            ? $media->getUrl('thumbnail')
-            : ($previewUrl ?: null);
-    }
+    // $thumbUrl comes from the component and goes through the media route.
+    // $media->getUrl('thumbnail') would be a raw disk URL, readable by anyone
+    // holding the link and checked by nothing.
+    $thumb = $isImage ? ($thumbUrl ?: $previewUrl ?: null) : null;
     $mimeIcon = \Koassi\FilamentFileExplorer\Support\MimeIcon::forMedia($media);
 @endphp
 

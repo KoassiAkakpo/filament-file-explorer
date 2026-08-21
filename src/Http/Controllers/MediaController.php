@@ -39,9 +39,35 @@ class MediaController extends Controller
     {
         $this->authorizeMedia($scopeKey, $media);
 
-        return $this->fileResponse($media, $request->boolean('download')
-            ? ResponseHeaderBag::DISPOSITION_ATTACHMENT
-            : ResponseHeaderBag::DISPOSITION_INLINE);
+        return $this->fileResponse(
+            $media,
+            $request->boolean('download')
+                ? ResponseHeaderBag::DISPOSITION_ATTACHMENT
+                : ResponseHeaderBag::DISPOSITION_INLINE,
+            $this->conversionName($request->query('conversion'), $media),
+        );
+    }
+
+    /**
+     * Which rendition to serve, or null for the original.
+     *
+     * Conversions go out through this route like everything else, because
+     * $media->getUrl('thumbnail') is a raw disk URL: on a public disk it hands
+     * the file to anyone who has the link, with neither the ability check nor
+     * the containment check the route exists to enforce.
+     *
+     * A name is only honoured when the media really has that conversion, so it
+     * can only ever be one already recorded in generated_conversions — never a
+     * path arriving from the query string. Missing conversions fall through to
+     * the original, which keeps the explorer working before a regenerate.
+     */
+    protected function conversionName(mixed $requested, Media $media): ?string
+    {
+        if (! is_string($requested) || ! preg_match('/^[A-Za-z0-9_-]{1,64}$/', $requested)) {
+            return null;
+        }
+
+        return $media->hasGeneratedConversion($requested) ? $requested : null;
     }
 
     public function zipMedia(Request $request, string $scopeKey, Media $media): Response
@@ -194,15 +220,20 @@ class MediaController extends Controller
         return array_values(array_unique(array_filter($ids, fn (int $id): bool => $id > 0)));
     }
 
-    protected function fileResponse(Media $media, string $disposition): Response
+    protected function fileResponse(Media $media, string $disposition, ?string $conversion = null): Response
     {
         $fileName = basename((string) $media->file_name) ?: 'file';
-        $contentType = $media->mime_type ?: 'application/octet-stream';
+
+        // A conversion is always an image, whatever the original was: a PDF
+        // thumbnail served as application/pdf would not render.
+        $contentType = $conversion === null
+            ? ($media->mime_type ?: 'application/octet-stream')
+            : ($this->conversionMimeType($media, $conversion) ?: 'image/jpeg');
 
         // Local disks go out as a file response so Symfony handles Range and
         // If-Range — video seeking, resumable downloads — plus Content-Length.
         if ($media->getDiskDriverName() === 'local') {
-            $path = $media->getPath();
+            $path = $conversion === null ? $media->getPath() : $media->getPath($conversion);
 
             abort_unless(is_file($path), 404);
 
@@ -217,12 +248,33 @@ class MediaController extends Controller
         }
 
         // Remote disk: stream the object instead of assuming a local path.
-        $path = $media->getPathRelativeToRoot();
-        $disk = Storage::disk($media->disk);
+        $path = $conversion === null
+            ? $media->getPathRelativeToRoot()
+            : $media->getPathRelativeToRoot($conversion);
+
+        $disk = Storage::disk($conversion === null ? $media->disk : ($media->conversions_disk ?: $media->disk));
 
         abort_unless($disk->exists($path), 404);
 
         return $disk->response($path, $fileName, ['Content-Type' => $contentType], $disposition);
+    }
+
+    /**
+     * Guessed from the conversion's own extension: Media Library keeps the
+     * original's unless the conversion changed the format.
+     */
+    protected function conversionMimeType(Media $media, string $conversion): ?string
+    {
+        $extension = strtolower(pathinfo($media->getPath($conversion), PATHINFO_EXTENSION));
+
+        return match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            'gif' => 'image/gif',
+            'avif' => 'image/avif',
+            default => null,
+        };
     }
 
     /**

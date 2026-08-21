@@ -555,8 +555,10 @@
                                     $fileSelected = in_array($media->id, $selectedFiles, false);
                                     $fileLabel = \Koassi\FilamentFileExplorer\Support\MediaLabel::display($media);
                                     $mimeIcon = \Koassi\FilamentFileExplorer\Support\MimeIcon::forMedia($media);
+                                    // Through the media route, never getUrl(): that is a raw
+                                    // disk URL and would skip both guards.
                                     $listPreview = str_starts_with((string) $media->mime_type, 'image/')
-                                        ? ($media->hasGeneratedConversion('thumbnail') ? $media->getUrl('thumbnail') : $this->mediaOpenUrl($media->id))
+                                        ? $this->mediaThumbnailUrl($media->id)
                                         : null;
                                     $sizeLabel = number_format(((int) $media->size) / 1024, 1) . ' KB';
                                     $isStripe = $viewMode === 'details' && ($detailRow % 2 === 1);
@@ -632,6 +634,7 @@
                                     :selectedFolders="$selectedFolders"
                                     :openUrl="$this->mediaOpenUrl($media->id)"
                                     :previewUrl="$this->mediaOpenUrl($media->id)"
+                                    :thumbUrl="$this->mediaThumbnailUrl($media->id)"
                                     :renamingType="$renamingType"
                                     :renamingId="$renamingId"
                                     wire:key="file-{{ $media->id }}"
@@ -693,7 +696,7 @@
                             <x-filament-file-explorer::file-explorer.folder-icon class="h-3.5 w-3.5" /> <span>{{ $folder->name }}</span>
                         </button>
                         @if (!$loop->last)
-                            @svg('heroicon-o-chevron-left', 'h-3 w-3 shrink-0 rotate-180 text-zinc-300 rtl:rotate-0')
+                            @svg('heroicon-o-chevron-left', 'h-3 w-3 shrink-0 rotate-180 text-zinc-300')
                         @endif
                     @endforeach
                 </nav>

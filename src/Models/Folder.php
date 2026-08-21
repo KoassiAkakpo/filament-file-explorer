@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
+use Spatie\Image\Enums\Fit;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class Folder extends Model implements HasMedia
 {
@@ -54,6 +56,48 @@ class Folder extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection(UploadRules::collection());
+    }
+
+    /**
+     * The thumbnail the explorer renders in place of the original.
+     *
+     * Config only, not a panel setting: conversions are registered on the model,
+     * which knows nothing about the panel it is being browsed from.
+     */
+    public function registerMediaConversions(?Media $media = null): void
+    {
+        if (! (bool) config('filament-file-explorer.thumbnails.enabled', true)) {
+            return;
+        }
+
+        // Media Library picks its image generator from the file's extension, so
+        // anything merely *named* .png would be handed to GD and take the upload
+        // down with it. The stored mime type is sniffed from the bytes, which is
+        // the part worth trusting.
+        if ($media !== null && ! str_starts_with((string) $media->mime_type, 'image/')) {
+            return;
+        }
+
+        $conversion = $this->addMediaConversion('thumbnail')
+            ->fit(
+                Fit::Crop,
+                (int) config('filament-file-explorer.thumbnails.width', 320),
+                (int) config('filament-file-explorer.thumbnails.height', 320),
+            )
+            ->performOnCollections(UploadRules::collection());
+
+        // Not queued by default. Media Library queues conversions unless told
+        // otherwise, and a host without a running worker would then never get a
+        // thumbnail at all — the explorer would keep serving originals, which is
+        // the whole thing this fixes. One 320px crop is cheap enough to do in
+        // the upload request.
+        if ((bool) config('filament-file-explorer.thumbnails.queued', false)) {
+            $conversion->queued();
+
+            return;
+        }
+
+        $conversion->nonQueued();
     }
 
     public function getDepth(): int

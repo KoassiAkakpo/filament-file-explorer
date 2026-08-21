@@ -59,17 +59,17 @@ trait InteractsWithFileExplorerTable
             ->columns(StandaloneSettings::tableColumns([
                 'preview' => ImageColumn::make('preview')
                     ->label(__('filament-file-explorer::file-explorer.preview'))
-                    ->getStateUsing(function (Media $record): ?string {
-                        if (! str_starts_with((string) $record->mime_type, 'image/')) {
-                            return null;
-                        }
-
-                        try {
-                            return $record->getUrl();
-                        } catch (\Throwable) {
-                            return null;
-                        }
-                    })
+                    // Through the media route, which is where the ability and
+                    // containment checks live. getUrl() returns a raw disk URL:
+                    // on a public disk it served every image in the library to
+                    // anyone holding the link, full size, checked by nothing.
+                    ->getStateUsing(fn (Media $record): ?string => str_starts_with((string) $record->mime_type, 'image/')
+                        ? route('filament-file-explorer.media.show', [
+                            'scopeKey' => $scopeKey,
+                            'media' => $record->id,
+                            'conversion' => 'thumbnail',
+                        ])
+                        : null)
                     ->circular()
                     ->imageSize(36)
                     ->toggleable(),

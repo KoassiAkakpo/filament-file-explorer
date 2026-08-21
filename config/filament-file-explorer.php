@@ -138,6 +138,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Thumbnails
+    |--------------------------------------------------------------------------
+    |
+    | The explorer renders a "thumbnail" conversion instead of the original, so
+    | a folder of photos costs kilobytes rather than megabytes. Needs GD or
+    | Imagick — both come through spatie/image, which Media Library already
+    | requires; there is nothing extra to install.
+    |
+    | Not queued by default: Media Library queues conversions unless told
+    | otherwise, and a host with no worker running would never get a thumbnail.
+    |
+    | Files uploaded before this existed have no thumbnail, and the media route
+    | quietly serves their original instead. To fill them in:
+    |
+    |   php artisan media-library:regenerate --only-conversions=thumbnail
+    |
+    | Config only, not a plugin setting: conversions are registered on the model,
+    | which knows nothing about the panel it is browsed from.
+    |
+    */
+    'thumbnails' => [
+        'enabled' => true,
+        'width' => 320,
+        'height' => 320,
+        'queued' => false,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Storage quota
     |--------------------------------------------------------------------------
     |

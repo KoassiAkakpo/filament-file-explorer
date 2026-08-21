@@ -21,6 +21,7 @@ use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Spatie\Image\Exceptions\CouldNotLoadImage;
 use Livewire\Attributes\On;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -571,17 +572,23 @@ class FileExplorer extends \Livewire\Component
         $index = FileNames::availableIndex($target, (string) $media->file_name);
 
         $actor = auth()->user();
-        $target
-            ->addMedia($path)
-            ->preservingOriginal()
-            ->usingName(FileNames::applyIndexToLabel((string) $media->name, $index))
-            ->usingFileName(FileNames::applyIndex((string) $media->file_name, $index))
-            ->withCustomProperties(array_merge($media->custom_properties ?? [], [
-                'user_id' => $actor?->getAuthIdentifier(),
-                'uploaded_by_type' => $actor ? $actor::class : null,
-                'uploaded_by_id' => $actor?->getAuthIdentifier(),
-            ]))
-            ->toMediaCollection(UploadRules::collection());
+
+        try {
+            $target
+                ->addMedia($path)
+                ->preservingOriginal()
+                ->usingName(FileNames::applyIndexToLabel((string) $media->name, $index))
+                ->usingFileName(FileNames::applyIndex((string) $media->file_name, $index))
+                ->withCustomProperties(array_merge($media->custom_properties ?? [], [
+                    'user_id' => $actor?->getAuthIdentifier(),
+                    'uploaded_by_type' => $actor ? $actor::class : null,
+                    'uploaded_by_id' => $actor?->getAuthIdentifier(),
+                ]))
+                ->toMediaCollection(UploadRules::collection());
+        } catch (CouldNotLoadImage $e) {
+            // As on upload: the copy exists, only its thumbnail does not.
+            report($e);
+        }
 
         return true;
     }
@@ -1281,8 +1288,10 @@ class FileExplorer extends \Livewire\Component
                 'updated' => $media->updated_at?->format('Y/m/d H:i'),
                 'extra' => $media->file_name,
                 'icon' => MimeIcon::forMedia($media),
+                // The inspector shows it at 80px: the thumbnail is enough, and
+                // the lightbox is what serves the original.
                 'preview' => str_starts_with((string) $media->mime_type, 'image/')
-                    ? $this->mediaOpenUrl($media->id)
+                    ? $this->mediaThumbnailUrl($media->id)
                     : null,
                 'delete_note' => $deleteState['reason'],
                 'added_by' => app(Uploader::class)->label($media),
@@ -1355,6 +1364,20 @@ class FileExplorer extends \Livewire\Component
     public function mediaOpenUrl(int $mediaId): string
     {
         return route('filament-file-explorer.media.show', ['scopeKey' => $this->scopeKey, 'media' => $mediaId]);
+    }
+
+    /**
+     * Thumbnail URL, through the same guarded route as everything else. The
+     * controller falls back to the original when the conversion is missing, so
+     * a library uploaded before thumbnails existed keeps rendering.
+     */
+    public function mediaThumbnailUrl(int $mediaId): string
+    {
+        return route('filament-file-explorer.media.show', [
+            'scopeKey' => $this->scopeKey,
+            'media' => $mediaId,
+            'conversion' => 'thumbnail',
+        ]);
     }
 
     public function mediaDownloadUrl(int $mediaId): string
@@ -1996,16 +2019,25 @@ class FileExplorer extends \Livewire\Component
                 $replaced++;
             }
 
-            $folder
-                ->addMedia($file)
-                ->usingName($label)
-                ->usingFileName($safe)
-                ->withCustomProperties([
-                    'user_id' => $actor?->getAuthIdentifier(),
-                    'uploaded_by_type' => $actor ? $actor::class : null,
-                    'uploaded_by_id' => $actor?->getAuthIdentifier(),
-                ])
-                ->toMediaCollection(UploadRules::collection());
+            try {
+                $folder
+                    ->addMedia($file)
+                    ->usingName($label)
+                    ->usingFileName($safe)
+                    ->withCustomProperties([
+                        'user_id' => $actor?->getAuthIdentifier(),
+                        'uploaded_by_type' => $actor ? $actor::class : null,
+                        'uploaded_by_id' => $actor?->getAuthIdentifier(),
+                    ])
+                    ->toMediaCollection(UploadRules::collection());
+            } catch (CouldNotLoadImage $e) {
+                // Only ever thrown while generating the thumbnail, which runs
+                // after the row and the original are written — so the upload has
+                // in fact succeeded. An image GD refuses to decode must not lose
+                // it; the media route serves the original when the conversion is
+                // missing.
+                report($e);
+            }
 
             $uploaded++;
         }
