@@ -149,3 +149,10 @@ it('ships the assets it edits', function (): void {
             ->and($asset->getPath())->not->toContain('/dist/');
     }
 });
+
+it('leaves no stray angle bracket where a label was translated', function (): void {
+    // Swapping a hard-coded label for __() once left the `<` of the closing tag
+    // behind, and a stray "<" showed up at the end of every sort menu entry.
+    // The slip renders as `<</`, which no legitimate markup produces.
+    expect(feDsComponent()->html())->not->toContain('<</');
+});

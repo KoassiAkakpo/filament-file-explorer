@@ -978,9 +978,9 @@
                                  x-transition:leave="transition ease-in duration-75"
                                  x-transition:leave-start="opacity-100"
                                  x-transition:leave-end="opacity-0">
-                                <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('name'))">{{ __('filament-file-explorer::file-explorer.sort.name') }}<</button>
-                                <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('date'))">{{ __('filament-file-explorer::file-explorer.sort.date') }}<</button>
-                                <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('type'))">{{ __('filament-file-explorer::file-explorer.sort.type') }}<</button>
+                                <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('name'))">{{ __('filament-file-explorer::file-explorer.sort.name') }}</button>
+                                <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('date'))">{{ __('filament-file-explorer::file-explorer.sort.date') }}</button>
+                                <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('type'))">{{ __('filament-file-explorer::file-explorer.sort.type') }}</button>
                             </div>
                         </div>
                     </div>
