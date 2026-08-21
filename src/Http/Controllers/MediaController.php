@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Models\Folder;
+use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\ScopeRoots;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
@@ -167,7 +168,7 @@ class MediaController extends Controller
         $primary = $rootFolderIds[0];
 
         abort_unless($authorizer->canAccess($scopeKey, $primary), 403);
-        abort_unless($authorizer->abilities($scopeKey, $primary)['download'] ?? false, 403);
+        abort_unless(app(Abilities::class)->allows($scopeKey, $primary, 'download'), 403);
 
         return $rootFolderIds;
     }

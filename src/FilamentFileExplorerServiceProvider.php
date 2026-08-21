@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer;
 
+use Filament\Support\Assets\Css;
+use Filament\Support\Assets\Js;
+use Filament\Support\Facades\FilamentAsset;
+use Illuminate\Support\Facades\Route;
 use Koassi\FilamentFileExplorer\Commands\InstallCommand;
 use Koassi\FilamentFileExplorer\Commands\MakeAuthorizerCommand;
 use Koassi\FilamentFileExplorer\Commands\MakeFolderMigrationCommand;
@@ -11,16 +15,17 @@ use Koassi\FilamentFileExplorer\Commands\MakePageCommand;
 use Koassi\FilamentFileExplorer\Commands\PurgeTrashCommand;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
+use Koassi\FilamentFileExplorer\Http\Controllers\MediaController;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer;
+use Koassi\FilamentFileExplorer\Resolvers\GlobalRootResolver;
+use Koassi\FilamentFileExplorer\Resolvers\PerTenantRootResolver;
+use Koassi\FilamentFileExplorer\Resolvers\PerUserRootResolver;
+use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\Quota;
-use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
-use Filament\Support\Assets\Css;
-use Filament\Support\Assets\Js;
-use Filament\Support\Facades\FilamentAsset;
-use Illuminate\Support\Facades\Route;
+use Koassi\FilamentFileExplorer\Support\Uploader;
 use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -64,6 +69,10 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         // the next request would make wrong.
         $this->app->scoped(Uploader::class);
 
+        // Scoped too: it memoises what a scope may do, and that answer belongs
+        // to whoever was authenticated for this request and no one else.
+        $this->app->scoped(Abilities::class);
+
         $this->app->singleton(FileExplorerAuthorizer::class, function ($app) {
             $class = config('filament-file-explorer.authorizer');
 
@@ -78,9 +87,9 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
             fn ($app) => $app->make(StandaloneSettings::resolverClass()),
         );
 
-        $this->app->singleton(\Koassi\FilamentFileExplorer\Resolvers\GlobalRootResolver::class);
-        $this->app->singleton(\Koassi\FilamentFileExplorer\Resolvers\PerUserRootResolver::class);
-        $this->app->singleton(\Koassi\FilamentFileExplorer\Resolvers\PerTenantRootResolver::class);
+        $this->app->singleton(GlobalRootResolver::class);
+        $this->app->singleton(PerUserRootResolver::class);
+        $this->app->singleton(PerTenantRootResolver::class);
     }
 
     public function packageBooted(): void
@@ -134,13 +143,13 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
             ->prefix($config['prefix'] ?? 'file-explorer/media')
             ->name($config['name'] ?? 'filament-file-explorer.media.')
             ->group(function (): void {
-                Route::get('{scopeKey}/files/{media}', [\Koassi\FilamentFileExplorer\Http\Controllers\MediaController::class, 'show'])
+                Route::get('{scopeKey}/files/{media}', [MediaController::class, 'show'])
                     ->name('show');
-                Route::get('{scopeKey}/files/{media}/zip', [\Koassi\FilamentFileExplorer\Http\Controllers\MediaController::class, 'zipMedia'])
+                Route::get('{scopeKey}/files/{media}/zip', [MediaController::class, 'zipMedia'])
                     ->name('zip-media');
-                Route::get('{scopeKey}/folders/{folder}/zip', [\Koassi\FilamentFileExplorer\Http\Controllers\MediaController::class, 'zipFolder'])
+                Route::get('{scopeKey}/folders/{folder}/zip', [MediaController::class, 'zipFolder'])
                     ->name('zip-folder');
-                Route::get('{scopeKey}/selection/zip', [\Koassi\FilamentFileExplorer\Http\Controllers\MediaController::class, 'zipSelection'])
+                Route::get('{scopeKey}/selection/zip', [MediaController::class, 'zipSelection'])
                     ->name('zip-selection');
             });
     }

@@ -27,6 +27,7 @@ use Koassi\FilamentFileExplorer\Events\FolderRenamed;
 use Koassi\FilamentFileExplorer\Events\FolderRestored;
 use Koassi\FilamentFileExplorer\Events\FolderTrashed;
 use Koassi\FilamentFileExplorer\Models\Folder;
+use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\ActiveRoot;
 use Koassi\FilamentFileExplorer\Support\FileNames;
 use Koassi\FilamentFileExplorer\Support\FolderListing;
@@ -297,7 +298,7 @@ class FileExplorer extends Component
      */
     public function abilities(): array
     {
-        return app(FileExplorerAuthorizer::class)->abilities($this->scopeKey, $this->rootFolderId);
+        return app(Abilities::class)->all($this->scopeKey, $this->rootFolderId);
     }
 
     protected function authorizer(): FileExplorerAuthorizer
@@ -307,7 +308,7 @@ class FileExplorer extends Component
 
     protected function ability(string $key): bool
     {
-        return (bool) ($this->abilities()[$key] ?? false);
+        return app(Abilities::class)->allows($this->scopeKey, $this->rootFolderId, $key);
     }
 
     protected function rules(): array

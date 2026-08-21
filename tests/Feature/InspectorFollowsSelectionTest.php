@@ -211,6 +211,11 @@ it('closes instead of refusing when the ability is revoked', function (): void {
         }
     });
 
+    // A revocation reaches the explorer on the next request, which is a new
+    // container scope: Abilities memoises for one request, so the boundary has
+    // to be crossed here the way the browser crosses it.
+    app()->forgetScopedInstances();
+
     $component->call('setSelection', [], [$second->id])
         ->assertOk()
         ->assertSet('showInfoModal', false);

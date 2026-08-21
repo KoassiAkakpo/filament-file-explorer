@@ -12,6 +12,15 @@ interface FileExplorerAuthorizer
     public function canAccess(string $scopeKey, int $rootFolderId): bool;
 
     /**
+     * Answer all of these. One left out is read as a denial.
+     *
+     * The explorer may come to ask about abilities that are not on this list —
+     * it never reads them from here directly. Support\Abilities resolves them,
+     * and one this implementation does not answer inherits the answer of the
+     * ability it is a variation of (`share` follows `download`), so an
+     * implementation written today keeps working and keeps meaning what its
+     * author meant. Answer a new key explicitly to override that.
+     *
      * @return array{
      *     browse: bool,
      *     search: bool,

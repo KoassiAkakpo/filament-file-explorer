@@ -16,6 +16,7 @@ use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Events\FileDeleted;
 use Koassi\FilamentFileExplorer\Events\FileTrashed;
 use Koassi\FilamentFileExplorer\Models\Folder;
+use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
@@ -126,7 +127,7 @@ trait InteractsWithFileExplorerTable
                             'download' => 1,
                         ]))
                         ->openUrlInNewTab()
-                        ->visible(fn (): bool => ($authorizer->abilities($scopeKey, $rootId)['download'] ?? false)),
+                        ->visible(fn (): bool => app(Abilities::class)->allows($scopeKey, $rootId, 'download')),
 
                     Action::make('openInExplorer')
                         ->label(__('filament-file-explorer::file-explorer.open_in_explorer'))

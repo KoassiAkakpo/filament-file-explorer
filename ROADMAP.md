@@ -21,15 +21,17 @@ Everything a host app writes code against:
 
 ## Before 1.0 — decisions that cannot be deferred
 
-One down: **domain events** shipped. The three that remain all change something a host app has written against, which is why they cannot wait.
+Two down: **domain events** and **the ability set**. The two that remain both change something a host app has written against, which is why they cannot wait.
 
-### An ability set that can grow
+### ~~An ability set that can grow~~ — done
 
-`abilities()` returns a fixed array of eleven keys. Any new key is a **silent denial** for every authorizer a host app has already written: the package reads a key the implementation never returned, gets nothing, and refuses the action. This is already documented as the reason trash restore and purge reuse `delete` / `deleteFolder` rather than asking for abilities of their own.
+[Support/Abilities.php](src/Support/Abilities.php) is now the only reader of `abilities()`. `ORIGINAL` is the published set, where silence is still a denial; `DERIVED` maps an ability added since to the one it inherits from when the authorizer says nothing, so a new capability no longer denies itself for every implementation already written. `share` is declared ahead of the feature that will read it — the declaration has to exist before the key is used, which is the whole point.
 
-Left as it is, that constraint becomes permanent at 1.0, and every future capability — sharing first among them — has to be smuggled onto an existing ability.
+Nothing defaults to allowed, an authorizer that answers a derived key overrides the inheritance, and keys an authorizer volunteers of its own are kept.
 
-The decision to make is how an unknown ability resolves: a declared fallback per new key, a base-ability mapping, or capability negotiation against the implementation. Whichever it is, it has to ship **before** the freeze, not after.
+It also stopped asking the authorizer on every read. `ability()` runs dozens of times per render and an authorizer consulting policies or the database was being asked each time; the resolver is bound `scoped` and answers once per scope per request.
+
+The signed share links can now be built without smuggling them onto an existing ability.
 
 ### A swappable folder model
 
@@ -57,7 +59,7 @@ Closing this also fixed a data-loss bug it uncovered: the files table's delete c
 
 The most asked-for capability of any file manager, and the security model is already shaped for it: the media route takes the scope key as a URL segment and resolves the root through `ScopeRoots`, so a sibling route without `auth` and with a signed, expiring URL fits the existing containment check rather than working around it.
 
-Gated on the ability decision above — this is the feature that makes it urgent.
+Unblocked: the `share` ability is declared and resolves for every authorizer, so what is left is the route, the expiry and the UI.
 
 ### The column view
 

@@ -325,6 +325,20 @@ php artisan filament-file-explorer:make-authorizer
 FilamentFileExplorerPlugin::make()->authorizer(\App\Support\FileExplorerAuthorizer::class)
 ```
 
+`abilities()` returns eleven keys, and one you leave out counts as a denial. But the set can grow: nothing reads your array directly — `Support\Abilities` does, and an ability the explorer gains later that your implementation does not answer **inherits the one it is a variation of** rather than being read as a refusal. `share` follows `download`, so an authorizer written today keeps working and keeps meaning what you meant by it. Answer the new key yourself to have the last word:
+
+```php
+public function abilities(string $scopeKey, int $rootFolderId): array
+{
+    return [
+        // … the eleven
+        'share' => false,   // explicit: no sharing even though download is allowed
+    ];
+}
+```
+
+Nothing ever defaults to allowed — an ability nobody declared is refused. Your own extra keys are kept, so you can read them for actions of your own.
+
 The media routes (`show`, `zip-media`, `zip-folder`) never trust the scope key in their own URL: they resolve the scope's root folder through the standalone resolver, or from the roots the current session has legitimately opened, and then require the media to sit under it. A media link is therefore only served to someone whose session has a claim to that scope — a URL kept from an expired session returns 403 until the explorer page is opened again.
 
 ## Events

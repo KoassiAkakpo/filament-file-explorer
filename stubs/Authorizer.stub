@@ -20,6 +20,14 @@ class {{ class }} implements FileExplorerAuthorizer
         return auth()->check();
     }
 
+    /**
+     * Answer all of the keys below: one left out is read as a denial.
+     *
+     * You do not have to keep this list in step with the package. An ability
+     * added later that you do not answer inherits the one it is a variation of
+     * — `share` follows `download` — so this method never silently starts
+     * denying something. Add a key here to have the last word on it.
+     */
     public function abilities(string $scopeKey, int $rootFolderId): array
     {
         $canWrite = auth()->check();
