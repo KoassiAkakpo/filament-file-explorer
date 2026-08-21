@@ -19,12 +19,12 @@
     data-fe-drop-folder="{{ $folder->id }}"
     tabindex="-1"
     role="option"
-    :aria-selected="$store.feSel.hasFolder({{ $folder->id }}) ? 'true' : 'false'"
+    :aria-selected="sel.hasFolder({{ $folder->id }}) ? 'true' : 'false'"
     @unless($isRenaming)
-        x-on:pointerdown="$store.feDrag.pointerDown($event, 'folder', {{ $folder->id }}, @js($folder->name), $wire)"
+        x-on:pointerdown="$store.feDrag.pointerDown($event, 'folder', {{ $folder->id }}, @js($folder->name), $wire, sel)"
         x-on:click.stop="
             if ($store.feDrag.consumeClickSuppression()) return;
-            $store.feSel.click('folder', {{ $folder->id }}, $event, $el);
+            sel.click('folder', {{ $folder->id }}, $event, $el);
         "
         x-on:dblclick.stop="$wire.navigateToFolder({{ $folder->id }})"
     @endunless
@@ -37,16 +37,16 @@
     x-on:dragleave.prevent="isDragOver = false"
     x-on:drop.prevent="$store.feDrag.dropFilesOnFolder($event, {{ $folder->id }}, $wire); isDragOver = false"
     x-on:contextmenu.stop.prevent="
-        if (!$store.feSel.hasFolder({{ $folder->id }})) {
-            $store.feSel.toggle('folder', {{ $folder->id }}, false);
+        if (!sel.hasFolder({{ $folder->id }})) {
+            sel.toggle('folder', {{ $folder->id }}, false);
         }
         $dispatch('fe-context', { type: 'folder', id: {{ $folder->id }}, name: @js($folder->name), x: $event.clientX, y: $event.clientY });
     "
     :class="{
         'fe-drop-target': isDragOver || $store.feDrag.dropTargetId === {{ $folder->id }},
-        'is-selected': $store.feSel.hasFolder({{ $folder->id }}),
-        'drag-hover': $store.feSel.inMarqueeFolder({{ $folder->id }}),
-        'fe-dragging': $store.feDrag.active && $store.feSel.hasFolder({{ $folder->id }}),
+        'is-selected': sel.hasFolder({{ $folder->id }}),
+        'drag-hover': sel.inMarqueeFolder({{ $folder->id }}),
+        'fe-dragging': $store.feDrag.active && sel.hasFolder({{ $folder->id }}),
     }"
     @class([
         'folder fe-icon-item group relative mx-0.5 flex w-[96px] cursor-default flex-col items-center px-0.5 pt-0.5 pb-0.5 text-center select-none',
@@ -55,7 +55,7 @@
 >
     <div
         class="fe-icon-well flex h-[68px] w-[76px] shrink-0 items-center justify-center rounded-xl"
-        :class="{ 'fe-icon-well--selected': ($store.feSel.hasFolder({{ $folder->id }}) || $store.feSel.inMarqueeFolder({{ $folder->id }})) && !@js($isRenaming) }"
+        :class="{ 'fe-icon-well--selected': (sel.hasFolder({{ $folder->id }}) || sel.inMarqueeFolder({{ $folder->id }})) && !@js($isRenaming) }"
     >
         <x-filament-file-explorer::file-explorer.folder-icon class="h-[3.35rem] w-[3.35rem] drop-shadow-sm" />
     </div>
@@ -76,12 +76,12 @@
         @else
             <span
                 class="fe-label dark:text-zinc-100"
-                :class="{ 'fe-label--selected': $store.feSel.hasFolder({{ $folder->id }}) || $store.feSel.inMarqueeFolder({{ $folder->id }}) }"
+                :class="{ 'fe-label--selected': sel.hasFolder({{ $folder->id }}) || sel.inMarqueeFolder({{ $folder->id }}) }"
                 title="{{ $folder->name }}"
             >{{ $folder->name }}</span>
             <span
                 class="fe-meta mt-0.5 text-[10px] leading-none text-zinc-400"
-                x-show="!($store.feSel.hasFolder({{ $folder->id }}) || $store.feSel.inMarqueeFolder({{ $folder->id }}))"
+                x-show="!(sel.hasFolder({{ $folder->id }}) || sel.inMarqueeFolder({{ $folder->id }}))"
             >{{ trans_choice('filament-file-explorer::file-explorer.items_count', $itemCount) }}</span>
         @endif
     </div>

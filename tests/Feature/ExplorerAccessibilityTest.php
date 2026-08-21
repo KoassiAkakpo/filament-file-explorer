@@ -65,19 +65,22 @@ it('marks folders and files as selectable options', function (): void {
     // Two options, each focusable and reporting its own selection state.
     expect(substr_count($html, 'role="option"'))->toBe(2)
         ->and(substr_count($html, 'tabindex="-1"'))->toBeGreaterThanOrEqual(2)
-        ->and($html)->toContain('$store.feSel.hasFolder')
-        ->and($html)->toContain('$store.feSel.hasFile');
+        // Through `sel`, the component's own selection — a $store would be the
+        // page's, shared with a picker in a modal beside it.
+        ->and($html)->toContain('sel.hasFolder')
+        ->and($html)->toContain('sel.hasFile')
+        ->and($html)->not->toContain('$store.feSel');
 });
 
-it('hands clicks to the selection store so shift can extend a range', function (): void {
+it('hands clicks to its own selection so shift can extend a range', function (): void {
     $root = feA11yRoot();
     Folder::query()->create(['name' => 'Docs', 'slug' => 'docs', 'parent_id' => $root->id]);
     feA11yMedia($root);
 
     $html = feA11yComponent()->assertOk()->html();
 
-    expect($html)->toContain("\$store.feSel.click('folder'")
-        ->and($html)->toContain("\$store.feSel.click('file'");
+    expect($html)->toContain("sel.click('folder'")
+        ->and($html)->toContain("sel.click('file'");
 });
 
 it('renders breadcrumbs as buttons instead of clickable spans', function (): void {

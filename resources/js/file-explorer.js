@@ -14,6 +14,11 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
         }
 
         // Keep Livewire $wire outside Alpine reactive stores — wrapping the proxy breaks method calls.
+        //
+        // One global is right for the drag store and only for it: a page can
+        // hold several explorers, but the user drags in one at a time, and
+        // pointerDown names which. The selection cannot work that way — both
+        // explorers hold one at once — so it carries its own, see callWire().
         let feWireRef = null;
 
         function setFeWire(wire) {
@@ -22,8 +27,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
             }
         }
 
-        function callFeWire(method, ...args) {
-            const wire = feWireRef;
+        function invokeWire(wire, method, ...args) {
             if (!wire) return;
 
             const direct = wire[method];
@@ -40,12 +44,23 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
             }
         }
 
-        function registerQfSelStore() {
-            if (typeof Alpine === 'undefined') return;
-            if (Alpine.store('feDrag')?.pointerDown) {
-                return;
-            }
-            Alpine.store('feSel', {
+        function callFeWire(method, ...args) {
+            return invokeWire(feWireRef, method, ...args);
+        }
+
+        /**
+         * One selection, belonging to one explorer.
+         *
+         * It used to be a single Alpine store, so two explorers on a page — the
+         * page's own and a FileExplorerPicker in a modal — shared one selection,
+         * and setSelection reported to whichever component initialised last.
+         * Clicking in one moved the other's highlight and sent its ids to the
+         * wrong component. Each component now owns one of these, so nothing is
+         * addressed globally and each syncs to its own $wire.
+         */
+        function createFeSelection() {
+            return {
+
                 folders: [],
                 files: [],
                 marqueeFolders: [],
@@ -58,8 +73,14 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 // shift+arrow re-select the same two items.
                 cursor: null,
                 _syncTimer: null,
+                _wire: null,
                 setWire(wire) {
-                    setFeWire(wire);
+                    if (wire) {
+                        this._wire = wire;
+                    }
+                },
+                callWire(method, ...args) {
+                    return invokeWire(this._wire, method, ...args);
                 },
                 replace(folders, files) {
                     this.folders = (folders || []).map(Number);
@@ -196,21 +217,28 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.clearMarquee();
                     if (this._syncTimer) clearTimeout(this._syncTimer);
                     this._syncTimer = null;
-                    if (sync) callFeWire('clearSelection');
+                    if (sync) this.callWire('clearSelection');
                 },
                 flushSync() {
                     if (this._syncTimer) clearTimeout(this._syncTimer);
                     this._syncTimer = null;
-                    callFeWire('setSelection', [...this.folders], [...this.files]);
+                    this.callWire('setSelection', [...this.folders], [...this.files]);
                 },
                 queueSync() {
                     if (this._syncTimer) clearTimeout(this._syncTimer);
                     this._syncTimer = setTimeout(() => {
                         this._syncTimer = null;
-                        callFeWire('setSelection', [...this.folders], [...this.files]);
+                        this.callWire('setSelection', [...this.folders], [...this.files]);
                     }, 40);
                 },
-            });
+            };
+        }
+
+        function registerQfDragStore() {
+            if (typeof Alpine === 'undefined') return;
+            if (Alpine.store('feDrag')?.pointerDown) {
+                return;
+            }
 
             Alpine.store('feDrag', {
                 active: false,
@@ -226,9 +254,13 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 _onMove: null,
                 _onUp: null,
                 abilities: {},
+                // The selection the drag started in. A drag is one at a time
+                // across the page, so remembering it here is enough — but it
+                // has to be remembered, since there is no longer one selection
+                // to reach for.
+                sel: null,
 
-                prepareSelection(type, id) {
-                    const sel = Alpine.store('feSel');
+                prepareSelection(sel, type, id) {
                     id = Number(id);
                     if (type === 'folder' && !sel.hasFolder(id)) {
                         sel.replace([id], []);
@@ -239,15 +271,18 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.files = [...sel.files];
                 },
 
-                pointerDown(event, type, id, label, wire) {
+                pointerDown(event, type, id, label, wire, sel) {
                     if (event.button !== 0) return;
                     if (event.target.closest('input, textarea, button, a, .fe-rename-input')) return;
                     // Keep default so double-click still works; stop bubble so marquee does not start
                     event.stopPropagation();
 
                     setFeWire(wire);
+                    this.sel = sel || null;
                     this.label = label || 'item';
-                    this.prepareSelection(type, id);
+                    if (this.sel) {
+                        this.prepareSelection(this.sel, type, id);
+                    }
                     this.startX = event.clientX;
                     this.startY = event.clientY;
                     this.active = false;
@@ -300,10 +335,10 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                             const copy = event.altKey || event.ctrlKey;
                             if (copy && this.abilities.copy) {
                                 callFeWire('copyItemsToFolder', targetId, folders, files);
-                                Alpine.store('feSel').clear({ sync: false });
+                                this.sel?.clear({ sync: false });
                             } else if (!copy && this.abilities.move) {
                                 callFeWire('moveItemsToFolder', targetId, folders, files);
-                                Alpine.store('feSel').clear({ sync: false });
+                                this.sel?.clear({ sync: false });
                             }
                         }
                     }
@@ -495,36 +530,40 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 refreshInterval: Number(config.refreshInterval || 0),
                 componentId: config.componentId || '',
                 translations: config.translations || {},
+                // This component's selection, not the page's. Children inherit
+                // it through the Alpine scope, which is how the views reach it
+                // as `sel` without addressing anything globally.
+                sel: createFeSelection(),
                 ctx: { open: false, type: 'empty', id: null, name: '', x: 0, y: 0, canDelete: true, deleteHint: '' },
 
                 init() {
                     this.startAutoRefresh();
                     registerQfUiStore();
-                    registerQfSelStore();
+                    registerQfDragStore();
                     registerQfUploadStore();
-                    Alpine.store('feSel').setWire(this.$wire);
+                    this.sel.setWire(this.$wire);
                     Alpine.store('feDrag').abilities = this.abilities;
                     Alpine.store('feUpload').translations = this.translations;
-                    Alpine.store('feSel').replace(
+                    this.sel.replace(
                         config.selectedFolders || [],
                         config.selectedFiles || []
                     );
                     this.$watch('$wire.selectedFolders', (v) => {
-                        const local = Alpine.store('feSel').folders.join(',');
+                        const local = this.sel.folders.join(',');
                         const server = (v || []).map(Number).join(',');
-                        const localFiles = Alpine.store('feSel').files.join(',');
+                        const localFiles = this.sel.files.join(',');
                         const serverFiles = (this.$wire.selectedFiles || []).map(Number).join(',');
                         if (local === server && localFiles === serverFiles) {
                             return;
                         }
                         if (((v || []).length + (this.$wire.selectedFiles || []).length) === 0) {
-                            Alpine.store('feSel').replace([], []);
+                            this.sel.replace([], []);
                             return;
                         }
-                        if (Alpine.store('feSel')._syncTimer) {
+                        if (this.sel._syncTimer) {
                             return;
                         }
-                        Alpine.store('feSel').replace(v, this.$wire.selectedFiles);
+                        this.sel.replace(v, this.$wire.selectedFiles);
                     });
                 },
 
@@ -553,14 +592,14 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     Alpine.store('feUpload').settled();
                 },
                 confirmDeleteSelected() {
-                    const folders = [...Alpine.store('feSel').folders];
-                    const files = [...Alpine.store('feSel').files];
+                    const folders = [...this.sel.folders];
+                    const files = [...this.sel.files];
 
                     if (!folders.length && !files.length) return;
 
-                    if (Alpine.store('feSel')._syncTimer) clearTimeout(Alpine.store('feSel')._syncTimer);
-                    Alpine.store('feSel')._syncTimer = null;
-                    Alpine.store('feSel').clearMarquee();
+                    if (this.sel._syncTimer) clearTimeout(this.sel._syncTimer);
+                    this.sel._syncTimer = null;
+                    this.sel.clearMarquee();
 
                     // The dialog is built server-side: it knows what a recursive
                     // delete takes with it and which items are refused.
@@ -618,7 +657,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.ctx = { open: true, type: 'empty', id: null, name: '', x: this.ctx.x, y: this.ctx.y, canDelete: false, deleteHint: '' };
                 },
                 async toolbarRename() {
-                    const sel = Alpine.store('feSel');
+                    const sel = this.sel;
                     await this.$wire.setSelection([...sel.folders], [...sel.files]);
                     if (sel.folders.length === 1 && sel.files.length === 0) {
                         await this.$wire.startRename('folder', sel.folders[0]);
@@ -627,12 +666,12 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     }
                 },
                 async toolbarCopy() {
-                    const sel = Alpine.store('feSel');
+                    const sel = this.sel;
                     await this.$wire.setSelection([...sel.folders], [...sel.files]);
                     await this.$wire.copySelection();
                 },
                 async toolbarCut() {
-                    const sel = Alpine.store('feSel');
+                    const sel = this.sel;
                     await this.$wire.setSelection([...sel.folders], [...sel.files]);
                     await this.$wire.cutSelection();
                 },
@@ -645,7 +684,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 onKeydown(event) {
                     if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
 
-                    const sel = Alpine.store('feSel');
+                    const sel = this.sel;
                     const mod = event.ctrlKey || event.metaKey;
                     const key = event.key || '';
 
@@ -704,7 +743,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     }
                 },
                 openSelection() {
-                    const sel = Alpine.store('feSel');
+                    const sel = this.sel;
 
                     if (sel.folders.length === 1) {
                         this.$wire.navigateToFolder(sel.folders[0]);
@@ -716,7 +755,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     }
                 },
                 moveSelection(key, extend) {
-                    const sel = Alpine.store('feSel');
+                    const sel = this.sel;
                     const items = sel.orderedItems(this.$el);
 
                     if (!items.length) return;
@@ -781,7 +820,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     return items.indexOf(best);
                 },
                 async toolbarInfo() {
-                    const sel = Alpine.store('feSel');
+                    const sel = this.sel;
                     await this.$wire.setSelection([...sel.folders], [...sel.files]);
                     if (sel.folders.length === 1 && sel.files.length === 0) {
                         await this.$wire.showInfo('folder', sel.folders[0]);
@@ -792,7 +831,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     }
                 },
                 toolbarDownload() {
-                    const sel = Alpine.store('feSel');
+                    const sel = this.sel;
                     const total = sel.folders.length + sel.files.length;
 
                     if (!total) return;
@@ -914,7 +953,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                         if (!this.isDrawing && (dx > 4 || dy > 4)) {
                             this._marqueePending = false;
                             this.isDrawing = true;
-                            Alpine.store('feSel').clear({ sync: false });
+                            this.sel.clear({ sync: false });
                             this.drawnArea = { left: this.startX, top: this.startY, width: 0, height: 0 };
                         }
                         if (this.isDrawing) {
@@ -956,12 +995,12 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     if (meaningful) {
                         this.wasDrawing = true;
                         this.selectElementsWithinDrawnArea();
-                        const sel = Alpine.store('feSel');
+                        const sel = this.sel;
                         if (!sel.folders.length && !sel.files.length) {
                             sel.clear({ sync: true });
                         }
                     }
-                    Alpine.store('feSel').clearMarquee();
+                    this.sel.clearMarquee();
                     this.isDrawing = false;
                     this.drawnArea = null;
                 },
@@ -991,15 +1030,15 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                             else files.push(id);
                         }
                     });
-                    Alpine.store('feSel').setMarquee(folders, files);
+                    this.sel.setMarquee(folders, files);
                 },
                 selectElementsWithinDrawnArea() {
-                    const folders = [...Alpine.store('feSel').marqueeFolders];
-                    const files = [...Alpine.store('feSel').marqueeFiles];
+                    const folders = [...this.sel.marqueeFolders];
+                    const files = [...this.sel.marqueeFiles];
                     if (folders.length > 0 || files.length > 0) {
-                        Alpine.store('feSel').replace(folders, files);
-                        if (Alpine.store('feSel')._syncTimer) clearTimeout(Alpine.store('feSel')._syncTimer);
-                        Alpine.store('feSel')._syncTimer = null;
+                        this.sel.replace(folders, files);
+                        if (this.sel._syncTimer) clearTimeout(this.sel._syncTimer);
+                        this.sel._syncTimer = null;
                         this.$wire.setSelection(folders, files);
                     }
                 },
@@ -1013,7 +1052,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
 
                 handleContainerClick(event) {
                     if (!this.wasDrawing && event.target === event.currentTarget) {
-                        Alpine.store('feSel').clear();
+                        this.sel.clear();
                     }
                     this.wasDrawing = false;
                 },
@@ -1028,7 +1067,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.isDrawing = false;
                     this.unbindMarqueeListeners();
                     this.drawnArea = null;
-                    Alpine.store('feSel').clearMarquee();
+                    this.sel.clearMarquee();
                 },
                 uploadDroppedFiles(files) {
                     if (!this.abilities.upload) return;

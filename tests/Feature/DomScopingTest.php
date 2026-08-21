@@ -156,3 +156,25 @@ it('leaves no stray angle bracket where a label was translated', function (): vo
     // The slip renders as `<</`, which no legitimate markup produces.
     expect(feDsComponent()->html())->not->toContain('<</');
 });
+
+it('keeps the selection out of the global store', function (): void {
+    // Two explorers on one page — the page's own and a FileExplorerPicker in a
+    // modal — shared a single feSel store: clicking in one moved the other's
+    // highlight, and setSelection went to whichever initialised last.
+    Folder::query()->create(['name' => 'Reports', 'slug' => 'reports', 'parent_id' => feDsRoot()->id]);
+    feDsMedia();
+
+    expect(feDsComponent()->html())
+        ->not->toContain('$store.feSel')
+        ->toContain('sel.hasFolder')
+        ->toContain('sel.hasFile');
+});
+
+it('registers no selection store at all', function (): void {
+    // The store cannot come back by the back door either: it is a factory the
+    // component calls, so there is nothing page-wide left to reach for.
+    $js = (string) file_get_contents(__DIR__.'/../../resources/js/file-explorer.js');
+
+    expect($js)->not->toContain("Alpine.store('feSel'")
+        ->toContain('function createFeSelection()');
+});

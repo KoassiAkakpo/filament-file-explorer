@@ -21,7 +21,7 @@ Everything a host app writes code against:
 
 ## Before 1.0 — decisions that cannot be deferred
 
-Three down: **domain events**, **the ability set** and **the folder model**. What remains is the selection store — the one no PHP test can reach.
+All four are done: **domain events**, **the ability set**, **the folder model** and **the selection**. Nothing structural stands between here and 1.0 — what is left below is features and polish.
 
 ### ~~An ability set that can grow~~ — done
 
@@ -41,11 +41,13 @@ The sharp edge was the morph class. `getMorphClass()` now answers for the base m
 
 A test asserts the static forms never come back, since they creep in the moment someone adds a query without thinking about it.
 
-### Selection state per component, not per page
+### ~~Selection state per component, not per page~~ — done
 
-The Alpine `feSel` store and its `feWireRef` are global. Two explorers on one page — which the `FileExplorerPicker` in a modal makes an ordinary situation — share one selection, and `setSelection` reports to whichever component initialised last.
+`createFeSelection()` is a factory and each component holds one as `sel` in its own `x-data`, with a `$wire` of its own. The views reach it as `sel` rather than `$store.feSel` — 72 call sites — because children inherit the Alpine scope, so nothing is addressed page-wide any more.
 
-This is the last global left after the `id` sweep, and it is the one no PHP test can reach. The fix is to move the selection into the component or key the store by scope; both change the JS contract, so it belongs before the freeze.
+The `feDrag` store stays shared, which is right: a user drags in one explorer at a time. What changed is that it no longer reaches for a selection of its own — `pointerDown` is handed the one the drag started in.
+
+Seven tests in the `node:vm` harness cover it, which needed the harness to be able to put two explorers in one realm. Reintroducing a shared selection fails all seven.
 
 ### ~~Domain events~~ — done
 

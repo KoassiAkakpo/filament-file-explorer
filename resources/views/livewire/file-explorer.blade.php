@@ -33,8 +33,8 @@
             @fe-item-drag-start.window="onItemDragStart()"
             @fe-item-drag-end.window="isDraggingItems = false"
             @fe-upload-files.window="uploadDroppedFiles($event.detail.files)"
-            @fe-sel-cleared.window="Alpine.store('feSel').replace([], [])"
-            @fe-folder-created.window="Alpine.store('feSel').replace([Number($event.detail.folderId)], [])"
+            @fe-sel-cleared.window="sel.replace([], [])"
+            @fe-folder-created.window="sel.replace([Number($event.detail.folderId)], [])"
             @new-folder-created.window="focusInput('[data-fe-new-folder-input]', $event.detail)"
             @focus-rename-input.window="focusInput('[data-fe-rename-input]', $event.detail)"
             @click.window="closeContext()"
@@ -173,21 +173,21 @@
 
                         @if ($abilities['rename'])
                         <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.rename') }}" x-cloak
-                            x-show="($store.feSel.folders.length + $store.feSel.files.length) === 1"
+                            x-show="(sel.folders.length + sel.files.length) === 1"
                             @click="toolbarRename()">
                             @svg('heroicon-o-pencil', 'h-3.5 w-3.5')
                         </button>
                         @endif
                         @if ($abilities['download'])
                         <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.download') }}" x-cloak
-                            x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0"
+                            x-show="(sel.folders.length + sel.files.length) > 0"
                             @click="toolbarDownload()">
                             @svg('heroicon-o-arrow-down-tray', 'h-3.5 w-3.5')
                         </button>
                         @endif
                         @if ($abilities['copy'])
                         <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.copy') }}" x-cloak
-                            x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0"
+                            x-show="(sel.folders.length + sel.files.length) > 0"
                             @click="toolbarCopy()">
                             @svg('heroicon-o-document-duplicate', 'h-3.5 w-3.5')
                         </button>
@@ -199,14 +199,14 @@
                         @endif
                         @if ($abilities['getInfo'])
                         <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.info') }}" x-cloak
-                            x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0"
+                            x-show="(sel.folders.length + sel.files.length) > 0"
                             @click="toolbarInfo()">
                             @svg('heroicon-o-information-circle', 'h-3.5 w-3.5')
                         </button>
                         @endif
                         @if ($abilities['delete'] || $abilities['deleteFolder'])
                         <button type="button" class="fe-tool-btn fe-tool-btn--ghost-danger" title="{{ __('filament-file-explorer::file-explorer.toolbar.delete') }}" x-cloak
-                            x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0"
+                            x-show="(sel.folders.length + sel.files.length) > 0"
                             @click="confirmDeleteSelected()">
                             @svg('heroicon-o-trash', 'h-3.5 w-3.5')
                         </button>
@@ -229,17 +229,17 @@
                             class="fe-menu absolute start-0 top-full z-30 mt-1 w-48 overflow-hidden py-1"
                         >
                             @if ($abilities['rename'])
-                            <button type="button" class="fe-view-item" x-show="($store.feSel.folders.length + $store.feSel.files.length) === 1" @click="toolbarRename(); open=false">
+                            <button type="button" class="fe-view-item" x-show="(sel.folders.length + sel.files.length) === 1" @click="toolbarRename(); open=false">
                                 @svg('heroicon-o-pencil', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.toolbar.rename') }}
                             </button>
                             @endif
                             @if ($abilities['download'])
-                            <button type="button" class="fe-view-item" x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0" @click="toolbarDownload(); open=false">
+                            <button type="button" class="fe-view-item" x-show="(sel.folders.length + sel.files.length) > 0" @click="toolbarDownload(); open=false">
                                 @svg('heroicon-o-arrow-down-tray', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.toolbar.download') }}
                             </button>
                             @endif
                             @if ($abilities['copy'])
-                            <button type="button" class="fe-view-item" x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0" @click="toolbarCopy(); open=false">
+                            <button type="button" class="fe-view-item" x-show="(sel.folders.length + sel.files.length) > 0" @click="toolbarCopy(); open=false">
                                 @svg('heroicon-o-document-duplicate', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.toolbar.copy') }}
                             </button>
                             @endif
@@ -249,12 +249,12 @@
                             </button>
                             @endif
                             @if ($abilities['getInfo'])
-                            <button type="button" class="fe-view-item" x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0" @click="toolbarInfo(); open=false">
+                            <button type="button" class="fe-view-item" x-show="(sel.folders.length + sel.files.length) > 0" @click="toolbarInfo(); open=false">
                                 @svg('heroicon-o-information-circle', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.toolbar.info') }}
                             </button>
                             @endif
                             @if ($abilities['delete'] || $abilities['deleteFolder'])
-                            <button type="button" class="fe-view-item text-red-600 dark:text-red-400" x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0" @click="confirmDeleteSelected(); open=false">
+                            <button type="button" class="fe-view-item text-red-600 dark:text-red-400" x-show="(sel.folders.length + sel.files.length) > 0" @click="confirmDeleteSelected(); open=false">
                                 @svg('heroicon-o-trash', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.toolbar.delete') }}
                             </button>
                             @endif
@@ -277,10 +277,10 @@
 
                     <div class="fe-toolbar__end flex min-w-0 items-center gap-1">
                         <span class="me-1 hidden min-w-0 truncate text-[11px] text-zinc-400 sm:inline" x-cloak
-                              x-show="($store.feSel.folders.length + $store.feSel.files.length) > 0"
+                              x-show="(sel.folders.length + sel.files.length) > 0"
                               x-text="translations?.toolbar?.selected_count
-                                  ? translations.toolbar.selected_count.replace(':count', $store.feSel.folders.length + $store.feSel.files.length)
-                                  : ($store.feSel.folders.length + $store.feSel.files.length) + ' selected'"></span>
+                                  ? translations.toolbar.selected_count.replace(':count', sel.folders.length + sel.files.length)
+                                  : (sel.folders.length + sel.files.length) + ' selected'"></span>
 
                         <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false">
                             <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.sort_by') }}" @click="open = !open">
@@ -495,10 +495,10 @@
                                     x-data="{ isDragOver: false }"
                                     data-fe-drop-folder="{{ $folder->id }}"
                                     @unless($folderRenaming)
-                                        x-on:pointerdown="$store.feDrag.pointerDown($event, 'folder', {{ $folder->id }}, @js($folder->name), $wire)"
+                                        x-on:pointerdown="$store.feDrag.pointerDown($event, 'folder', {{ $folder->id }}, @js($folder->name), $wire, sel)"
                                         x-on:click.stop="
                                             if ($store.feDrag.consumeClickSuppression()) return;
-                                            $store.feSel.click('folder', {{ $folder->id }}, $event, $el);
+                                            sel.click('folder', {{ $folder->id }}, $event, $el);
                                         "
                                         x-on:dblclick.stop="$wire.navigateToFolder({{ $folder->id }})"
                                     @endunless
@@ -511,7 +511,7 @@
                                     x-on:dragleave.prevent="isDragOver = false"
                                     x-on:drop.prevent="$store.feDrag.dropFilesOnFolder($event, {{ $folder->id }}, $wire); isDragOver = false"
                                     x-on:contextmenu.stop.prevent="
-                                        if (!$store.feSel.hasFolder({{ $folder->id }})) { $store.feSel.toggle('folder', {{ $folder->id }}, false); }
+                                        if (!sel.hasFolder({{ $folder->id }})) { sel.toggle('folder', {{ $folder->id }}, false); }
                                         $dispatch('fe-context', { type: 'folder', id: {{ $folder->id }}, name: @js($folder->name), x: $event.clientX, y: $event.clientY })
                                     "
                                     @class([
@@ -521,17 +521,17 @@
                                         'fe-list-row--stripe' => $isStripe,
                                     ])
                                     :class="{
-                                        'fe-row--selected': ($store.feSel.hasFolder({{ $folder->id }}) || $store.feSel.inMarqueeFolder({{ $folder->id }})) && !@js($folderRenaming),
-                                        'drag-hover': $store.feSel.inMarqueeFolder({{ $folder->id }}),
-                                        'hover:bg-zinc-100/80 dark:hover:bg-white/5': !$store.feSel.hasFolder({{ $folder->id }}) && !$store.feSel.inMarqueeFolder({{ $folder->id }}),
+                                        'fe-row--selected': (sel.hasFolder({{ $folder->id }}) || sel.inMarqueeFolder({{ $folder->id }})) && !@js($folderRenaming),
+                                        'drag-hover': sel.inMarqueeFolder({{ $folder->id }}),
+                                        'hover:bg-zinc-100/80 dark:hover:bg-white/5': !sel.hasFolder({{ $folder->id }}) && !sel.inMarqueeFolder({{ $folder->id }}),
                                         'ring-2 ring-zinc-300/50 bg-zinc-100/70': isDragOver || $store.feDrag.dropTargetId === {{ $folder->id }},
-                                        'fe-dragging': $store.feDrag.active && $store.feSel.hasFolder({{ $folder->id }})
+                                        'fe-dragging': $store.feDrag.active && sel.hasFolder({{ $folder->id }})
                                     }"
                                     data-id="{{ $folder->id }}"
                                     data-fe-type="folder"
                                     tabindex="-1"
                                     role="option"
-                                    :aria-selected="$store.feSel.hasFolder({{ $folder->id }}) ? 'true' : 'false'"
+                                    :aria-selected="sel.hasFolder({{ $folder->id }}) ? 'true' : 'false'"
                                 >
                                     <div class="flex min-w-0 items-center gap-2">
                                         <x-filament-file-explorer::file-explorer.folder-icon class="h-6 w-6 shrink-0" />
@@ -567,15 +567,15 @@
                                 <div
                                     wire:key="row-file-{{ $media->id }}-{{ $viewMode }}"
                                     @unless($fileRenaming)
-                                        x-on:pointerdown="$store.feDrag.pointerDown($event, 'file', {{ $media->id }}, @js($fileLabel), $wire)"
+                                        x-on:pointerdown="$store.feDrag.pointerDown($event, 'file', {{ $media->id }}, @js($fileLabel), $wire, sel)"
                                         x-on:click.stop="
                                             if ($store.feDrag.consumeClickSuppression()) return;
-                                            $store.feSel.click('file', {{ $media->id }}, $event, $el);
+                                            sel.click('file', {{ $media->id }}, $event, $el);
                                         "
                                         x-on:dblclick.stop="openFile({{ $media->id }})"
                                     @endunless
                                     x-on:contextmenu.stop.prevent="
-                                        if (!$store.feSel.hasFile({{ $media->id }})) { $store.feSel.toggle('file', {{ $media->id }}, false); }
+                                        if (!sel.hasFile({{ $media->id }})) { sel.toggle('file', {{ $media->id }}, false); }
                                         $dispatch('fe-context', { type: 'file', id: {{ $media->id }}, name: @js($fileLabel), x: $event.clientX, y: $event.clientY })
                                     "
                                     @class([
@@ -585,16 +585,16 @@
                                         'fe-list-row--stripe' => $isStripe,
                                     ])
                                     :class="{
-                                        'fe-row--selected': ($store.feSel.hasFile({{ $media->id }}) || $store.feSel.inMarqueeFile({{ $media->id }})) && !@js($fileRenaming),
-                                        'drag-hover': $store.feSel.inMarqueeFile({{ $media->id }}),
-                                        'hover:bg-zinc-100/80 dark:hover:bg-white/5': !$store.feSel.hasFile({{ $media->id }}) && !$store.feSel.inMarqueeFile({{ $media->id }}),
-                                        'fe-dragging': $store.feDrag.active && $store.feSel.hasFile({{ $media->id }})
+                                        'fe-row--selected': (sel.hasFile({{ $media->id }}) || sel.inMarqueeFile({{ $media->id }})) && !@js($fileRenaming),
+                                        'drag-hover': sel.inMarqueeFile({{ $media->id }}),
+                                        'hover:bg-zinc-100/80 dark:hover:bg-white/5': !sel.hasFile({{ $media->id }}) && !sel.inMarqueeFile({{ $media->id }}),
+                                        'fe-dragging': $store.feDrag.active && sel.hasFile({{ $media->id }})
                                     }"
                                     data-id="{{ $media->id }}"
                                     data-fe-type="file"
                                     tabindex="-1"
                                     role="option"
-                                    :aria-selected="$store.feSel.hasFile({{ $media->id }}) ? 'true' : 'false'"
+                                    :aria-selected="sel.hasFile({{ $media->id }}) ? 'true' : 'false'"
                                 >
                                     <div class="flex min-w-0 items-center gap-2">
                                         @if ($listPreview)
@@ -1030,7 +1030,7 @@
                         <div class="fe-ctx-sep" x-show="(abilities.delete && ctx.type === 'file') || (abilities.deleteFolder && ctx.type === 'folder')"></div>
                         <button type="button" class="fe-ctx-item fe-ctx-danger"
                             x-show="(abilities.delete && ctx.type === 'file') || (abilities.deleteFolder && ctx.type === 'folder')"
-                            :disabled="!ctx.canDelete || (ctx.type === 'folder' && ctx.id === rootFolderId && ($store.feSel.folders.length + $store.feSel.files.length) <= 1)"
+                            :disabled="!ctx.canDelete || (ctx.type === 'folder' && ctx.id === rootFolderId && (sel.folders.length + sel.files.length) <= 1)"
                             :title="ctx.deleteHint || ''"
                             @click="run(() => confirmDeleteSelected())">
                             @svg('heroicon-o-trash', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.context.delete') }}

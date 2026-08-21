@@ -26,27 +26,27 @@
     data-fe-type="file"
     tabindex="-1"
     role="option"
-    :aria-selected="$store.feSel.hasFile({{ $media->id }}) ? 'true' : 'false'"
+    :aria-selected="sel.hasFile({{ $media->id }}) ? 'true' : 'false'"
     @unless($isRenaming)
-        x-on:pointerdown="$store.feDrag.pointerDown($event, 'file', {{ $media->id }}, @js($label), $wire)"
+        x-on:pointerdown="$store.feDrag.pointerDown($event, 'file', {{ $media->id }}, @js($label), $wire, sel)"
         x-on:click.stop="
             if ($store.feDrag.consumeClickSuppression()) return;
-            $store.feSel.click('file', {{ $media->id }}, $event, $el);
+            sel.click('file', {{ $media->id }}, $event, $el);
         "
         @if($openUrl)
             x-on:dblclick.stop="openFile({{ $media->id }})"
         @endif
     @endunless
     x-on:contextmenu.stop.prevent="
-        if (!$store.feSel.hasFile({{ $media->id }})) {
-            $store.feSel.toggle('file', {{ $media->id }}, false);
+        if (!sel.hasFile({{ $media->id }})) {
+            sel.toggle('file', {{ $media->id }}, false);
         }
         $dispatch('fe-context', { type: 'file', id: {{ $media->id }}, name: @js($label), x: $event.clientX, y: $event.clientY });
     "
     :class="{
-        'is-selected': $store.feSel.hasFile({{ $media->id }}),
-        'drag-hover': $store.feSel.inMarqueeFile({{ $media->id }}),
-        'fe-dragging': $store.feDrag.active && $store.feSel.hasFile({{ $media->id }}),
+        'is-selected': sel.hasFile({{ $media->id }}),
+        'drag-hover': sel.inMarqueeFile({{ $media->id }}),
+        'fe-dragging': $store.feDrag.active && sel.hasFile({{ $media->id }}),
     }"
     @class([
         'file fe-icon-item group relative mx-0.5 flex w-[96px] cursor-default flex-col items-center px-0.5 pt-0.5 pb-0.5 text-center select-none',
@@ -55,7 +55,7 @@
 >
     <div
         class="fe-icon-well flex h-[68px] w-[76px] shrink-0 items-center justify-center rounded-xl"
-        :class="{ 'fe-icon-well--selected': ($store.feSel.hasFile({{ $media->id }}) || $store.feSel.inMarqueeFile({{ $media->id }})) && !@js($isRenaming) }"
+        :class="{ 'fe-icon-well--selected': (sel.hasFile({{ $media->id }}) || sel.inMarqueeFile({{ $media->id }})) && !@js($isRenaming) }"
     >
         @if ($thumb)
             <img
@@ -87,7 +87,7 @@
         @else
             <span
                 class="fe-label dark:text-zinc-100"
-                :class="{ 'fe-label--selected': $store.feSel.hasFile({{ $media->id }}) || $store.feSel.inMarqueeFile({{ $media->id }}) }"
+                :class="{ 'fe-label--selected': sel.hasFile({{ $media->id }}) || sel.inMarqueeFile({{ $media->id }}) }"
                 title="{{ $label }}"
             >{{ $label }}</span>
         @endif

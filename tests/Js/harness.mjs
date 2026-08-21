@@ -15,6 +15,24 @@ const here = dirname(fileURLToPath(import.meta.url));
  * cheap to build.
  */
 export function loadExplorer({ items = [], columns = 4 } = {}) {
+    const realm = createRealm();
+    const first = createExplorer(realm, { items, columns });
+
+    return {
+        ...first,
+        /**
+         * A second explorer on the same page, sharing the realm and therefore
+         * the Alpine stores — which is the situation the selection used to get
+         * wrong.
+         */
+        spawn: (options = {}) => createExplorer(realm, { columns, ...options }),
+        // The stores really are shared between the two, which is what makes
+        // the isolation worth asserting.
+        Alpine: realm.Alpine,
+    };
+}
+
+function createRealm() {
     const source = readFileSync(resolve(here, '../../resources/js/file-explorer.js'), 'utf8');
 
     const stores = {};
@@ -26,6 +44,31 @@ export function loadExplorer({ items = [], columns = 4 } = {}) {
         },
     };
 
+    const context = {
+        // Enough of window for the drag store, which binds its pointer
+        // listeners there.
+        window: {
+            addEventListener() {},
+            removeEventListener() {},
+            dispatchEvent() {},
+        },
+        document: { querySelector: () => null, hidden: false, addEventListener() {} },
+        Alpine,
+        setInterval: () => 0,
+        clearInterval: () => {},
+        setTimeout: (fn) => fn === undefined ? 0 : 0,
+        clearTimeout: () => {},
+        console,
+    };
+    context.globalThis = context;
+
+    vm.createContext(context);
+    vm.runInContext(source, context);
+
+    return { context, Alpine };
+}
+
+function createExplorer(realm, { items = [], columns = 4 } = {}) {
     const elements = items.map((item, index) => ({
         _item: item,
         offsetTop: Math.floor(index / columns) * 100,
@@ -59,22 +102,7 @@ export function loadExplorer({ items = [], columns = 4 } = {}) {
         },
     };
 
-    const context = {
-        window: {},
-        document: { querySelector: () => container, hidden: false, addEventListener() {} },
-        Alpine,
-        setInterval: () => 0,
-        clearInterval: () => {},
-        setTimeout: (fn) => { calls.push(['setTimeout']); return 0; },
-        clearTimeout: () => {},
-        console,
-    };
-    context.globalThis = context;
-
-    vm.createContext(context);
-    vm.runInContext(source, context);
-
-    const component = context.window.FileExplorerUi({
+    const component = realm.context.window.FileExplorerUi({
         scopeKey: 'library',
         rootFolderId: 1,
         abilities: { browse: true, copy: true, move: true, rename: true, delete: true, deleteFolder: true },
@@ -90,7 +118,9 @@ export function loadExplorer({ items = [], columns = 4 } = {}) {
 
     component.init();
 
-    return { component, sel: Alpine.store('feSel'), calls, items, elements };
+    // The selection belongs to the component now, not to a global store: that
+    // is the whole point of it, and two components give two selections.
+    return { component, sel: component.sel, calls, items, elements, container, wire };
 }
 
 /**
@@ -110,4 +140,15 @@ export function selected(sel) {
         ...sel.folders.map((id) => `folder:${id}`),
         ...sel.files.map((id) => `file:${id}`),
     ];
+}
+
+/**
+ * The $wire calls as flat strings.
+ *
+ * Same reason as at() and selected(): the arrays are built inside the vm, so
+ * their prototype is not this realm's and deepStrictEqual refuses them however
+ * identical they look.
+ */
+export function wireCalls(list) {
+    return list.map(([method, ...args]) => `${method}(${args.map((arg) => JSON.stringify(arg)).join(', ')})`);
 }

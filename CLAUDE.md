@@ -66,16 +66,18 @@ The `FileExplorerPicker` puts an explorer in a modal, so a page can hold two of 
 - **Nothing calls `document.getElementById`**, and a test asserts it stays that way.
 - **Server-dispatched focus events carry `id: $this->getId()`**, which `focusInput()` compares against its own `componentId` before acting — they travel through the window, so both explorers hear them. It also gives up after 40 attempts: the input never appears if the user cancels before the render lands, and the old handler polled for it forever.
 
-Still shared, and worth knowing before adding anything to it: the Alpine `feSel` store and its `feWireRef` are **global**. Two explorers on one page share selection state, and `setSelection` goes to whichever component initialised last. Fixing that means moving the selection out of the store and into the component (or keying the store by scope), which no PHP test can cover.
+- **The selection is the component's, not the page's.** It used to be one Alpine `feSel` store with one `feWireRef`, so two explorers shared a selection: clicking in the modal moved the page's highlight, and `setSelection` reported to whichever component initialised last. `createFeSelection()` is now a factory and the component holds one as `sel` in its own `x-data`; the views reach it as `sel` because children inherit the Alpine scope. There is no `feSel` store to reach for, and a test asserts it does not come back.
+
+Still shared, and correctly so: the `feDrag` store and its `feWireRef`. A user drags in one explorer at a time, `pointerDown` is handed the selection it started in, and the store holds it for the length of the drag.
 
 ## Selection and keyboard
 
-Selection lives in the Alpine `feSel` store ([resources/js/file-explorer.js](resources/js/file-explorer.js)) and is mirrored to the component through a debounced `setSelection`. Two conventions hold it together:
+Selection lives on the component, built by `createFeSelection()` ([resources/js/file-explorer.js](resources/js/file-explorer.js)), and is mirrored to that component through a debounced `setSelection` on a `$wire` of its own. Two conventions hold it together:
 
-- Every rendered item carries `data-fe-type` (`folder`/`file`) and `data-id`, and the items container carries `data-fe-items` — which is also how the JS and the CSS address that container now that it has no id. `feSel.orderedItems(scope)` reads the DOM through those attributes — that is how shift-range and the arrow keys work in the grid *and* the row views without anyone knowing the column count (vertical movement groups items by `offsetTop`). A new view mode has to keep those attributes.
+- Every rendered item carries `data-fe-type` (`folder`/`file`) and `data-id`, and the items container carries `data-fe-items` — which is also how the JS and the CSS address that container now that it has no id. `sel.orderedItems(scope)` reads the DOM through those attributes — that is how shift-range and the arrow keys work in the grid *and* the row views without anyone knowing the column count (vertical movement groups items by `offsetTop`). A new view mode has to keep those attributes.
 - Keyboard shortcuts are bound on the items container (`@keydown="onKeydown($event)"`), never on the window. A page can hold more than one explorer — the `FileExplorerPicker` in a modal — and a window binding would fire for all of them, including while the user types in the search box.
 
-`feSel.click()` owns the modifier logic (shift extends from the anchor, ctrl/meta toggles) so the Blade files stay declarative, and `toggle()` moves the anchor. `replace()` mirrors server state without syncing back; `select()` is the one that syncs, so UI-driven selection must go through it.
+`sel.click()` owns the modifier logic (shift extends from the anchor, ctrl/meta toggles) so the Blade files stay declarative, and `toggle()` moves the anchor. `replace()` mirrors server state without syncing back; `select()` is the one that syncs, so UI-driven selection must go through it.
 
 **`anchor` and `cursor` are two different things.** The anchor is the fixed end of a shift-range and moves only on a plain click or `toggle()`; the cursor is where the keyboard is, and `selectRange()` moves it to the far end. `moveSelection()` has to read the cursor — reading the anchor for both meant every `shift+arrow` recomputed the same two-item range, so a keyboard selection could never grow past two items.
 
