@@ -343,6 +343,10 @@ The JS tests need nothing installed: they run the shipped script in a `node:vm` 
 
 > Provider order matters when booting Filament under Testbench: `Filament\Support\SupportServiceProvider` binds Livewire's `DataStore` mechanism non-shared, so it must register **before** `LivewireServiceProvider`. See `tests/TestCase.php`.
 
+## Roadmap
+
+The package is on `0.x`, which is the only window in which the public API can still change. [ROADMAP.md](ROADMAP.md) lists what has to be settled before it freezes at 1.0.0 — an ability set that can grow, a swappable folder model, selection state per component, domain events — and what is planned after.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
