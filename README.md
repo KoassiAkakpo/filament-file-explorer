@@ -203,8 +203,49 @@ Images are rendered from a `thumbnail` conversion instead of the original, so a 
 Thumbnails go out through the media route like everything else, so they are subject to the same ability and containment checks — and a file uploaded before this existed keeps rendering, because the route serves the original when the conversion is missing. To fill those in:
 
 ```bash
-php artisan media-library:regenerate --only-conversions=thumbnail
+php artisan media-library:regenerate "Koassi\FilamentFileExplorer\Models\Folder" --only=thumbnail --only-missing
 ```
+
+## Where files land
+
+The package never picks a disk or a path: uploads go to `toMediaCollection()` with no disk, so everything is Media Library's own configuration — `media-library.disk_name` for the disk, its `PathGenerator` for the layout. By default that means `{disk}/{media_id}/file.png`, one directory per file at the root of the disk, mixed in with whatever else the application stores there.
+
+To gather the explorer's files under a single directory, point Media Library's `custom_path_generators` at the `Folder` model:
+
+```php
+namespace App\Support;
+
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Spatie\MediaLibrary\Support\PathGenerator\DefaultPathGenerator;
+
+class FileExplorerPathGenerator extends DefaultPathGenerator
+{
+    protected function getBasePath(Media $media): string
+    {
+        return 'file-explorer/'.$media->getKey();
+    }
+}
+```
+
+```php
+// config/media-library.php
+'custom_path_generators' => [
+    \Koassi\FilamentFileExplorer\Models\Folder::class => \App\Support\FileExplorerPathGenerator::class,
+],
+```
+
+```
+storage/app/public/file-explorer/12/photo.png
+storage/app/public/file-explorer/12/conversions/photo-thumbnail.jpg
+```
+
+Overriding only `getBasePath()` keeps `conversions/` and `responsive-images/` where Media Library expects them, and keying the generator to the model leaves the rest of the application's media untouched. Nothing in the explorer needs to know: paths are resolved through `getPath()` / `getPathRelativeToRoot()`, and the trash only ever changes a file's name and collection, never its directory. If you set `morph_class`, key the config on that value rather than on `Folder::class` unless it is in the morph map.
+
+`media-library.prefix` does the same thing in one line, but for *every* media in the application — fine when the explorer is the only thing using Media Library.
+
+Either way the path is computed, never stored, so the change is retroactive: files already uploaded stay where they are and the new path will not find them. Move them once before switching, or after, in a maintenance command.
+
+Keeping the files private needs no more than a disk that is not `public` — `MEDIA_DISK`, or `media-library.disk_name`. Nothing in the explorer calls `getUrl()`: downloads, previews, thumbnails and zips all go out through the media route, behind the ability and containment checks, so a private disk costs no functionality. Keep the driver `local` rather than remote and the route still answers with a `BinaryFileResponse`, which is what gives video seeking and resumable downloads.
 
 ## Quotas
 

@@ -152,7 +152,8 @@ return [
     | Files uploaded before this existed have no thumbnail, and the media route
     | quietly serves their original instead. To fill them in:
     |
-    |   php artisan media-library:regenerate --only-conversions=thumbnail
+    |   php artisan media-library:regenerate "Koassi\FilamentFileExplorer\Models\Folder" \
+    |       --only=thumbnail --only-missing
     |
     | Config only, not a plugin setting: conversions are registered on the model,
     | which knows nothing about the panel it is browsed from.
