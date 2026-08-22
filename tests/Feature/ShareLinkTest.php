@@ -1,0 +1,277 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
+use Koassi\FilamentFileExplorer\Authorizers\AllowAllAuthorizer;
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
+use Koassi\FilamentFileExplorer\Events\FileShared;
+use Koassi\FilamentFileExplorer\Events\ShareRevoked;
+use Koassi\FilamentFileExplorer\Livewire\FileExplorer as FileExplorerComponent;
+use Koassi\FilamentFileExplorer\Models\FileShare;
+use Koassi\FilamentFileExplorer\Models\Folder;
+use Koassi\FilamentFileExplorer\Support\FolderModel;
+use Koassi\FilamentFileExplorer\Support\Sharing;
+use Koassi\FilamentFileExplorer\Support\Trash;
+use Koassi\FilamentFileExplorer\Support\UploadRules;
+use Koassi\FilamentFileExplorer\Tests\Fixtures\User;
+use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
+
+beforeEach(function (): void {
+    Storage::fake('public');
+
+    $this->actingAs(new User(['id' => 1]));
+});
+
+function feShRootId(): int
+{
+    return app(FileExplorerRootResolver::class)->rootFolderId();
+}
+
+function feShComponent(): Testable
+{
+    return Livewire::test(FileExplorerComponent::class, [
+        'scopeKey' => 'library',
+        'rootFolderId' => feShRootId(),
+    ]);
+}
+
+function feShMedia(string $name = 'report.pdf', ?int $folderId = null): Media
+{
+    $media = Media::query()->create([
+        'model_type' => FolderModel::morphClass(),
+        'model_id' => $folderId ?? feShRootId(),
+        'collection_name' => UploadRules::collection(),
+        'name' => $name,
+        'file_name' => $name,
+        'mime_type' => 'application/pdf',
+        'disk' => 'public',
+        'size' => 8,
+        'manipulations' => [],
+        'custom_properties' => [],
+        'generated_conversions' => [],
+        'responsive_images' => [],
+    ]);
+
+    // Real bytes, so the response is a real response.
+    Storage::disk('public')->put($media->id.'/'.$name, '%PDF-1.4 x');
+
+    return $media;
+}
+
+function feShShare(?Media $media = null): FileShare
+{
+    return app(Sharing::class)->create('library', feShRootId(), $media ?? feShMedia());
+}
+
+it('serves the file to someone with no session at all', function (): void {
+    $share = feShShare();
+
+    // The point of the feature: no authenticated user, no session.
+    auth()->logout();
+
+    $this->get(app(Sharing::class)->url($share))
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+});
+
+it('takes nothing but the token', function (): void {
+    $share = feShShare();
+    $other = feShMedia('secret.pdf');
+
+    // No scope key, no media id, nothing to edit into a link for another file.
+    $url = app(Sharing::class)->url($share);
+
+    expect($url)->not->toContain('library')
+        ->and($url)->not->toContain((string) $other->id)
+        ->and($url)->toContain($share->token);
+});
+
+it('stops serving once revoked', function (): void {
+    $share = feShShare();
+    $url = app(Sharing::class)->url($share);
+
+    $this->get($url)->assertOk();
+
+    app(Sharing::class)->revoke($share);
+
+    $this->get($url)->assertNotFound();
+
+    // The row survives: a withdrawn share is still there to look at.
+    expect(FileShare::query()->find($share->id)?->revoked_at)->not->toBeNull();
+});
+
+it('stops serving once expired', function (): void {
+    $share = feShShare();
+    $url = app(Sharing::class)->url($share);
+
+    $this->get($url)->assertOk();
+
+    $share->expires_at = now()->subMinute();
+    $share->save();
+
+    $this->get($url)->assertNotFound();
+});
+
+it('stops serving when the file is trashed, with nothing to update', function (): void {
+    $media = feShMedia();
+    $share = feShShare($media);
+    $url = app(Sharing::class)->url($share);
+
+    $this->get($url)->assertOk();
+
+    app(Trash::class)->trashMedia($media);
+
+    // The collection filter does it: a trashed file leaves the explorer's
+    // collection, so containment fails on its own.
+    $this->get($url)->assertNotFound();
+});
+
+it('stops serving when the file is moved out of the scope it was shared from', function (): void {
+    $media = feShMedia();
+    $share = feShShare($media);
+    $url = app(Sharing::class)->url($share);
+
+    $this->get($url)->assertOk();
+
+    $elsewhere = FolderModel::query()->create(['name' => 'Elsewhere', 'slug' => 'elsewhere', 'parent_id' => null]);
+    $media->model_id = $elsewhere->id;
+    $media->save();
+
+    // Containment runs against the root recorded on the row — never against
+    // anything derived from the media, which would only prove it sits under its
+    // own ancestor.
+    $this->get($url)->assertNotFound();
+});
+
+it('answers the same for a token that never existed', function (): void {
+    $this->get(route('filament-file-explorer.share.show', ['token' => str_repeat('a', 64)]))
+        ->assertNotFound();
+
+    $this->get(route('filament-file-explorer.share.show', ['token' => 'short']))
+        ->assertNotFound();
+});
+
+it('serves no conversion, whatever the query string asks for', function (): void {
+    $share = feShShare();
+
+    // A share is for the file that was shared, not a rendition named in a URL.
+    $this->get(app(Sharing::class)->url($share).'?conversion=thumbnail')
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+});
+
+it('refuses to mint a link for media outside the root', function (): void {
+    $elsewhere = FolderModel::query()->create(['name' => 'Outside', 'slug' => 'outside', 'parent_id' => null]);
+    $media = feShMedia('outside.pdf', (int) $elsewhere->id);
+
+    app(Sharing::class)->create('library', feShRootId(), $media);
+})->throws(RuntimeException::class, 'does not belong to root');
+
+it('hands back the same link rather than minting a second', function (): void {
+    $media = feShMedia();
+
+    $first = app(Sharing::class)->create('library', feShRootId(), $media);
+    $second = app(Sharing::class)->create('library', feShRootId(), $media);
+
+    expect($second->id)->toBe($first->id)
+        ->and(FileShare::query()->count())->toBe(1);
+});
+
+it('caps the expiry at the configured ceiling', function (): void {
+    config(['filament-file-explorer.share.max_ttl_days' => 3]);
+
+    $share = app(Sharing::class)->create('library', feShRootId(), feShMedia(), ttlDays: 3650);
+
+    expect($share->expires_at->diffInDays(now()->addDays(3)))->toBeLessThan(1);
+});
+
+it('allows a link that never expires only when config does', function (): void {
+    config([
+        'filament-file-explorer.share.max_ttl_days' => null,
+        'filament-file-explorer.share.default_ttl_days' => null,
+    ]);
+
+    expect(app(Sharing::class)->create('library', feShRootId(), feShMedia())->expires_at)->toBeNull();
+});
+
+it('counts the views', function (): void {
+    $share = feShShare();
+    $url = app(Sharing::class)->url($share);
+
+    $this->get($url)->assertOk();
+    $this->get($url)->assertOk();
+
+    expect(FileShare::query()->find($share->id)?->views)->toBe(2);
+});
+
+it('serves nothing when sharing is turned off', function (): void {
+    $share = feShShare();
+    $url = app(Sharing::class)->url($share);
+
+    config(['filament-file-explorer.share.enabled' => false]);
+
+    $this->get($url)->assertNotFound();
+});
+
+it('needs the share ability', function (): void {
+    $media = feShMedia();
+
+    app()->instance(FileExplorerAuthorizer::class, new class extends AllowAllAuthorizer
+    {
+        public function abilities(string $scopeKey, int $rootFolderId): array
+        {
+            return [...parent::abilities($scopeKey, $rootFolderId), 'download' => false];
+        }
+    });
+    app()->forgetScopedInstances();
+
+    // share follows download for an authorizer that says nothing about it.
+    feShComponent()->call('shareFile', $media->id)->assertForbidden();
+});
+
+it('refuses to share media of another scope', function (): void {
+    $elsewhere = FolderModel::query()->create(['name' => 'Outside', 'slug' => 'outside', 'parent_id' => null]);
+    $media = feShMedia('outside.pdf', (int) $elsewhere->id);
+
+    feShComponent()->call('shareFile', $media->id)->assertForbidden();
+});
+
+it('fires FileShared once, and ShareRevoked on withdrawal', function (): void {
+    $heard = new ArrayObject;
+    Event::listen(FileShared::class, fn (object $e) => $heard->append($e));
+    Event::listen(ShareRevoked::class, fn (object $e) => $heard->append($e));
+
+    $media = feShMedia();
+
+    $component = feShComponent()->call('shareFile', $media->id);
+
+    // Re-sharing something already shared is not a new event.
+    $component->call('shareFile', $media->id);
+
+    expect(iterator_to_array($heard))->toHaveCount(1);
+
+    $component->call('revokeShare');
+
+    $events = iterator_to_array($heard);
+
+    expect($events)->toHaveCount(2)
+        ->and($events[1])->toBeInstanceOf(ShareRevoked::class)
+        ->and($events[0]->share->token)->toBe($events[1]->share->token);
+});
+
+it('reports the link to the panel', function (): void {
+    $media = feShMedia();
+
+    $component = feShComponent()->call('shareFile', $media->id);
+
+    $state = $component->get('shareItem');
+
+    expect($state['media_id'])->toBe($media->id)
+        ->and($state['url'])->toContain('file-explorer/share/')
+        ->and($state['expires_at'])->not->toBeNull();
+});

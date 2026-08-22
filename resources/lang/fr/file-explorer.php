@@ -161,6 +161,20 @@ return [
     'js' => [
         'delete_not_allowed' => 'Suppression non autorisée',
     ],
+    'share' => [
+        'action' => 'Partager',
+        'title' => 'Lien de partage',
+        'description' => 'Toute personne ayant ce lien peut ouvrir le fichier, sans compte.',
+        'copy' => 'Copier le lien',
+        'copied' => 'Copié',
+        'expires' => 'Expire le',
+        'never_expires' => "N'expire pas",
+        'views' => "{0} pas encore ouvert|{1} ouvert une fois|[2,*] ouvert :count fois",
+        'revoke' => 'Arrêter le partage',
+        'revoked' => 'Le lien ne fonctionne plus',
+        'open' => 'Ouvrir',
+        'shared' => 'Partagé',
+    ],
     'trash' => [
         'title' => 'Corbeille',
         'moved' => '{1} :count élément mis à la corbeille|[2,*] :count éléments mis à la corbeille',

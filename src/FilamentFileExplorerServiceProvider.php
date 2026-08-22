@@ -16,6 +16,7 @@ use Koassi\FilamentFileExplorer\Commands\PurgeTrashCommand;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Http\Controllers\MediaController;
+use Koassi\FilamentFileExplorer\Http\Controllers\ShareController;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer;
 use Koassi\FilamentFileExplorer\Resolvers\GlobalRootResolver;
 use Koassi\FilamentFileExplorer\Resolvers\PerTenantRootResolver;
@@ -23,7 +24,9 @@ use Koassi\FilamentFileExplorer\Resolvers\PerUserRootResolver;
 use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
+use Koassi\FilamentFileExplorer\Support\MediaScope;
 use Koassi\FilamentFileExplorer\Support\Quota;
+use Koassi\FilamentFileExplorer\Support\Sharing;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Uploader;
 use Livewire\Livewire;
@@ -72,6 +75,11 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         // Scoped too: it memoises what a scope may do, and that answer belongs
         // to whoever was authenticated for this request and no one else.
         $this->app->scoped(Abilities::class);
+
+        // Stateless, so a singleton is enough: it reads and writes rows and
+        // memoises nothing.
+        $this->app->singleton(MediaScope::class);
+        $this->app->singleton(Sharing::class);
 
         $this->app->singleton(FileExplorerAuthorizer::class, function ($app) {
             $class = config('filament-file-explorer.authorizer');
@@ -151,6 +159,22 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
                     ->name('zip-folder');
                 Route::get('{scopeKey}/selection/zip', [MediaController::class, 'zipSelection'])
                     ->name('zip-selection');
+            });
+
+        if (! Sharing::enabled()) {
+            return;
+        }
+
+        $share = config('filament-file-explorer.share.routes');
+
+        // Its own group, because its middleware is the point: no `auth`. The
+        // token is the only credential and the only parameter — there is no
+        // scope key to tamper with here.
+        Route::middleware($share['middleware'] ?? ['web'])
+            ->prefix($share['prefix'] ?? 'file-explorer/share')
+            ->name($share['name'] ?? 'filament-file-explorer.share.')
+            ->group(function (): void {
+                Route::get('{token}', [ShareController::class, 'show'])->name('show');
             });
     }
 }

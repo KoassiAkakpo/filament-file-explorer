@@ -17,6 +17,7 @@ use Koassi\FilamentFileExplorer\Events\FileDeleted;
 use Koassi\FilamentFileExplorer\Events\FileMoved;
 use Koassi\FilamentFileExplorer\Events\FileRenamed;
 use Koassi\FilamentFileExplorer\Events\FileRestored;
+use Koassi\FilamentFileExplorer\Events\FileShared;
 use Koassi\FilamentFileExplorer\Events\FileTrashed;
 use Koassi\FilamentFileExplorer\Events\FileUploaded;
 use Koassi\FilamentFileExplorer\Events\FolderCopied;
@@ -26,6 +27,8 @@ use Koassi\FilamentFileExplorer\Events\FolderMoved;
 use Koassi\FilamentFileExplorer\Events\FolderRenamed;
 use Koassi\FilamentFileExplorer\Events\FolderRestored;
 use Koassi\FilamentFileExplorer\Events\FolderTrashed;
+use Koassi\FilamentFileExplorer\Events\ShareRevoked;
+use Koassi\FilamentFileExplorer\Models\FileShare;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\ActiveRoot;
@@ -34,9 +37,11 @@ use Koassi\FilamentFileExplorer\Support\FolderListing;
 use Koassi\FilamentFileExplorer\Support\FolderModel;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\MediaLabel;
+use Koassi\FilamentFileExplorer\Support\MediaScope;
 use Koassi\FilamentFileExplorer\Support\MimeIcon;
 use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\ScopeRoots;
+use Koassi\FilamentFileExplorer\Support\Sharing;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\Uploader;
@@ -113,6 +118,14 @@ class FileExplorer extends Component
 
     /** @var array{id: int, name: string, mime: string, kind: string, url: string, download_url: string, size: string, icon: string, position: int, total: int}|null */
     public ?array $previewItem = null;
+
+    /**
+     * The share panel's state, on the server like the other dialogs: it has to
+     * report an expiry and a view count, which Alpine has no way to know.
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $shareItem = null;
 
     /** Whether the browser area shows the trash instead of the current folder. */
     public bool $showTrash = false;
@@ -252,14 +265,12 @@ class FileExplorer extends Component
      */
     protected function assertMediaUnderRoot(Media $media): Folder
     {
-        abort_unless($media->model_type === FolderModel::morphClass(), 403);
-        abort_unless($media->collection_name === UploadRules::collection(), 403);
+        $folder = app(MediaScope::class)->folderUnderRoot($media, $this->rootFolderId);
 
-        $folder = FolderModel::query()->find($media->model_id);
-
-        // Aborts when the folder is missing or out of scope, so what comes back
-        // is always the media's in-scope folder.
-        $this->assertUnderRoot($folder);
+        // Aborts when the row is not one of the explorer's, or its folder is
+        // missing or out of scope, so what comes back is always the media's
+        // in-scope folder.
+        abort_if($folder === null, 403);
 
         return $folder;
     }
@@ -1177,6 +1188,97 @@ class FileExplorer extends Component
     public function closePreview(): void
     {
         $this->previewItem = null;
+    }
+
+    /**
+     * Gives a file a public link, or hands back the one it already has.
+     *
+     * The ability is checked here and nowhere else afterwards: the share route
+     * has no authenticated user to ask. Containment still runs on every request
+     * to that route, against the root recorded on the row.
+     */
+    public function shareFile(int $mediaId): void
+    {
+        abort_unless(Sharing::enabled(), 404);
+        abort_unless($this->ability('share'), 403);
+
+        $media = Media::query()->findOrFail($mediaId);
+        $this->assertMediaUnderRoot($media);
+
+        $sharing = app(Sharing::class);
+
+        // Asked before creating, because create() hands back an existing link
+        // rather than minting a second one — and re-sharing something already
+        // shared is not a new event.
+        $existing = $sharing->activeForMedia((int) $media->id, $this->scopeKey, $this->rootFolderId);
+
+        $share = $sharing->create(
+            $this->scopeKey,
+            $this->rootFolderId,
+            $media,
+            actor: auth()->user(),
+        );
+
+        if ($existing === null) {
+            event(new FileShared($this->scopeKey, $this->rootFolderId, auth()->user(), $media, $share));
+        }
+
+        $this->shareItem = $this->shareState($share, $media);
+    }
+
+    /**
+     * Withdraws the link the panel is showing.
+     *
+     * Takes the same ability that made it: someone who can hand a file out can
+     * stop handing it out, and a separate ability would let an authorizer allow
+     * the first without the second.
+     */
+    public function revokeShare(): void
+    {
+        abort_unless($this->ability('share'), 403);
+
+        if ($this->shareItem === null) {
+            return;
+        }
+
+        $share = FileShare::query()->find($this->shareItem['id'] ?? 0);
+
+        // Nothing to say if it is already gone or was never this scope's: the
+        // panel simply closes.
+        if ($share instanceof FileShare
+            && $share->scope_key === $this->scopeKey
+            && $share->root_folder_id === $this->rootFolderId) {
+            app(Sharing::class)->revoke($share);
+
+            event(new ShareRevoked($this->scopeKey, $this->rootFolderId, auth()->user(), $share));
+        }
+
+        $this->shareItem = null;
+
+        Notification::make()
+            ->success()
+            ->title(__('filament-file-explorer::file-explorer.share.revoked'))
+            ->send();
+    }
+
+    public function closeShare(): void
+    {
+        $this->shareItem = null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function shareState(FileShare $share, Media $media): array
+    {
+        return [
+            'id' => (int) $share->id,
+            'media_id' => (int) $media->id,
+            'name' => MediaLabel::display($media),
+            'url' => app(Sharing::class)->url($share),
+            'expires_at' => $share->expires_at?->toDayDateTimeString(),
+            'views' => (int) $share->views,
+        ];
     }
 
     /**

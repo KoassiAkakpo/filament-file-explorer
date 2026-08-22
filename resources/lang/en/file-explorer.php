@@ -161,6 +161,20 @@ return [
     'js' => [
         'delete_not_allowed' => 'Delete not allowed',
     ],
+    'share' => [
+        'action' => 'Share',
+        'title' => 'Share link',
+        'description' => 'Anyone with this link can open the file, without an account.',
+        'copy' => 'Copy link',
+        'copied' => 'Copied',
+        'expires' => 'Expires',
+        'never_expires' => 'Does not expire',
+        'views' => '{0} not opened yet|{1} opened once|[2,*] opened :count times',
+        'revoke' => 'Stop sharing',
+        'revoked' => 'The link no longer works',
+        'open' => 'Open',
+        'shared' => 'Shared',
+    ],
     'trash' => [
         'title' => 'Trash',
         'moved' => '{1} :count item moved to the trash|[2,*] :count items moved to the trash',

@@ -211,6 +211,44 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Share links
+    |--------------------------------------------------------------------------
+    |
+    | A share link serves one file to whoever holds it, with no session and no
+    | account — which is the point: it is how you send a file to someone outside
+    | the panel. Gated on the `share` ability, which follows `download` for any
+    | authorizer that does not answer it.
+    |
+    | The link stops working on its own when the file is moved out of the scope
+    | it was shared from, trashed, or deleted. Revoking is a database write and
+    | takes effect immediately; the row is kept, so a withdrawn share is still
+    | there to inspect.
+    |
+    | max_ttl_days is a ceiling, not a default: a caller asking for longer, or
+    | for no expiry, gets the ceiling. Set it to null to allow links that never
+    | expire, and default_ttl_days to null to make that the default.
+    |
+    */
+    'share' => [
+        'enabled' => true,
+        'table' => 'file_explorer_shares',
+        'default_ttl_days' => 7,
+        'max_ttl_days' => 30,
+
+        /*
+         | Deliberately without `auth`: a link that needed an account would not
+         | be a share. The token is the only credential, and the only input the
+         | route takes — everything else is read off the stored row.
+         */
+        'routes' => [
+            'prefix' => 'file-explorer/share',
+            'middleware' => ['web'],
+            'name' => 'filament-file-explorer.share.',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Trash
     |--------------------------------------------------------------------------
     |
