@@ -30,6 +30,17 @@ final class FolderListing
      */
     public const SORTS = ['name', 'date', 'type', 'size'];
 
+    /**
+     * The LIKE escape character, and the one place a search term becomes a
+     * pattern.
+     *
+     * "!" rather than a backslash because sqlite reads '\\' as two characters
+     * and rejects it, while every supported driver accepts a plain one. Public
+     * because Support\Annotations matches descriptions and tag names with the
+     * same term: what a search means is decided here, once.
+     */
+    public const LIKE_ESCAPE = '!';
+
     private string $search;
 
     private string $sortBy;
@@ -45,6 +56,7 @@ final class FolderListing
         string $sortBy = 'name',
         string $sortDir = 'asc',
         ?string $kind = null,
+        private readonly ?int $tagId = null,
     ) {
         // Normalised here, so an unrecognised value narrows nothing rather than
         // emptying a folder with no explanation.
@@ -104,14 +116,29 @@ final class FolderListing
      */
     private function foldersQuery(): Builder
     {
+        $query = FolderModel::query();
+
+        // Before the window and before the counts, like the kind filter, so the
+        // totals describe what the filter left. Unlike the kind filter this one
+        // narrows folders too: a folder can be tagged, and hiding folders here
+        // would hide exactly what the user tagged.
+        $query = app(Annotations::class)->applyTag(
+            $query,
+            Annotations::FOLDER,
+            $this->folderTable().'.id',
+            $this->tagId,
+        );
+
         if ($this->search === '') {
-            return FolderModel::query()->where('parent_id', $this->currentFolderId);
+            return $query->where('parent_id', $this->currentFolderId);
         }
 
         return $this->applySearch(
-            FolderModel::query()
+            $query
                 ->whereIn('id', $this->scopeFolderIds())
-                ->where('id', '!=', $this->rootFolderId)
+                ->where('id', '!=', $this->rootFolderId),
+            Annotations::FOLDER,
+            $this->folderTable().'.id',
         );
     }
 
@@ -128,26 +155,68 @@ final class FolderListing
         // the filter left rather than what was there.
         $query = FileKinds::apply($query, $this->kind);
 
+        $query = app(Annotations::class)->applyTag(
+            $query,
+            Annotations::FILE,
+            $this->mediaTable().'.id',
+            $this->tagId,
+        );
+
         if ($this->search === '') {
             return $query->where('model_id', $this->currentFolderId);
         }
 
-        return $this->applySearch($query->whereIn('model_id', $this->scopeFolderIds()));
+        return $this->applySearch(
+            $query->whereIn('model_id', $this->scopeFolderIds()),
+            Annotations::FILE,
+            $this->mediaTable().'.id',
+        );
     }
 
     /**
      * LIKE with an explicit escape character, so "%" and "_" typed in the
-     * search box are literals instead of wildcards. The escape is "!" rather
-     * than a backslash because sqlite reads '\\' as two characters and rejects
-     * it, while every supported driver accepts a plain one.
+     * search box are literals instead of wildcards.
+     *
+     * The name is not the only thing a search looks at: a description and a tag
+     * are worth nothing if the words in them cannot be found again, which is
+     * also why neither is stored in a JSON column. All three are matched in one
+     * grouped OR, so the window and the counts still describe the same set.
      *
      * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>  $query
+     * @return Builder<covariant \Illuminate\Database\Eloquent\Model>
      */
-    private function applySearch(Builder $query): Builder
+    private function applySearch(Builder $query, string $itemType, string $idColumn): Builder
     {
-        $needle = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $this->search);
+        $pattern = self::likePattern($this->search);
 
-        return $query->whereRaw("name LIKE ? ESCAPE '!'", ['%'.$needle.'%']);
+        return $query->where(function (Builder $group) use ($pattern, $itemType, $idColumn): void {
+            $group->whereRaw("name LIKE ? ESCAPE '".self::LIKE_ESCAPE."'", [$pattern]);
+
+            app(Annotations::class)->orWhereMatches($group, $itemType, $idColumn, $pattern);
+        });
+    }
+
+    /**
+     * A typed term as a LIKE pattern: the wildcards a user typed are literals,
+     * and the ones the search adds are its own.
+     */
+    public static function likePattern(string $search): string
+    {
+        $e = self::LIKE_ESCAPE;
+
+        $needle = str_replace([$e, '%', '_'], [$e.$e, $e.'%', $e.'_'], trim($search));
+
+        return '%'.$needle.'%';
+    }
+
+    private function folderTable(): string
+    {
+        return FolderModel::new()->getTable();
+    }
+
+    private function mediaTable(): string
+    {
+        return (new Media)->getTable();
     }
 
     /**

@@ -59,6 +59,11 @@ final class Abilities
      */
     public const DERIVED = [
         'share' => 'download',
+
+        // Writing a description or a tag changes what an item is called, not
+        // what it holds — the same kind of edit as a rename, and denied
+        // wherever renaming is.
+        'annotate' => 'rename',
     ];
 
     /** @var array<string, array<string, bool>> */

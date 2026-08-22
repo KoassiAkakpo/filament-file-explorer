@@ -1,5 +1,6 @@
 @props([
     'folder',
+    'tags' => [],
     'selectedFolders',
     'selectedFiles',
     'renamingType' => null,
@@ -83,6 +84,7 @@
                 class="fe-meta mt-0.5 text-[10px] leading-none text-zinc-400"
                 x-show="!(sel.hasFolder({{ $folder->id }}) || sel.inMarqueeFolder({{ $folder->id }}))"
             >{{ trans_choice('filament-file-explorer::file-explorer.items_count', $itemCount) }}</span>
+            <x-filament-file-explorer::file-explorer.tag-dots :tags="$tags" />
         @endif
     </div>
 </div>

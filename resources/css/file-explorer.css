@@ -891,6 +891,138 @@ body.fe-is-dragging * {
   background: rgba(24, 24, 27, 0.05);
 }
 
+/* Tags and descriptions -----------------------------------------------------
+   The palette is a closed list of seven names, resolved server-side, so a
+   colour that is not one of them draws the neutral dot rather than reaching the
+   page. Both are drawn in the inspector and, as bare dots, on the items. */
+.fe-tag__dot {
+  display: inline-block;
+  height: 0.5rem;
+  width: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: #a1a1aa;
+  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.12);
+}
+.fe-tag__dot--grey { background: #a1a1aa; }
+.fe-tag__dot--red { background: #ef4444; }
+.fe-tag__dot--orange { background: #f97316; }
+.fe-tag__dot--yellow { background: #eab308; }
+.fe-tag__dot--green { background: #22c55e; }
+.fe-tag__dot--blue { background: #3b82f6; }
+.fe-tag__dot--purple { background: #a855f7; }
+/* On an item: a cluster small enough not to compete with the name, capped at
+   four so a heavily tagged file does not widen its own row. */
+.fe-tag-dots {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  margin-top: 0.15rem;
+}
+.fe-tag-dots .fe-tag__dot {
+  height: 0.4rem;
+  width: 0.4rem;
+}
+.fe-annotate {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-top: 1px solid rgba(24, 24, 27, 0.08);
+  padding-top: 0.6rem;
+}
+.dark .fe-annotate {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+.fe-annotate__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+.fe-annotate__label:not(:first-child) {
+  margin-top: 0.4rem;
+}
+.fe-annotate__empty,
+.fe-annotate__read {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #71717a;
+}
+.dark .fe-annotate__empty,
+.dark .fe-annotate__read {
+  color: #a1a1aa;
+}
+.fe-annotate__read {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fe-annotate__input,
+.fe-annotate__text {
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+  font-size: 11px;
+}
+.fe-annotate__text {
+  resize: vertical;
+  line-height: 1.45;
+}
+.fe-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+/* The chip carries the colour as a tint rather than a fill: the name has to stay
+   readable in both themes, and seven saturated backgrounds would not. */
+.fe-tag {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.15rem;
+  border-radius: 9999px;
+  background: rgba(24, 24, 27, 0.06);
+  padding: 0.1rem 0.15rem 0.1rem 0.45rem;
+  font-size: 11px;
+  color: #3f3f46;
+}
+.dark .fe-tag {
+  background: rgba(255, 255, 255, 0.09);
+  color: #e4e4e7;
+}
+.fe-tag--red { background: rgba(239, 68, 68, 0.14); }
+.fe-tag--orange { background: rgba(249, 115, 22, 0.14); }
+.fe-tag--yellow { background: rgba(234, 179, 8, 0.16); }
+.fe-tag--green { background: rgba(34, 197, 94, 0.14); }
+.fe-tag--blue { background: rgba(59, 130, 246, 0.14); }
+.fe-tag--purple { background: rgba(168, 85, 247, 0.14); }
+.fe-tag__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fe-tag__name:hover {
+  text-decoration: underline;
+}
+.fe-tag__remove {
+  display: inline-flex;
+  height: 1rem;
+  width: 1rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  opacity: 0.5;
+}
+.fe-tag__remove:hover {
+  background: rgba(24, 24, 27, 0.12);
+  opacity: 1;
+}
+.dark .fe-tag__remove:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 .fe-share__row {
   margin-top: 0.75rem;
   display: flex;

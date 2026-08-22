@@ -91,11 +91,18 @@ Matched on the mime type rather than the extension, for the same reason the sort
 
 Not remembered across mounts, unlike the view mode and the sort. Those are how someone likes to look at a library; a filter is what they are looking for right now.
 
+### ~~Tags and descriptions~~ — done
+
+Tables of their own, and the "or `custom_properties`" half of that line answered itself: the search runs in SQL, and querying inside a JSON column is written differently on every driver — the same constraint that already decided the type sort and the kind filter. Folders have no `custom_properties` at all, so the free option meant two mechanisms for one feature.
+
+A tag is a row per scope rather than a string per item, because a shared row is what lets the filter offer a closed list and a colour mean one thing everywhere. And a tag nothing carries any more is deleted, which is what means there is no tag management screen: the vocabulary is exactly what is in use.
+
+Items are keyed by `'folder'` / `'file'` rather than by a morph class — the same trap the swappable folder model walked into, avoided this time by not storing a class name at all.
+
 ## After 1.0 — additive, and none of it blocking
 
 - **File versioning.** The `replace` conflict policy destroys what was there. Keeping the last N versions would follow the pattern the trash already proved: move aside rather than destroy.
 - **Chunked and direct-to-S3 uploads.** `upload.max_size_kb` defaults to 50 MB, but the real ceiling is the host's `post_max_size`. This is what unblocks video and large media.
-- **Tags and descriptions**, searchable — in `custom_properties` or a table of their own.
 - **Touch support.** The drag geometry and the marquee assume a mouse. A functional gap rather than a refinement as soon as a panel is opened on a tablet.
 - **A storage widget.** The quota already renders in the sidebar; exposing it as a per-scope dashboard widget is nearly free.
 - **PDF and video thumbnails, opt-in.** Deliberately absent today because they need Imagick or ffmpeg on the host and a failing generator costs more than the icon already drawn. Worth offering behind an explicit flag — never by default.

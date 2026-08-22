@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
+use Koassi\FilamentFileExplorer\Events\FileAnnotated;
 use Koassi\FilamentFileExplorer\Events\FileCopied;
 use Koassi\FilamentFileExplorer\Events\FileDeleted;
 use Koassi\FilamentFileExplorer\Events\FileMoved;
@@ -20,6 +21,7 @@ use Koassi\FilamentFileExplorer\Events\FileRestored;
 use Koassi\FilamentFileExplorer\Events\FileShared;
 use Koassi\FilamentFileExplorer\Events\FileTrashed;
 use Koassi\FilamentFileExplorer\Events\FileUploaded;
+use Koassi\FilamentFileExplorer\Events\FolderAnnotated;
 use Koassi\FilamentFileExplorer\Events\FolderCopied;
 use Koassi\FilamentFileExplorer\Events\FolderCreated;
 use Koassi\FilamentFileExplorer\Events\FolderDeleted;
@@ -32,6 +34,7 @@ use Koassi\FilamentFileExplorer\Models\FileShare;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\ActiveRoot;
+use Koassi\FilamentFileExplorer\Support\Annotations;
 use Koassi\FilamentFileExplorer\Support\FileKinds;
 use Koassi\FilamentFileExplorer\Support\FileNames;
 use Koassi\FilamentFileExplorer\Support\FolderListing;
@@ -125,6 +128,27 @@ class FileExplorer extends Component
     public ?array $infoItem = null;
 
     public bool $showInfoModal = false;
+
+    /**
+     * The annotation the inspector is editing, mirrored here so the textarea and
+     * the tag list survive the round trip that saves them.
+     *
+     * Seeded by showInfo() and cleared with the panel. Kept beside $infoItem
+     * rather than inside it because these two are the only bound inputs in the
+     * panel: everything else there is read-only text the server owns.
+     */
+    public string $description = '';
+
+    /** @var list<array{id: int, name: string, color: string|null}> */
+    public array $tags = [];
+
+    public string $tagInput = '';
+
+    /**
+     * The tag the listing is narrowed to, or null. Validated against the scope
+     * on every read, so an id from another scope narrows nothing.
+     */
+    public ?int $tagId = null;
 
     /**
      * Pending delete, summarised for the confirmation dialog. Built server-side
@@ -1448,6 +1472,7 @@ class FileExplorer extends Component
                     'updated' => '—',
                     'extra' => null,
                 ];
+                $this->loadAnnotation();
                 $this->showInfoModal = true;
 
                 return;
@@ -1473,6 +1498,7 @@ class FileExplorer extends Component
                 'extra' => trans_choice('filament-file-explorer::file-explorer.items_count', $items),
                 'delete_note' => $this->folderDeleteNote($folder),
             ];
+            $this->loadAnnotation();
             $this->showInfoModal = true;
 
             return;
@@ -1503,6 +1529,7 @@ class FileExplorer extends Component
                 'delete_note' => $deleteState['reason'],
                 'added_by' => app(Uploader::class)->label($media),
             ];
+            $this->loadAnnotation();
             $this->showInfoModal = true;
 
             return;
@@ -1529,6 +1556,7 @@ class FileExplorer extends Component
             'extra' => trans_choice('filament-file-explorer::file-explorer.items_count', $items),
             'delete_note' => $this->folderDeleteNote($folder),
         ];
+        $this->loadAnnotation();
         $this->showInfoModal = true;
     }
 
@@ -1566,6 +1594,319 @@ class FileExplorer extends Component
     {
         $this->showInfoModal = false;
         $this->infoItem = null;
+        $this->description = '';
+        $this->tags = [];
+        $this->tagInput = '';
+    }
+
+    /* ------------------------------------------------ tags and descriptions */
+
+    public function annotationsEnabled(): bool
+    {
+        return Annotations::enabled();
+    }
+
+    public function canAnnotate(): bool
+    {
+        return Annotations::enabled() && $this->ability('annotate');
+    }
+
+    /**
+     * The tag the listing is narrowed to, re-validated against the scope.
+     *
+     * Read rather than trusted, on every listing: $tagId is a public property, so
+     * it arrives from the browser, and a tag of another scope must narrow
+     * nothing rather than reach across. A tag that has since been dropped — its
+     * last item untagged in another session — clears itself the same way.
+     */
+    protected function activeTagId(): ?int
+    {
+        if ($this->tagId === null || ! Annotations::enabled()) {
+            return null;
+        }
+
+        $tag = app(Annotations::class)->tag($this->scopeKey, $this->tagId);
+
+        if ($tag === null) {
+            $this->tagId = null;
+
+            return null;
+        }
+
+        return $tag['id'];
+    }
+
+    /**
+     * @return array{id: int, name: string, color: string|null}|null
+     */
+    public function activeTag(): ?array
+    {
+        return app(Annotations::class)->tag($this->scopeKey, $this->activeTagId());
+    }
+
+    /**
+     * The tags of everything the listing is about to draw, in two queries.
+     *
+     * The view asks per row; this is what stops that being a query per row. Both
+     * kinds are prefetched together because a window holds folders and files and
+     * the render walks them in one pass.
+     *
+     * @return array{folder: array<int, list<array{id: int, name: string, color: string|null}>>, file: array<int, list<array{id: int, name: string, color: string|null}>>}
+     */
+    public function tagIndex(): array
+    {
+        if (! Annotations::enabled()) {
+            return ['folder' => [], 'file' => []];
+        }
+
+        $listing = $this->listing();
+        $annotations = app(Annotations::class);
+
+        return [
+            'folder' => $annotations->tagsFor(
+                Annotations::FOLDER,
+                $listing['folders']->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+            ),
+            'file' => $annotations->tagsFor(
+                Annotations::FILE,
+                $listing['files']->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+            ),
+        ];
+    }
+
+    /**
+     * @return list<array{id: int, name: string, color: string|null, count: int}>
+     */
+    public function availableTags(): array
+    {
+        if (! Annotations::enabled() || ! $this->ability('browse')) {
+            return [];
+        }
+
+        return app(Annotations::class)->available($this->scopeKey);
+    }
+
+    /**
+     * Narrows the listing to one tag, or clears the filter when handed the
+     * active one again — a toggle, like the kind filter, so there is always a
+     * way back without hunting for a separate "show all".
+     */
+    public function setTagFilter(?int $tagId): void
+    {
+        abort_unless($this->ability('browse'), 403);
+
+        // Resolved before it is stored, so an id from another scope never
+        // becomes the active filter even for one render.
+        $tag = app(Annotations::class)->tag($this->scopeKey, $tagId);
+
+        $this->tagId = ($tag === null || $this->tagId === $tag['id']) ? null : $tag['id'];
+
+        $this->resetListing();
+    }
+
+    /**
+     * The item the inspector is annotating, or null when there is nothing to
+     * annotate: a multi-selection has no single description to write.
+     *
+     * @return array{type: string, id: int}|null
+     */
+    protected function annotationTarget(): ?array
+    {
+        $type = $this->infoItem['type'] ?? null;
+        $id = $this->infoItem['id'] ?? null;
+
+        if (! Annotations::isItemType($type) || ! is_int($id) || $id <= 0) {
+            return null;
+        }
+
+        return ['type' => $type, 'id' => $id];
+    }
+
+    /**
+     * Reads the annotation of whatever the panel is showing into the inputs.
+     *
+     * Called from showInfo(), so the inspector following the selection carries
+     * the description and the tags with it rather than leaving one item's note
+     * in the textarea of the next.
+     */
+    protected function loadAnnotation(): void
+    {
+        $target = $this->annotationTarget();
+
+        if ($target === null || ! Annotations::enabled()) {
+            $this->description = '';
+            $this->tags = [];
+            $this->tagInput = '';
+
+            return;
+        }
+
+        $annotations = app(Annotations::class);
+
+        $this->description = $annotations->description($target['type'], $target['id']);
+        $this->tags = $annotations->tags($target['type'], $target['id']);
+        $this->tagInput = '';
+    }
+
+    /**
+     * Livewire's own hook, so the property is already set when the save runs.
+     *
+     * A `wire:blur` action beside `wire:model.blur` would race it: both travel
+     * on the same event and nothing orders them, so the save could read the
+     * value from before the edit.
+     */
+    public function updatedDescription(): void
+    {
+        $this->saveDescription();
+    }
+
+    public function saveDescription(): void
+    {
+        abort_unless($this->canAnnotate(), 403);
+
+        $target = $this->annotationTarget();
+
+        if ($target === null) {
+            return;
+        }
+
+        $item = $this->resolveAnnotatable($target['type'], $target['id']);
+
+        $previous = app(Annotations::class)->description($target['type'], $target['id']);
+
+        $this->description = app(Annotations::class)
+            ->setDescription($target['type'], $target['id'], $this->description);
+
+        if ($this->description === $previous) {
+            return;
+        }
+
+        $this->announceAnnotation($target['type'], $item, $previous, $this->tagNames());
+
+        // A description is searchable, so writing one can change what a search
+        // is showing — and it is a mutation the other explorer on the page has
+        // no other way to hear about.
+        $this->afterMutation();
+    }
+
+    public function addTag(): void
+    {
+        abort_unless($this->canAnnotate(), 403);
+
+        $target = $this->annotationTarget();
+        $name = trim($this->tagInput);
+
+        if ($target === null || $name === '') {
+            $this->tagInput = '';
+
+            return;
+        }
+
+        $item = $this->resolveAnnotatable($target['type'], $target['id']);
+        $before = $this->tagNames();
+
+        $this->tags = app(Annotations::class)
+            ->attach($this->scopeKey, $target['type'], $target['id'], $name);
+
+        $this->tagInput = '';
+
+        if ($this->tagNames() === $before) {
+            return;
+        }
+
+        $this->announceAnnotation($target['type'], $item, $this->description, $before);
+        $this->afterMutation();
+    }
+
+    public function removeTag(int $tagId): void
+    {
+        abort_unless($this->canAnnotate(), 403);
+
+        $target = $this->annotationTarget();
+
+        if ($target === null) {
+            return;
+        }
+
+        $item = $this->resolveAnnotatable($target['type'], $target['id']);
+        $before = $this->tagNames();
+
+        $this->tags = app(Annotations::class)->detach($target['type'], $target['id'], $tagId);
+
+        if ($this->tagNames() === $before) {
+            return;
+        }
+
+        // The tag the listing was filtered by may have just lost its last item,
+        // in which case it no longer exists — activeTagId() clears it on read.
+        $this->announceAnnotation($target['type'], $item, $this->description, $before);
+        $this->afterMutation();
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function tagNames(): array
+    {
+        return array_values(array_map(fn (array $tag): string => $tag['name'], $this->tags));
+    }
+
+    /**
+     * The row an annotation belongs to, with both guards run.
+     *
+     * Annotating goes through containment like every other action: the ids come
+     * from the panel, and a description written on a folder outside the scope
+     * would be a write past the only thing keeping scopes apart.
+     */
+    protected function resolveAnnotatable(string $type, int $id): Folder|Media
+    {
+        if ($type === Annotations::FOLDER) {
+            $folder = FolderModel::query()->findOrFail($id);
+            $this->assertUnderRoot($folder);
+
+            return $folder;
+        }
+
+        $media = Media::query()->findOrFail($id);
+        $this->assertMediaUnderRoot($media);
+
+        return $media;
+    }
+
+    /**
+     * @param  list<string>  $previousTags
+     */
+    protected function announceAnnotation(string $type, Folder|Media $item, string $previousDescription, array $previousTags): void
+    {
+        $actor = auth()->user();
+
+        if ($type === Annotations::FOLDER && $item instanceof Folder) {
+            event(new FolderAnnotated(
+                $this->scopeKey,
+                $this->rootFolderId,
+                $actor,
+                $item,
+                $this->description,
+                $this->tagNames(),
+                $previousDescription,
+                $previousTags,
+            ));
+
+            return;
+        }
+
+        if ($item instanceof Media) {
+            event(new FileAnnotated(
+                $this->scopeKey,
+                $this->rootFolderId,
+                $actor,
+                $item,
+                $this->description,
+                $this->tagNames(),
+                $previousDescription,
+                $previousTags,
+            ));
+        }
     }
 
     public function mediaOpenUrl(int $mediaId): string
@@ -1822,6 +2163,7 @@ class FileExplorer extends Component
             $this->sortBy,
             $this->sortDir,
             $this->kind,
+            $this->activeTagId(),
         ))->window($this->perPage > 0 ? $this->perPage : $this->pageSize());
     }
 
@@ -1869,7 +2211,7 @@ class FileExplorer extends Component
                 // The filter is a lens on the whole view, so the panes behind
                 // the last one are narrowed too — a pane showing files the
                 // filter excludes would contradict the one beside it.
-                : (new FolderListing($this->rootFolderId, (int) $folder->id, '', $this->sortBy, $this->sortDir, $this->kind))->window($limit);
+                : (new FolderListing($this->rootFolderId, (int) $folder->id, '', $this->sortBy, $this->sortDir, $this->kind, $this->activeTagId()))->window($limit);
 
             $panes[] = [
                 'folder' => $folder,
@@ -1990,6 +2332,7 @@ class FileExplorer extends Component
 
         app(FolderTree::class)->flush();
         app(Quota::class)->flush();
+        app(Annotations::class)->flush();
     }
 
     /**

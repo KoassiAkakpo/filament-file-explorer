@@ -132,6 +132,26 @@ Three decisions worth keeping:
 
 Two ways a conversion can take an upload down with it, both handled: Media Library picks its image generator from the **extension**, so a file merely named `.png` is skipped on its sniffed mime type; and an image GD cannot decode (a truncated upload sniffs as `image/png` all the same) throws `CouldNotLoadImage` *after* the row and the original are written, so it is caught and reported rather than losing an upload that in fact succeeded. Non-image thumbnails (PDF, video) are deliberately not attempted: they need Imagick or ffmpeg on the host, and a failing generator costs more than the icon the explorer already draws.
 
+## Tags and descriptions
+
+`annotations.enabled` (on by default). [Support/Annotations.php](src/Support/Annotations.php) is the only reader and writer, bound `scoped` because it memoises the tags of the rows on screen.
+
+Three tables, not `custom_properties`: **the search runs in SQL**, and querying inside a JSON column is written differently on every driver — the same portability constraint that made the type sort and the kind filter match on `mime_type`. Folders have no `custom_properties` either, so that route meant two mechanisms for one feature.
+
+Decisions that carry weight:
+
+- **Items are discriminated by `'folder'` / `'file'`, never by a morph class.** The folder model is swappable and media rows belong to Media Library's own model, so a class name stored in `item_type` would either break on a swap or need the same `getMorphClass()` care media rows need. Those two words are already the package's vocabulary, from `data-fe-type` down to the clipboard.
+- **A tag is a row, per scope.** Free-text strings per item give three spellings of "Urgent" in a week; a shared row is what lets the filter offer a closed list and a colour mean the same thing everywhere. Uniqueness is decided on the **slug**, so case is not a second tag.
+- **A tag nothing carries any more is deleted** (`pruneTag()`). That is what means there is no tag management screen to build: the vocabulary is exactly what is in use, and the filter menu can never offer a word matching nothing. It also means the active filter can point at a tag that has ceased to exist — `activeTagId()` re-validates on every listing and clears it, which is also what stops a tag id from another scope narrowing anything.
+- **Colours are palette names, never hex.** `Annotations::COLORS` is the closed list and `colour()` the only reader; an unrecognised value becomes null and draws the neutral dot rather than reaching the page.
+- **The search escape rule has one owner.** `FolderListing::LIKE_ESCAPE` and `FolderListing::likePattern()` are public for exactly one caller, `Annotations::orWhereMatches()`. Two copies of it would drift, and the annotation search would quietly become the one place `%` still meant "anything".
+- **Cleanup is a model listener, not a call at each delete site.** `FilamentFileExplorerServiceProvider::forgetAnnotationsOfDeletedItems()` listens to `Media::deleted` and `forceDeleted` on the *configured* folder model — Eloquent fires model events under the class of the instance, so a listener on the package's `Folder` would never hear from a host app's subclass. `forceDeleted` and not `deleted`, because a soft-deleted folder is in the trash and has to come back annotated. Both listeners check the row is **ours** first, and that is not an optimisation: an annotation is keyed by `(kind, id)`, so a media row of another model with a colliding id would otherwise take one of our files' descriptions with it.
+- **The description saves through `updatedDescription()`**, Livewire's own hook, not a `wire:blur` action beside `wire:model.blur`. Both travel on the same event and nothing orders them, so an action could read the value from before the edit.
+
+Applied in `FolderListing` before the window and before the counts, like the kind filter, so `shown`/`total` describe the filtered set. Unlike the kind filter it narrows **folders too** — a folder can be tagged, and hiding folders would hide exactly what the user tagged.
+
+`tagIndex()` prefetches both kinds in two queries because the rendered rows ask per item; a window is a hundred rows.
+
 ## Security model
 
 Two independent guards, both required — never add an entry point that skips either:

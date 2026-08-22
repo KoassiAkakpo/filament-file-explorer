@@ -278,6 +278,50 @@ Either way the path is computed, never stored, so the change is retroactive: fil
 
 Keeping the files private needs no more than a disk that is not `public` — `MEDIA_DISK`, or `media-library.disk_name`. Nothing in the explorer calls `getUrl()`: downloads, previews, thumbnails and zips all go out through the media route, behind the ability and containment checks, so a private disk costs no functionality. Keep the driver `local` rather than remote and the route still answers with a `BinaryFileResponse`, which is what gives video seeking and resumable downloads.
 
+## Tags and descriptions
+
+Folders and files can carry a **description** and any number of **tags**, both written in the Get Info inspector — the panel that already follows the selection, and so the only place on screen that knows which single item you mean.
+
+Tags belong to a scope. A tag nothing carries any more is deleted, which is why there is no tag management screen: the list of tags *is* the list in use, and the filter menu can never offer a word that matches nothing.
+
+Both are **searchable**. The search box matches names, descriptions and tag names in one query, so a note you wrote is a note you can find again.
+
+Tags are also a filter, beside the kind filter in the toolbar. It narrows folders as well as files — a folder can be tagged, and hiding folders would hide exactly what you tagged. Across the listing a tag shows as a coloured dot, from a closed palette of seven; the colour is stored as a name, so an unknown one draws a neutral dot rather than reaching the page.
+
+```php
+// config/filament-file-explorer.php
+'annotations' => [
+    'enabled' => true,
+
+    'descriptions_table' => 'file_explorer_descriptions',
+    'tags_table' => 'file_explorer_tags',
+    'tag_items_table' => 'file_explorer_tag_items',
+],
+```
+
+Gated on the `annotate` ability, which follows `rename` for any authorizer that does not answer it: both change what an item is called rather than what it holds.
+
+Read or write them from your own code through `Support\Annotations`:
+
+```php
+use Koassi\FilamentFileExplorer\Support\Annotations;
+
+$annotations = app(Annotations::class);
+
+$annotations->setDescription(Annotations::FILE, $media->id, 'The signed lease');
+$annotations->attach('library', Annotations::FILE, $media->id, 'Urgent', 'red');
+
+$annotations->description(Annotations::FOLDER, $folder->id);
+$annotations->tags(Annotations::FOLDER, $folder->id);
+$annotations->available('library');   // the scope's whole vocabulary, with counts
+```
+
+`'folder'` and `'file'` rather than model classes, deliberately: the folder model is swappable and media rows belong to Media Library's own model, so a class name stored here would either break on a swap or need the same care `getMorphClass()` needs.
+
+### Why not `custom_properties`
+
+Media Library hands you a JSON column for free, and it was the obvious place — but the search has to run in SQL, and querying inside a JSON column is written differently on sqlite, MySQL and Postgres. Everything else in the listing is filtered and sorted in the database precisely so a folder of thousands of files stays usable; an annotation the search could not reach would be a note nobody finds again. Folders have no `custom_properties` at all, so that route also meant two mechanisms for one feature.
+
 ## Quotas
 
 `quota.bytes` (null by default) caps what a scope may hold. The cap is per root folder, so with the per-user or per-tenant resolver each user or tenant gets an allowance of that size, and the sidebar shows the usage — amber past 85%, red when full.
@@ -462,6 +506,8 @@ Event::listen(FileUploaded::class, ScanUpload::class);
 | `FolderRestored` | `folder` |
 | `FileDeleted` | `mediaId`, `name`, `fileName`, `folderId`, `size`, `purgedFromTrash` |
 | `FolderDeleted` | `folderId`, `name`, `parentId`, `purgedFromTrash` |
+| `FileAnnotated` | `media`, `description`, `tags`, `previousDescription`, `previousTags` |
+| `FolderAnnotated` | `folder`, `description`, `tags`, `previousDescription`, `previousTags` |
 | `FileShared` | `media`, `share` |
 | `ShareRevoked` | `share` |
 

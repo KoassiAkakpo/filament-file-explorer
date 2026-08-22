@@ -22,16 +22,21 @@ use Koassi\FilamentFileExplorer\Resolvers\GlobalRootResolver;
 use Koassi\FilamentFileExplorer\Resolvers\PerTenantRootResolver;
 use Koassi\FilamentFileExplorer\Resolvers\PerUserRootResolver;
 use Koassi\FilamentFileExplorer\Support\Abilities;
+use Koassi\FilamentFileExplorer\Support\Annotations;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
+use Koassi\FilamentFileExplorer\Support\FolderModel;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\MediaScope;
 use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\Sharing;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
+use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\Uploader;
+use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class FilamentFileExplorerServiceProvider extends PackageServiceProvider
 {
@@ -75,6 +80,10 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         // Scoped too: it memoises what a scope may do, and that answer belongs
         // to whoever was authenticated for this request and no one else.
         $this->app->scoped(Abilities::class);
+
+        // Scoped as well: it memoises the tags of the rows on screen, which the
+        // next request will be drawing from a different folder.
+        $this->app->scoped(Annotations::class);
 
         // Stateless, so a singleton is enough: it reads and writes rows and
         // memoises nothing.
@@ -125,6 +134,43 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         }
 
         $this->registerRoutes();
+        $this->forgetAnnotationsOfDeletedItems();
+    }
+
+    /**
+     * Descriptions and tags follow their item into the grave.
+     *
+     * Registered here rather than at each delete site because there are several
+     * — the explorer's delete, the trash purge, the files table, the purge
+     * command — and one that forgot would leave a tag on the filter menu
+     * pointing at nothing.
+     *
+     * Both listeners check the row is *ours* before deleting anything, and that
+     * is not an optimisation: an annotation is keyed by (kind, id), so a media
+     * row of some other model whose id happens to match one of our files would
+     * otherwise take that file's description with it.
+     */
+    protected function forgetAnnotationsOfDeletedItems(): void
+    {
+        Media::deleted(function (Media $media): void {
+            $ours = $media->model_type === FolderModel::morphClass()
+                && in_array($media->collection_name, [UploadRules::collection(), Trash::collection()], true);
+
+            if ($ours) {
+                app(Annotations::class)->forgetItem(Annotations::FILE, (int) $media->id);
+            }
+        });
+
+        // forceDeleted, not deleted: a folder the trash took is soft-deleted and
+        // coming back, and it must come back with its tags. Registered on the
+        // configured model because Eloquent fires model events under the class
+        // of the instance, so a listener on the package's Folder would never
+        // hear from a host app's subclass.
+        $folderModel = FolderModel::class();
+
+        $folderModel::forceDeleted(function ($folder): void {
+            app(Annotations::class)->forgetItem(Annotations::FOLDER, (int) $folder->id);
+        });
     }
 
     /**

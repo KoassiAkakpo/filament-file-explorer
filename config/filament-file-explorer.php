@@ -249,6 +249,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tags and descriptions
+    |--------------------------------------------------------------------------
+    |
+    | Folders and files can carry a description and any number of tags, both
+    | shown and edited in the Get Info inspector, both matched by the search
+    | box, and tags additionally offered as a filter beside the kind filter.
+    |
+    | Tags belong to a scope, like every other piece of state here: a tenant's
+    | vocabulary is not another tenant's. A tag nothing carries any more is
+    | dropped, so the filter menu never offers a word that matches nothing and
+    | there is no tag management screen to go and tidy.
+    |
+    | Stored in tables of their own rather than in Media Library's
+    | custom_properties, because the search runs in SQL — querying inside a JSON
+    | column is written differently on sqlite, MySQL and Postgres, and folders
+    | have no custom_properties at all.
+    |
+    | Gated on the `annotate` ability, which follows `rename` for any authorizer
+    | that does not answer it: both change what an item is called, not what it
+    | contains.
+    |
+    */
+    'annotations' => [
+        'enabled' => true,
+
+        'descriptions_table' => 'file_explorer_descriptions',
+        'tags_table' => 'file_explorer_tags',
+        'tag_items_table' => 'file_explorer_tag_items',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Trash
     |--------------------------------------------------------------------------
     |

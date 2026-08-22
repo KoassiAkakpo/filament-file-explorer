@@ -8,6 +8,8 @@
             $sortedMedia = $listing['files'];
             $abilities = $this->abilities();
             $panes = $this->columnPanes();
+            // Both kinds prefetched in two queries: the rows below ask per item.
+            $tagIndex = $this->tagIndex();
             $locale = str_replace('_', '-', app()->getLocale());
             $i18n = trans('filament-file-explorer::file-explorer');
         @endphp
@@ -353,6 +355,42 @@
                             </div>
                         </div>
 
+                        @if ($this->annotationsEnabled() && ($availableTags = $this->availableTags()) !== [])
+                            {{-- Beside the kind filter and built the same way,
+                                 because they are the same gesture: narrow the
+                                 folder, and be told so by the bar below. --}}
+                            <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false">
+                                <button
+                                    type="button"
+                                    class="fe-tool-btn {{ $tagId ? 'fe-tool-btn--active' : '' }}"
+                                    title="{{ __('filament-file-explorer::file-explorer.tags.title') }}"
+                                    @click="open = !open"
+                                >
+                                    @svg('heroicon-o-tag', 'h-3.5 w-3.5')
+                                </button>
+                                <div x-show="open" x-cloak
+                                     x-transition:enter="transition ease-out duration-100"
+                                     x-transition:enter-start="opacity-0"
+                                     x-transition:enter-end="opacity-100"
+                                     x-transition:leave="transition ease-in duration-75"
+                                     x-transition:leave-start="opacity-100"
+                                     x-transition:leave-end="opacity-0"
+                                     class="fe-menu absolute end-0 top-full z-30 mt-1 max-h-72 w-52 overflow-y-auto py-1"
+                                >
+                                    <button type="button" class="fe-view-item {{ $tagId === null ? 'fe-view-item--active' : '' }}" wire:click="setTagFilter(null)" @click="open=false">
+                                        @svg('heroicon-o-squares-2x2', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.tags.all') }}
+                                    </button>
+                                    @foreach ($availableTags as $availableTag)
+                                        <button type="button" class="fe-view-item {{ $tagId === $availableTag['id'] ? 'fe-view-item--active' : '' }}" wire:click="setTagFilter({{ $availableTag['id'] }})" @click="open=false">
+                                            <span class="fe-tag__dot {{ $availableTag['color'] ? 'fe-tag__dot--'.$availableTag['color'] : '' }}"></span>
+                                            <span class="truncate">{{ $availableTag['name'] }}</span>
+                                            <span class="ms-auto shrink-0 text-[10px] text-zinc-400">{{ $availableTag['count'] }}</span>
+                                        </button>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+
                         <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false">
                             <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.view_options') }}" @click="open = !open">
                                 @if ($viewMode === 'columns')
@@ -446,6 +484,15 @@
                             <span class="truncate">{{ __('filament-file-explorer::file-explorer.kind.active', ['kind' => __('filament-file-explorer::file-explorer.kind.'.$kind)]) }}</span>
                             <button type="button" class="ms-auto shrink-0 text-xs underline hover:no-underline" wire:click="setKind(null)">
                                 {{ __('filament-file-explorer::file-explorer.kind.clear') }}
+                            </button>
+                        </div>
+                    @endif
+                    @if ($activeTag = $this->activeTag())
+                        <div class="flex items-center gap-2 border-b border-zinc-200 bg-zinc-100/80 px-4 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 sm:px-5">
+                            <span class="fe-tag__dot {{ $activeTag['color'] ? 'fe-tag__dot--'.$activeTag['color'] : '' }}"></span>
+                            <span class="truncate">{{ __('filament-file-explorer::file-explorer.tags.active', ['tag' => $activeTag['name']]) }}</span>
+                            <button type="button" class="ms-auto shrink-0 text-xs underline hover:no-underline" wire:click="setTagFilter(null)">
+                                {{ __('filament-file-explorer::file-explorer.tags.clear') }}
                             </button>
                         </div>
                     @endif
@@ -705,6 +752,7 @@
                                             <input type="text" data-fe-rename-input wire:model="renameValue" wire:keydown.enter.prevent="saveRename" wire:keydown.escape.prevent="cancelRename" wire:blur="saveRename" class="fe-input fe-rename-input w-full px-1.5 py-0.5 text-[13px]" @click.stop @mousedown.stop>
                                         @else
                                             <span class="truncate font-medium text-zinc-800 dark:text-zinc-100">{{ $folder->name }}</span>
+                                            <x-filament-file-explorer::file-explorer.tag-dots :tags="$tagIndex['folder'][$folder->id] ?? []" />
                                         @endif
                                     </div>
                                     <span class="text-xs text-zinc-500">{{ __('filament-file-explorer::file-explorer.folder_kind') }}</span>
@@ -771,6 +819,7 @@
                                             <input type="text" data-fe-rename-input wire:model="renameValue" wire:keydown.enter.prevent="saveRename" wire:keydown.escape.prevent="cancelRename" wire:blur="saveRename" class="fe-input fe-rename-input w-full px-1.5 py-0.5 text-[13px]" @click.stop @mousedown.stop>
                                         @else
                                             <span class="truncate text-zinc-800 dark:text-zinc-100">{{ $fileLabel }}</span>
+                                            <x-filament-file-explorer::file-explorer.tag-dots :tags="$tagIndex['file'][$media->id] ?? []" />
                                         @endif
                                     </div>
                                     <span class="truncate text-xs text-zinc-500">{{ strtoupper(pathinfo($media->file_name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
@@ -784,6 +833,7 @@
                             @foreach($sortedFolders as $folder)
                                 <x-filament-file-explorer::file-explorer.directory
                                     :folder="$folder"
+                                    :tags="$tagIndex['folder'][$folder->id] ?? []"
                                     :selectedFolders="$selectedFolders"
                                     :selectedFiles="$selectedFiles"
                                     :renamingType="$renamingType"
@@ -795,6 +845,7 @@
                             @foreach($sortedMedia as $media)
                                 <x-filament-file-explorer::file-explorer.media
                                     :media="$media"
+                                    :tags="$tagIndex['file'][$media->id] ?? []"
                                     :selectedFiles="$selectedFiles"
                                     :selectedFolders="$selectedFolders"
                                     :openUrl="$this->mediaOpenUrl($media->id)"
@@ -909,6 +960,94 @@
                                         <div class="fe-inspector-row"><dt>{{ __('filament-file-explorer::file-explorer.inspector.details') }}</dt><dd class="break-all text-end">{{ $infoItem['extra'] }}</dd></div>
                                     @endif
                                 </dl>
+
+                                @if ($this->annotationsEnabled() && in_array($infoItem['type'] ?? '', ['folder', 'file'], true))
+                                    @php $tagListId = 'fe-tags-'.$this->getId(); @endphp
+                                    {{-- The inspector is where an annotation is
+                                         read and written, because it is already
+                                         the panel that follows the selection:
+                                         nothing else on the page knows which
+                                         single item the user means. --}}
+                                    <div class="fe-annotate">
+                                        <div class="fe-annotate__label">{{ __('filament-file-explorer::file-explorer.tags.title') }}</div>
+
+                                        @if ($tags !== [])
+                                            <div class="fe-tags">
+                                                @foreach ($tags as $tag)
+                                                    <span class="fe-tag {{ $tag['color'] ? 'fe-tag--'.$tag['color'] : '' }}">
+                                                        <button
+                                                            type="button"
+                                                            class="fe-tag__name"
+                                                            title="{{ __('filament-file-explorer::file-explorer.tags.filter') }}"
+                                                            wire:click="setTagFilter({{ $tag['id'] }})"
+                                                        >{{ $tag['name'] }}</button>
+                                                        @if ($this->canAnnotate())
+                                                            <button
+                                                                type="button"
+                                                                class="fe-tag__remove"
+                                                                aria-label="{{ __('filament-file-explorer::file-explorer.tags.remove', ['name' => $tag['name']]) }}"
+                                                                wire:click="removeTag({{ $tag['id'] }})"
+                                                            >@svg('heroicon-m-x-mark', 'h-3 w-3')</button>
+                                                        @endif
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        @elseif (! $this->canAnnotate())
+                                            <p class="fe-annotate__empty">{{ __('filament-file-explorer::file-explorer.tags.none') }}</p>
+                                        @endif
+
+                                        @if ($this->canAnnotate())
+                                            {{-- Deferred, not live: the property
+                                                 travels with the addTag request
+                                                 the Enter key fires, so the
+                                                 input costs no round trip per
+                                                 keystroke. --}}
+                                            <input
+                                                type="text"
+                                                class="fe-input fe-annotate__input"
+                                                list="{{ $tagListId }}"
+                                                wire:model="tagInput"
+                                                wire:keydown.enter.prevent="addTag"
+                                                placeholder="{{ __('filament-file-explorer::file-explorer.tags.placeholder') }}"
+                                                aria-label="{{ __('filament-file-explorer::file-explorer.tags.add') }}"
+                                                maxlength="{{ \Koassi\FilamentFileExplorer\Support\Annotations::MAX_TAG_NAME }}"
+                                            >
+                                            {{-- The scope's existing words, so a
+                                                 second spelling of one is a
+                                                 choice rather than an accident.
+                                                 The id is built from the
+                                                 component id: a page can hold
+                                                 two explorers. --}}
+                                            <datalist id="{{ $tagListId }}">
+                                                @foreach ($this->availableTags() as $knownTag)
+                                                    <option value="{{ $knownTag['name'] }}"></option>
+                                                @endforeach
+                                            </datalist>
+                                        @endif
+
+                                        <div class="fe-annotate__label">{{ __('filament-file-explorer::file-explorer.description.label') }}</div>
+
+                                        @if ($this->canAnnotate())
+                                            {{-- .blur rather than .live: a
+                                                 description is typed in
+                                                 sentences, and updatedDescription()
+                                                 is what saves it — an action on
+                                                 the same event would race the
+                                                 property update. --}}
+                                            <textarea
+                                                class="fe-input fe-annotate__text"
+                                                rows="3"
+                                                wire:model.blur="description"
+                                                placeholder="{{ __('filament-file-explorer::file-explorer.description.placeholder') }}"
+                                                maxlength="{{ \Koassi\FilamentFileExplorer\Support\Annotations::MAX_DESCRIPTION }}"
+                                            ></textarea>
+                                        @elseif ($description !== '')
+                                            <p class="fe-annotate__read">{{ $description }}</p>
+                                        @else
+                                            <p class="fe-annotate__empty">{{ __('filament-file-explorer::file-explorer.description.empty') }}</p>
+                                        @endif
+                                    </div>
+                                @endif
                             </div>
                         </aside>
                     @endif

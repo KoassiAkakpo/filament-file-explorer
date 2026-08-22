@@ -101,6 +101,24 @@ return [
         'sort_by' => 'Trier par',
     ],
 
+    'tags' => [
+        'title' => 'Étiquettes',
+        'all' => 'Toutes les étiquettes',
+        'none' => 'Aucune étiquette',
+        'add' => 'Ajouter une étiquette',
+        'placeholder' => 'Nouvelle étiquette',
+        'remove' => 'Retirer :name',
+        'active' => 'Étiqueté :tag',
+        'clear' => 'Tout afficher',
+        'filter' => 'Filtrer sur cette étiquette',
+    ],
+
+    'description' => [
+        'label' => 'Description',
+        'placeholder' => 'Ajouter une description',
+        'empty' => 'Aucune description',
+    ],
+
     'kind' => [
         'title' => 'Type',
         'all' => 'Tous les types',

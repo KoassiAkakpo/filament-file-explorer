@@ -101,6 +101,24 @@ return [
         'sort_by' => 'Sort By',
     ],
 
+    'tags' => [
+        'title' => 'Tags',
+        'all' => 'All tags',
+        'none' => 'No tags yet',
+        'add' => 'Add a tag',
+        'placeholder' => 'New tag',
+        'remove' => 'Remove :name',
+        'active' => 'Tagged :tag',
+        'clear' => 'Show all',
+        'filter' => 'Filter by this tag',
+    ],
+
+    'description' => [
+        'label' => 'Description',
+        'placeholder' => 'Add a description',
+        'empty' => 'No description',
+    ],
+
     'kind' => [
         'title' => 'Kind',
         'all' => 'All kinds',

@@ -1,6 +1,7 @@
 @props([
     'thumbUrl' => null,
     'media',
+    'tags' => [],
     'selectedFiles',
     'selectedFolders' => [],
     'openUrl' => null,
@@ -90,6 +91,7 @@
                 :class="{ 'fe-label--selected': sel.hasFile({{ $media->id }}) || sel.inMarqueeFile({{ $media->id }}) }"
                 title="{{ $label }}"
             >{{ $label }}</span>
+            <x-filament-file-explorer::file-explorer.tag-dots :tags="$tags" />
         @endif
     </div>
 </div>
