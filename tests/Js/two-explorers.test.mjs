@@ -146,3 +146,36 @@ test('the selection reaches its component through a closure, not a property', ()
     assert.equal(page.sel.hasWire(), true);
     assert.deepEqual(wireCalls(page.calls), ['setSelection([], [12])']);
 });
+
+test('the selection survives the component being initialised again', () => {
+    const page = loadExplorer({
+        items: [
+            { type: 'file', id: 1 },
+            { type: 'file', id: 2 },
+            { type: 'file', id: 3 },
+            { type: 'file', id: 4 },
+        ],
+    });
+
+    page.sel.toggle('file', 2, false);
+    page.component.moveSelection('ArrowRight', false);
+    page.sel.flushSync();
+
+    assert.deepEqual(selected(page.sel), ['file:3']);
+    assert.equal(at(page.sel.cursor), 'file:3');
+
+    // What a Livewire round trip does: the root x-data attribute is rewritten
+    // and Alpine runs the initialiser again. A selection built inline there died
+    // with it, so the cursor came back null.
+    const again = page.reinit();
+
+    assert.equal(again.sel, page.sel);
+    assert.equal(at(again.sel.cursor), 'file:3');
+    assert.deepEqual(selected(again.sel), ['file:3']);
+
+    // The bug as reported: the next arrow jumped back to the first item instead
+    // of carrying on, because a null cursor reads as "nothing selected".
+    again.component.moveSelection('ArrowRight', false);
+
+    assert.deepEqual(selected(again.sel), ['file:4']);
+});

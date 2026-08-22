@@ -74,6 +74,11 @@ The `FileExplorerPicker` puts an explorer in a modal, so a page can hold two of 
 
 - **The selection is the component's, not the page's.** It used to be one Alpine `feSel` store with one `feWireRef`, so two explorers shared a selection: clicking in the modal moved the page's highlight, and `setSelection` reported to whichever component initialised last. `createFeSelection()` is now a factory and the component holds one as `sel` in its own `x-data`; the views reach it as `sel` because children inherit the Alpine scope. There is no `feSel` store to reach for, and a test asserts it does not come back.
 
+  Two things about that selection are load-bearing, and both were learned the hard way:
+
+  - **It is looked up from `feSelections`, keyed by component id — never built inline in the `x-data`.** The root `x-data` embeds server values, so a Livewire round trip rewrites that attribute and Alpine runs the initialiser again. A selection constructed there dies on every keystroke: the cursor comes back null, `moveSelection()` reads that as "nothing selected", and the arrow jumps to the first item instead of the next. The global store this replaced survived by accident, being registered once and guarded. For the same reason the root `x-data` must **not** carry `selectedFolders` / `selectedFiles` — `init()` seeds from `$wire` instead, which is what stops a selection change from rewriting the attribute at all.
+  - **The `$wire` lives in the factory's closure, not as a property.** The selection is reactive `x-data`, and Alpine hands nested objects out wrapped; the Livewire proxy does not survive being wrapped. As a property it stopped `setSelection` reaching the server, and the `$wire.selectedFolders` watch then read the empty server state as a deliberate clear and wiped the selection.
+
 Still shared, and correctly so: the `feDrag` store and its `feWireRef`. A user drags in one explorer at a time, `pointerDown` is handed the selection it started in, and the store holds it for the length of the drag.
 
 ## Selection and keyboard

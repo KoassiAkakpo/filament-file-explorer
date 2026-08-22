@@ -26,6 +26,21 @@ export function loadExplorer({ items = [], columns = 4 } = {}) {
          * wrong.
          */
         spawn: (options = {}) => createExplorer(realm, { columns, ...options }),
+        /**
+         * The same explorer, initialised again.
+         *
+         * This is what a Livewire round trip does: the root x-data attribute is
+         * rewritten and Alpine runs the initialiser afresh. The selection has to
+         * survive it, or every keystroke starts from nothing.
+         */
+        reinit: (options = {}) => createExplorer(realm, {
+            columns,
+            items,
+            componentId: first.componentId,
+            // Same component, so the same $wire and the same record of calls.
+            reuse: { wire: first.wire, calls: first.calls },
+            ...options,
+        }),
         // The stores really are shared between the two, which is what makes
         // the isolation worth asserting.
         Alpine: realm.Alpine,
@@ -65,7 +80,7 @@ function createRealm() {
     vm.createContext(context);
     vm.runInContext(source, context);
 
-    return { context, Alpine };
+    return { context, Alpine, spawned: 0 };
 }
 
 /**
@@ -78,9 +93,12 @@ function createRealm() {
  * stub without this could not tell the difference, and did not: the bug shipped
  * with all seventeen tests green.
  */
-function reactive(target, seen = new WeakMap()) {
+/** Memoised across calls, the way Vue and Alpine memoise: one proxy per object. */
+const reactiveProxies = new WeakMap();
+
+function reactive(target) {
     if (target === null || typeof target !== 'object') return target;
-    if (seen.has(target)) return seen.get(target);
+    if (reactiveProxies.has(target)) return reactiveProxies.get(target);
 
     const proxy = new Proxy(target, {
         get(object, key, receiver) {
@@ -94,16 +112,21 @@ function reactive(target, seen = new WeakMap()) {
                 return value;
             }
 
-            return (typeof value === 'object' && value !== null) ? reactive(value, seen) : value;
+            return (typeof value === 'object' && value !== null) ? reactive(value) : value;
         },
     });
 
-    seen.set(target, proxy);
+    reactiveProxies.set(target, proxy);
 
     return proxy;
 }
 
-function createExplorer(realm, { items = [], columns = 4 } = {}) {
+function createExplorer(realm, { items = [], columns = 4, componentId = null, reuse = null } = {}) {
+    // Livewire gives every component on the page its own id, and the selection
+    // is keyed by it — so the harness has to hand out distinct ones too, or two
+    // explorers would look like one.
+    const id = componentId ?? `explorer-${++realm.spawned}`;
+
     const elements = items.map((item, index) => ({
         _item: item,
         offsetTop: Math.floor(index / columns) * 100,
@@ -125,21 +148,27 @@ function createExplorer(realm, { items = [], columns = 4 } = {}) {
         matches: () => true,
     };
 
-    const calls = [];
+    const calls = reuse?.calls ?? [];
 
     /**
-     * Stands in for the Livewire proxy, and refuses to be called on a wrapper
-     * the way the real one effectively does.
+     * Stands in for the Livewire proxy: it refuses to be called on a wrapper
+     * the way the real one effectively does, and it records what the server
+     * would then be holding, so an initialiser that reseeds from it sees what a
+     * browser would.
      */
-    const wire = {
+    const wire = reuse?.wire ?? {
         selectedFolders: [],
         selectedFiles: [],
         setSelection(folders, files) {
             assertRawWire(this, wire);
+            this.selectedFolders = folders;
+            this.selectedFiles = files;
             calls.push(['setSelection', folders, files]);
         },
         clearSelection() {
             assertRawWire(this, wire);
+            this.selectedFolders = [];
+            this.selectedFiles = [];
             calls.push(['clearSelection']);
         },
     };
@@ -147,6 +176,7 @@ function createExplorer(realm, { items = [], columns = 4 } = {}) {
     const component = realm.context.window.FileExplorerUi({
         scopeKey: 'library',
         rootFolderId: 1,
+        componentId: id,
         abilities: { browse: true, copy: true, move: true, rename: true, delete: true, deleteFolder: true },
     });
 
@@ -166,7 +196,7 @@ function createExplorer(realm, { items = [], columns = 4 } = {}) {
 
     // The selection belongs to the component now, not to a global store: that
     // is the whole point of it, and two components give two selections.
-    return { component: view, sel: view.sel, calls, items, elements, container, wire };
+    return { component: view, sel: view.sel, calls, items, elements, container, wire, componentId: id };
 }
 
 /**

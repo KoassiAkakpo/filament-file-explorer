@@ -20,8 +20,6 @@
                 refreshInterval: {{ $this->refreshInterval() }},
                 componentId: @js($this->getId()),
                 translations: @js($i18n),
-                selectedFolders: @js($selectedFolders),
-                selectedFiles: @js($selectedFiles),
             })"
             x-on:livewire-upload-start="onUploadStart()"
             x-on:livewire-upload-finish="onUploadFinish()"

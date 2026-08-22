@@ -58,6 +58,31 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
          * wrong component. Each component now owns one of these, so nothing is
          * addressed globally and each syncs to its own $wire.
          */
+        /**
+         * Selections outlive the Alpine component that shows them.
+         *
+         * The root x-data embeds server state, so every Livewire round trip
+         * rewrites that attribute and Alpine runs the initialiser again. A
+         * selection created inline there died on every keystroke: the cursor came
+         * back null, and the next arrow read that as "nothing selected" and
+         * jumped to the first item. The global store this replaced survived by
+         * accident, being registered once and guarded.
+         *
+         * Keyed by Livewire component id, so two explorers on one page still get
+         * two — which is the whole point of it not being a single store.
+         */
+        const feSelections = new Map();
+
+        function feSelectionFor(componentId) {
+            const key = componentId || 'default';
+
+            if (!feSelections.has(key)) {
+                feSelections.set(key, createFeSelection());
+            }
+
+            return feSelections.get(key);
+        }
+
         function createFeSelection() {
             // The $wire proxy lives in this closure and never becomes a property
             // of the returned object. That object is part of the component's
@@ -547,8 +572,10 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 translations: config.translations || {},
                 // This component's selection, not the page's. Children inherit
                 // it through the Alpine scope, which is how the views reach it
-                // as `sel` without addressing anything globally.
-                sel: createFeSelection(),
+                // as `sel` without addressing anything globally. Looked up
+                // rather than built, so it survives the re-initialisation a
+                // Livewire round trip causes.
+                sel: feSelectionFor(config.componentId),
                 ctx: { open: false, type: 'empty', id: null, name: '', x: 0, y: 0, canDelete: true, deleteHint: '' },
 
                 init() {
@@ -559,9 +586,12 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.sel.setWire(this.$wire);
                     Alpine.store('feDrag').abilities = this.abilities;
                     Alpine.store('feUpload').translations = this.translations;
+                    // From $wire, not from the x-data attribute: keeping the
+                    // selection out of that attribute is what stops every
+                    // selection change from rewriting it and re-running this.
                     this.sel.replace(
-                        config.selectedFolders || [],
-                        config.selectedFiles || []
+                        this.$wire.selectedFolders || [],
+                        this.$wire.selectedFiles || []
                     );
                     this.$watch('$wire.selectedFolders', (v) => {
                         const local = this.sel.folders.join(',');
