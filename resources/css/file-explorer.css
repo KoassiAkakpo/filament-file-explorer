@@ -150,7 +150,16 @@
   color: #0f766e !important;
   border-radius: 6px;
 }
+/* The browsing area is what absorbs a column taller than its content.
+   The inspector is a sibling of the whole main column, so opening it can make
+   the flex row taller than the 560px floor — and with nothing growing in the
+   column, that surplus landed under the breadcrumb, which then read as a
+   breadcrumb bar three times its height. It belongs here instead: a taller
+   panel beside the folder should give more room to browse. */
 .fe-browser {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   background: #fff;
   min-height: 500px;
 }

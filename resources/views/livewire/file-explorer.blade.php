@@ -523,7 +523,7 @@
                         x-on:click="handleContainerClick($event)"
                         x-on:contextmenu.prevent="openEmptyContext($event)"
                         @class([
-                            'relative min-h-[500px] select-none overflow-y-auto p-2 pb-8',
+                            'relative min-h-[500px] flex-1 select-none overflow-y-auto p-2 pb-8',
                             'flex flex-wrap content-start gap-x-0 gap-y-1' => in_array($viewMode, ['grid', 'icons'], true),
                             'space-y-0.5' => $viewMode === 'details',
                             'fe-columns' => $viewMode === 'columns' && $panes !== [],
@@ -908,7 +908,7 @@
                     </div>
                 </div>
 
-                <nav class="flex select-none items-center gap-0.5 border-t border-zinc-100 px-2 py-1.5 text-xs dark:border-zinc-700/80 dark:text-zinc-300">
+                <nav class="flex shrink-0 select-none items-center gap-0.5 border-t border-zinc-100 px-2 py-1.5 text-xs dark:border-zinc-700/80 dark:text-zinc-300">
                     @foreach ($breadcrumb as $index => $folder)
                         <button
                             type="button"
