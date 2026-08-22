@@ -101,6 +101,21 @@ return [
         'sort_by' => 'Sort By',
     ],
 
+    'kind' => [
+        'title' => 'Kind',
+        'all' => 'All kinds',
+        'active' => 'Showing :kind only',
+        'clear' => 'Show all',
+        'image' => 'Images',
+        'pdf' => 'PDF',
+        'document' => 'Documents',
+        'spreadsheet' => 'Spreadsheets',
+        'presentation' => 'Presentations',
+        'archive' => 'Archives',
+        'audio' => 'Audio',
+        'video' => 'Video',
+    ],
+
     'view' => [
         'icons' => 'Icons',
         'columns' => 'Columns',

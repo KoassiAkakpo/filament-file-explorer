@@ -32,6 +32,7 @@ use Koassi\FilamentFileExplorer\Models\FileShare;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\ActiveRoot;
+use Koassi\FilamentFileExplorer\Support\FileKinds;
 use Koassi\FilamentFileExplorer\Support\FileNames;
 use Koassi\FilamentFileExplorer\Support\FolderListing;
 use Koassi\FilamentFileExplorer\Support\FolderModel;
@@ -71,6 +72,16 @@ class FileExplorer extends Component
     public array $selectedFiles = [];
 
     public string $search = '';
+
+    /**
+     * Narrows the listing to one kind of file.
+     *
+     * Not remembered across mounts, unlike the view mode and the sort: those are
+     * how you like to look at a library, a filter is what you are looking for
+     * right now. Coming back tomorrow to a folder that seems to hold three files
+     * would be a bug report, not a convenience.
+     */
+    public ?string $kind = null;
 
     /** @var array<int, TemporaryUploadedFile|null> */
     public array $files = [];
@@ -1810,6 +1821,7 @@ class FileExplorer extends Component
             $this->search,
             $this->sortBy,
             $this->sortDir,
+            $this->kind,
         ))->window($this->perPage > 0 ? $this->perPage : $this->pageSize());
     }
 
@@ -1854,7 +1866,10 @@ class FileExplorer extends Component
             // whatever a "load more" has widened it to.
             $listing = $isLast
                 ? $this->listing()
-                : (new FolderListing($this->rootFolderId, (int) $folder->id, '', $this->sortBy, $this->sortDir))->window($limit);
+                // The filter is a lens on the whole view, so the panes behind
+                // the last one are narrowed too — a pane showing files the
+                // filter excludes would contradict the one beside it.
+                : (new FolderListing($this->rootFolderId, (int) $folder->id, '', $this->sortBy, $this->sortDir, $this->kind))->window($limit);
 
             $panes[] = [
                 'folder' => $folder,
@@ -1934,6 +1949,22 @@ class FileExplorer extends Component
 
         $this->navigateToParent();
         $this->selectFolder($leaving);
+    }
+
+    /**
+     * Narrows the listing, or clears the filter when handed the active kind
+     * again — the menu entry is a toggle, so there is always a way back without
+     * hunting for a separate "show all".
+     */
+    public function setKind(?string $kind): void
+    {
+        abort_unless($this->ability('browse'), 403);
+
+        $kind = FileKinds::normalise($kind);
+
+        $this->kind = $this->kind === $kind ? null : $kind;
+
+        $this->resetListing();
     }
 
     public function loadMore(): void

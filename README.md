@@ -201,6 +201,10 @@ It costs one listing query per level of the path, which `folders.max_depth` boun
 
 The explorer renders `listing.per_page` items at a time (100 by default), folders first, with a “Load more” control for the rest. Sorting, filtering and windowing all happen in SQL, so a folder holding thousands of files stays responsive.
 
+Narrow a folder to one **kind** — images, PDF, documents, spreadsheets, presentations, archives, audio, video — from the funnel in the toolbar. The entry toggles, so choosing the active kind again clears it, and a bar above the listing says which filter is on with a way out: a narrowed folder that simply looked empty would be a bug report.
+
+Kinds are matched on the stored mime type, never on the extension. The filter has to run in SQL or the totals and “Load more” would count rows the window then dropped — and the mime type is the half worth trusting, sniffed from the bytes rather than typed by whoever uploaded. Only files are narrowed: a folder has no kind, and hiding folders would filter you into a room with no doors. The filter is not remembered across mounts, unlike the view and the sort — how you like to look at a library is a preference, what you are looking for right now is not.
+
 Sort by **name**, **date**, **kind** or **size**, ascending or descending. Size sorts the files; a folder has no size of its own — the only honest one would be the recursive weight of its subtree, which is a query per folder or a column to keep in step with every upload, move and delete — so it falls back to its name, as it already did for kind. Folders fill the window first whatever the sort, so they are never interleaved with the files they would be compared against.
 
 ```php
@@ -482,7 +486,7 @@ The JS tests need nothing installed: they run the shipped script in a `node:vm` 
 
 ## Roadmap
 
-The package is on `0.x`, which is the only window in which the public API can still change. [ROADMAP.md](ROADMAP.md) lists what has to be settled before it freezes at 1.0.0 — an ability set that can grow, a swappable folder model, selection state per component, domain events — and what is planned after.
+The package is on `0.x`, which is the only window in which the public API can still change. [ROADMAP.md](ROADMAP.md) records what had to be settled before it freezes at 1.0.0 — an ability set that can grow, a swappable folder model, selection state per component, domain events — all of which have shipped, along with the features that were planned alongside them. What remains is additive.
 
 ## License
 

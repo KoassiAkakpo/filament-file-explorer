@@ -59,6 +59,8 @@ Closing this also fixed a data-loss bug it uncovered: the files table's delete c
 
 ## Features planned before 1.0
 
+All done. What follows is kept for the record of why each was shaped the way it was.
+
 ### ~~Expiring share links~~ — done
 
 Stored tokens rather than signed URLs, because revoking is the half of sharing that matters. See [the README](README.md#share-links).
@@ -81,7 +83,13 @@ It also forced a mislabel into the open. `table` had been labelled *Columns*, wh
 
 Ties break on the name before the primary key, since an empty file or several copies of one are common and the order should stay readable, not merely deterministic.
 
-**Filter by kind** is still open, and is a different shape of problem: it changes what the window contains rather than how it is ordered, so the counts and "load more" have to follow.
+### ~~Filter by kind~~ — done
+
+[Support/FileKinds.php](src/Support/FileKinds.php) owns both the list the menu offers and the predicate that matches it, so one cannot offer a kind the other ignores. Applied in `filesQuery()` before the window and before the counts, which is what makes "5 of 12" describe what the filter left.
+
+Matched on the mime type rather than the extension, for the same reason the sort by type is: extracting an extension is not portable across drivers, and the filter must run in SQL. Only the files are narrowed — a folder has no kind, and hiding folders would filter the user into a room with no doors.
+
+Not remembered across mounts, unlike the view mode and the sort. Those are how someone likes to look at a library; a filter is what they are looking for right now.
 
 ## After 1.0 — additive, and none of it blocking
 

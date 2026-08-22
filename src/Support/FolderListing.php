@@ -36,13 +36,20 @@ final class FolderListing
 
     private string $sortDir;
 
+    private ?string $kind;
+
     public function __construct(
         private readonly int $rootFolderId,
         private readonly int $currentFolderId,
         string $search = '',
         string $sortBy = 'name',
         string $sortDir = 'asc',
+        ?string $kind = null,
     ) {
+        // Normalised here, so an unrecognised value narrows nothing rather than
+        // emptying a folder with no explanation.
+        $this->kind = FileKinds::normalise($kind);
+
         $this->search = trim($search);
         $this->sortBy = in_array($sortBy, self::SORTS, true) ? $sortBy : 'name';
 
@@ -116,6 +123,10 @@ final class FolderListing
         $query = Media::query()
             ->where('collection_name', UploadRules::collection())
             ->where('model_type', FolderModel::morphClass());
+
+        // Before the window and before the counts, so "5 of 12" describes what
+        // the filter left rather than what was there.
+        $query = FileKinds::apply($query, $this->kind);
 
         if ($this->search === '') {
             return $query->where('model_id', $this->currentFolderId);

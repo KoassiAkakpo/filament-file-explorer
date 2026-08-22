@@ -101,6 +101,21 @@ return [
         'sort_by' => 'Trier par',
     ],
 
+    'kind' => [
+        'title' => 'Type',
+        'all' => 'Tous les types',
+        'active' => 'Affichage : :kind uniquement',
+        'clear' => 'Tout afficher',
+        'image' => 'Images',
+        'pdf' => 'PDF',
+        'document' => 'Documents',
+        'spreadsheet' => 'Tableurs',
+        'presentation' => 'Présentations',
+        'archive' => 'Archives',
+        'audio' => 'Audio',
+        'video' => 'Vidéo',
+    ],
+
     'view' => [
         'icons' => 'Icônes',
         'columns' => 'Colonnes',

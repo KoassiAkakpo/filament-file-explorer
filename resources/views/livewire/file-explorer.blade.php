@@ -324,6 +324,36 @@
                         </div>
 
                         <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false">
+                            <button
+                                type="button"
+                                class="fe-tool-btn {{ $kind ? 'fe-tool-btn--active' : '' }}"
+                                title="{{ __('filament-file-explorer::file-explorer.kind.title') }}"
+                                @click="open = !open"
+                            >
+                                @svg('heroicon-o-funnel', 'h-3.5 w-3.5')
+                            </button>
+                            <div x-show="open" x-cloak
+                                 x-transition:enter="transition ease-out duration-100"
+                                 x-transition:enter-start="opacity-0"
+                                 x-transition:enter-end="opacity-100"
+                                 x-transition:leave="transition ease-in duration-75"
+                                 x-transition:leave-start="opacity-100"
+                                 x-transition:leave-end="opacity-0"
+                                 class="fe-menu absolute end-0 top-full z-30 mt-1 w-48 overflow-hidden py-1"
+                            >
+                                <button type="button" class="fe-view-item {{ $kind === null ? 'fe-view-item--active' : '' }}" wire:click="setKind(null)" @click="open=false">
+                                    @svg('heroicon-o-squares-2x2', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.kind.all') }}
+                                </button>
+                                @foreach (\Koassi\FilamentFileExplorer\Support\FileKinds::all() as $availableKind)
+                                    <button type="button" class="fe-view-item {{ $kind === $availableKind ? 'fe-view-item--active' : '' }}" wire:click="setKind('{{ $availableKind }}')" @click="open=false">
+                                        @svg(\Koassi\FilamentFileExplorer\Support\FileKinds::icon($availableKind), 'h-3.5 w-3.5')
+                                        {{ __('filament-file-explorer::file-explorer.kind.'.$availableKind) }}
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false">
                             <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.view_options') }}" @click="open = !open">
                                 @if ($viewMode === 'columns')
                                     @svg('heroicon-o-view-columns', 'h-3.5 w-3.5')
@@ -407,6 +437,17 @@
                     @else
                     @if($search)
                         <div class="border-b border-zinc-200 bg-zinc-100/80 px-4 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 sm:px-5">{{ trans_choice('filament-file-explorer::file-explorer.search_results', $listing['total']) }}</div>
+                    @endif
+                    @if($kind)
+                        {{-- Without this, a folder narrowed to one kind simply
+                             looks empty, and nothing on screen says why. --}}
+                        <div class="flex items-center gap-2 border-b border-zinc-200 bg-zinc-100/80 px-4 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 sm:px-5">
+                            @svg('heroicon-o-funnel', 'h-3.5 w-3.5 shrink-0')
+                            <span class="truncate">{{ __('filament-file-explorer::file-explorer.kind.active', ['kind' => __('filament-file-explorer::file-explorer.kind.'.$kind)]) }}</span>
+                            <button type="button" class="ms-auto shrink-0 text-xs underline hover:no-underline" wire:click="setKind(null)">
+                                {{ __('filament-file-explorer::file-explorer.kind.clear') }}
+                            </button>
+                        </div>
                     @endif
 
                     <div
