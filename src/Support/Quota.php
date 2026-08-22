@@ -22,6 +22,9 @@ final class Quota
     /** @var array<int, int> */
     private array $used = [];
 
+    /** @var array<int, int> */
+    private array $counted = [];
+
     /**
      * Bytes committed earlier in this request. An upload or a copy adds rows
      * one at a time, and re-querying the sum between each would be both slower
@@ -43,6 +46,19 @@ final class Quota
             ->sum('size');
 
         return $used + $this->reserved;
+    }
+
+    /**
+     * How many files the scope holds, trashed ones included — the same set
+     * usedBytes() sums, and counted here so that predicate stays in one class.
+     */
+    public function fileCount(int $rootFolderId): int
+    {
+        return $this->counted[$rootFolderId] ??= (int) Media::query()
+            ->where('model_type', FolderModel::morphClass())
+            ->whereIn('collection_name', [UploadRules::collection(), Trash::collection()])
+            ->whereIn('model_id', app(FolderTree::class)->descendantFolderIdsIncludingRoot($rootFolderId))
+            ->count();
     }
 
     public function fits(int $rootFolderId, int $bytes): bool
@@ -105,6 +121,7 @@ final class Quota
     public function flush(): void
     {
         $this->used = [];
+        $this->counted = [];
         $this->reserved = 0;
     }
 }

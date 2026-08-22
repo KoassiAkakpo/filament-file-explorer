@@ -112,6 +112,18 @@ final class StandaloneSettings
     }
 
     /**
+     * Whether the panel wants the storage widget on its dashboard.
+     *
+     * Off by default: a widget appearing on someone's dashboard the day they
+     * upgrade would be a surprise, and a dashboard is not the package's.
+     */
+    public static function storageWidget(): bool
+    {
+        return self::plugin()?->hasStorageWidget()
+            ?? (bool) config('filament-file-explorer.standalone.storage_widget', false);
+    }
+
+    /**
      * Bytes a scope may hold, or null for no limit.
      */
     public static function quotaBytes(): ?int

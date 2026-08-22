@@ -220,6 +220,17 @@ Most freshness is free: Livewire re-reads models on every request and the listin
 
 Known gap: with the trash off, a folder purged by another session while a user is inside it leaves Livewire unable to restore the model at all (`newQueryForRestoration()->firstOrFail()`), and the component fails until the page is reloaded. Soft-deleted folders restore fine and take the fallback above.
 
+## The storage widget
+
+`Widgets\StorageWidget` is opt-in (`standalone.storage_widget`, or `->storageWidget()`), and it is the third place the standalone settings pattern has to be honoured — config key, plugin setter + accessor, `StandaloneSettings` reader.
+
+Two things about it are easy to get wrong, and one already was:
+
+- **`register()` reads `$this->storageWidgetEnabled`, not `StandaloneSettings::storageWidget()`.** The reader resolves the *panel's* plugin, which is not yet this one while `register()` runs, so a fluent `->storageWidget()` came back as silence and fell through to config. The `registers*()` helpers beside it have the same `$this->x ?? config(...)` shape for the same reason. `canView()` does use the reader — by then the plugin is the panel's.
+- **It never creates a root.** `Support\StandaloneAccess::scope()` is the read-only counterpart of `granted()` and returns null when the scope has no root yet, rather than 0: a dashboard renders for every authenticated user, exactly like the navigation, and `canAccess()` creating a folder there is the bug that made `ResolvesExistingRoot` exist.
+
+It reuses `Quota::state()` for the bar rather than recomputing the thresholds — the sidebar already owns 85% and "full" — and falls back to `usedBytes()` when there is no cap. `Quota::fileCount()` sits beside `usedBytes()` so the media-scoping predicate (both collections, whole subtree) stays in one class.
+
 ## Root folder creation
 
 `canAccess()` must never create anything. Filament calls it on every navigation render, so resolving the root the creating way wrote a folder each time a menu was drawn, for every authenticated user, including the ones the check was about to deny. `Contracts\ResolvesExistingRoot` is the read-only escape hatch, and it is a **separate interface on purpose**: adding a method to `FileExplorerRootResolver` would break every resolver a host app has already written. `Support\StandaloneAccess` is the one place both standalone pages take that decision — it authorizes with `0` when the scope has no root yet, and mount() creates it. `ScopeRoots` uses the same read-only path: serving a media file must never create a folder.

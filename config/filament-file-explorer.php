@@ -391,6 +391,16 @@ return [
             'slug' => 'library',
         ],
 
+        /*
+         | Puts a storage widget on the panel's dashboard: what the scope holds,
+         | against the quota when one is set. Off by default — a widget
+         | appearing on someone's dashboard the day they upgrade would be a
+         | surprise, and a dashboard is not the package's.
+         |
+         | Per panel instead: FilamentFileExplorerPlugin::make()->storageWidget().
+         */
+        'storage_widget' => false,
+
         'navigation' => [
             'enabled' => true,
             'files_enabled' => false,

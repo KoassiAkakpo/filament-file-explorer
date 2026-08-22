@@ -48,6 +48,45 @@ final class StandaloneAccess
     }
 
     /**
+     * The scope key and root folder of the standalone explorer, once access has
+     * been granted — or null.
+     *
+     * Read-only like granted(), and null rather than 0 when the scope has no
+     * root yet: a caller who is not the page itself has nothing to measure and
+     * must never be the one to create it.
+     *
+     * @return array{scopeKey: string, rootFolderId: int}|null
+     */
+    public static function scope(): ?array
+    {
+        if (! StandaloneSettings::enabled()) {
+            return null;
+        }
+
+        try {
+            $resolver = app(FileExplorerRootResolver::class);
+            $scopeKey = $resolver->scopeKey();
+            $rootFolderId = self::rootFolderId($resolver);
+
+            if ($rootFolderId <= 0) {
+                return null;
+            }
+
+            if (! app(FileExplorerAuthorizer::class)->canAccess($scopeKey, $rootFolderId)) {
+                return null;
+            }
+
+            return ['scopeKey' => $scopeKey, 'rootFolderId' => $rootFolderId];
+        } catch (HttpExceptionInterface) {
+            return null;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
+    }
+
+    /**
      * Root folder id to authorize against, or 0 when the scope has no root
      * folder yet — mount() creates it on the first real visit. An authorizer
      * that keys on the id rather than the scope key has to treat 0 as "not

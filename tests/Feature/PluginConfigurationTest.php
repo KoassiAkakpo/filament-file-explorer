@@ -11,6 +11,7 @@ use Koassi\FilamentFileExplorer\Pages\StandaloneFileExplorerPage;
 use Koassi\FilamentFileExplorer\Resolvers\PerUserRootResolver;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
+use Koassi\FilamentFileExplorer\Widgets\StorageWidget;
 use Livewire\Features\SupportTesting\Testable;
 
 it('registers the packaged pages by default', function (): void {
@@ -142,4 +143,52 @@ it('lets a panel rewrite the columns of the files table', function (): void {
     expect($plugin->getTableColumnsCallback())->toBeInstanceOf(Closure::class)
         ->and(array_values(($plugin->getTableColumnsCallback())(['preview' => 'a', 'file_name' => 'b'])))
         ->toBe(['b']);
+});
+
+it('registers the storage widget only when asked', function (): void {
+    $panel = Panel::make()->id('test-widget-off');
+
+    FilamentFileExplorerPlugin::make()->register($panel);
+
+    // A widget appearing on someone's dashboard the day they upgrade would be a
+    // surprise, and a dashboard is not the package's.
+    expect($panel->getWidgets())->not->toContain(StorageWidget::class);
+
+    $on = Panel::make()->id('test-widget-on');
+
+    FilamentFileExplorerPlugin::make()->storageWidget()->register($on);
+
+    expect($on->getWidgets())->toContain(StorageWidget::class);
+});
+
+it('registers the widget from config too', function (): void {
+    config()->set('filament-file-explorer.standalone.storage_widget', true);
+
+    $panel = Panel::make()->id('test-widget-config');
+
+    FilamentFileExplorerPlugin::make()->register($panel);
+
+    expect($panel->getWidgets())->toContain(StorageWidget::class);
+});
+
+it('lets the plugin turn the widget off against config', function (): void {
+    config()->set('filament-file-explorer.standalone.storage_widget', true);
+
+    $panel = Panel::make()->id('test-widget-override');
+
+    FilamentFileExplorerPlugin::make()->withoutStorageWidget()->register($panel);
+
+    // Panel-scoped settings take precedence over config, as everywhere else.
+    expect($panel->getWidgets())->not->toContain(StorageWidget::class);
+});
+
+it('registers the widget even with the pages turned off', function (): void {
+    $panel = Panel::make()->id('test-widget-no-pages');
+
+    FilamentFileExplorerPlugin::make()->withoutPages()->storageWidget()->register($panel);
+
+    // The record-scoped mode registers no standalone page at all, and a panel
+    // may still want the figure.
+    expect($panel->getPages())->toBe([])
+        ->and($panel->getWidgets())->toContain(StorageWidget::class);
 });

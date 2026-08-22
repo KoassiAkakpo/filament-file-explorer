@@ -107,11 +107,18 @@ So the two pointers get different gestures rather than the drag getting a touch 
 
 Written in the drag store rather than in the five views that hand it a press, for the reason every other rule in this package ended up in one place.
 
+### ~~A storage widget~~ — done
+
+Nearly free, as predicted, and the interesting part was what it must not do: a dashboard renders for every authenticated user, so the widget had to reach the root the read-only way. `StandaloneAccess::scope()` is the counterpart of `granted()` and returns null rather than 0 when there is no root yet — a caller who is not the page has nothing to measure and must never be the one to create it.
+
+Off by default, because a dashboard is not the package's. And it shows the total with no quota set at all: a bar with nothing to fill would only invent a limit.
+
+Wiring it up did find one real bug in the plugin's own pattern — `register()` cannot use the `StandaloneSettings` reader, because the reader resolves the panel's plugin and during `register()` that is not yet this one.
+
 ## After 1.0 — additive, and none of it blocking
 
 - **File versioning.** The `replace` conflict policy destroys what was there. Keeping the last N versions would follow the pattern the trash already proved: move aside rather than destroy.
 - **Chunked and direct-to-S3 uploads.** `upload.max_size_kb` defaults to 50 MB, but the real ceiling is the host's `post_max_size`. This is what unblocks video and large media.
-- **A storage widget.** The quota already renders in the sidebar; exposing it as a per-scope dashboard widget is nearly free.
 - **PDF and video thumbnails, opt-in.** Deliberately absent today because they need Imagick or ffmpeg on the host and a failing generator costs more than the icon already drawn. Worth offering behind an explicit flag — never by default.
 
 ## Out of scope

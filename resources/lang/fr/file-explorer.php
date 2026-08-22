@@ -101,6 +101,15 @@ return [
         'sort_by' => 'Trier par',
     ],
 
+    'widget' => [
+        'title' => 'Stockage',
+        'open' => "Ouvrir l'explorateur",
+        'of_limit' => ':percent % de :limit',
+        'no_limit' => 'Aucune limite définie',
+        'files' => '{0} Aucun fichier|{1} :count fichier|[2,*] :count fichiers',
+        'unavailable' => 'Rien à signaler pour ce périmètre.',
+    ],
+
     'tags' => [
         'title' => 'Étiquettes',
         'all' => 'Toutes les étiquettes',

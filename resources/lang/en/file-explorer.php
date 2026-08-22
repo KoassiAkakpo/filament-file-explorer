@@ -101,6 +101,15 @@ return [
         'sort_by' => 'Sort By',
     ],
 
+    'widget' => [
+        'title' => 'Storage',
+        'open' => 'Open the explorer',
+        'of_limit' => ':percent% of :limit',
+        'no_limit' => 'No limit set',
+        'files' => '{0} No files|{1} :count file|[2,*] :count files',
+        'unavailable' => 'Nothing to report for this scope.',
+    ],
+
     'tags' => [
         'title' => 'Tags',
         'all' => 'All tags',

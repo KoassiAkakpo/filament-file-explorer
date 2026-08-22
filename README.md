@@ -328,6 +328,27 @@ Media Library hands you a JSON column for free, and it was the obvious place —
 
 Uploads and copies that would go over are refused before anything is written, and the reason is reported. Replacing a file only counts the difference. Trashed files still count: they sit on the disk until they are purged, and a trash that stopped counting would be a way over the cap.
 
+## The storage widget
+
+What the standalone scope holds, on the panel's dashboard — the same figures the explorer's sidebar draws, in the place someone looks without going to the explorer first. A quota nobody sees until it refuses an upload is a quota that surprises people.
+
+```php
+FilamentFileExplorerPlugin::make()->storageWidget()
+```
+
+```php
+// or config/filament-file-explorer.php
+'standalone' => ['storage_widget' => false],
+```
+
+Off by default. A widget appearing on someone's dashboard the day they upgrade would be a surprise, and a dashboard is not the package's.
+
+With a quota set it draws the bar, warns at 85% and turns red when full. **Without** one it still shows the total and the file count, which is the useful half — a bar with nothing to fill would only invent a limit. Trashed files count, exactly as they do for the quota: they occupy the disk until they are purged, and a widget that disagreed with the upload being refused would be worse than none.
+
+It describes the **standalone** scope only. The record-scoped pages have one root per record, so there is no single figure a dashboard widget could stand for; read `Support\Quota` directly for a record you know.
+
+It hides itself when the scope is refused, when `browse` is denied, and before the scope has a root at all — and, like the navigation entry, it **never creates one**. The dashboard renders for every authenticated user, including the ones the check is about to deny.
+
 ## Who added a file
 
 The uploader is recorded on every upload and shown in the inspector and in the files table. It is resolved from the model each time rather than stored as a name, so a renamed account does not leave stale names behind, and memoised per request: a page costs one query per distinct uploader. When the account is gone, the id is still shown.

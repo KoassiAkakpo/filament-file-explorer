@@ -1218,6 +1218,75 @@ body.fe-is-dragging * {
   touch-action: manipulation;
 }
 
+/* Dashboard widget ----------------------------------------------------------
+   Deliberately plain: it sits inside a Filament section on a page the package
+   does not own, so it draws numbers and a bar and borrows the panel's chrome
+   for everything else. */
+.fe-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.fe-widget__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.fe-widget__title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #71717a;
+}
+.fe-widget__link {
+  font-size: 11px;
+  color: #0d9488;
+}
+.fe-widget__link:hover {
+  text-decoration: underline;
+}
+.fe-widget__figure {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: #18181b;
+}
+.dark .fe-widget__figure {
+  color: #fafafa;
+}
+.fe-widget__bar {
+  height: 0.4rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgba(24, 24, 27, 0.09);
+}
+.dark .fe-widget__bar {
+  background: rgba(255, 255, 255, 0.12);
+}
+.fe-widget__fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: #14b8a6;
+  transition: width 0.2s ease;
+}
+.fe-widget__fill--warning {
+  background: #f59e0b;
+}
+.fe-widget__fill--full {
+  background: #ef4444;
+}
+.fe-widget__meta,
+.fe-widget__empty {
+  font-size: 11px;
+  color: #71717a;
+}
+.dark .fe-widget__meta,
+.dark .fe-widget__empty {
+  color: #a1a1aa;
+}
+
 /* Touch ---------------------------------------------------------------------
    The finder is a mouse layout, and two things about a finger break it: iOS
    answers a long press with its own callout over ours, and a 28px control is

@@ -9,6 +9,7 @@ use Filament\Contracts\Plugin;
 use Filament\Panel;
 use Koassi\FilamentFileExplorer\Filament\Pages\FileExplorer;
 use Koassi\FilamentFileExplorer\Filament\Pages\FileExplorerFiles;
+use Koassi\FilamentFileExplorer\Widgets\StorageWidget;
 use UnitEnum;
 
 class FilamentFileExplorerPlugin implements Plugin
@@ -68,6 +69,8 @@ class FilamentFileExplorerPlugin implements Plugin
     protected ?int $maxFolderDepth = null;
 
     protected ?\Closure $tableColumns = null;
+
+    protected ?bool $storageWidgetEnabled = null;
 
     public function getId(): string
     {
@@ -409,8 +412,42 @@ class FilamentFileExplorerPlugin implements Plugin
     |--------------------------------------------------------------------------
     */
 
+    /**
+     * Puts the storage widget on the panel's dashboard.
+     *
+     * Opt-in, and separate from the quota: the widget is worth having with no
+     * cap set at all — it is then simply how much the library holds.
+     */
+    public function storageWidget(bool $condition = true): static
+    {
+        $this->storageWidgetEnabled = $condition;
+
+        return $this;
+    }
+
+    public function withoutStorageWidget(): static
+    {
+        return $this->storageWidget(false);
+    }
+
+    public function hasStorageWidget(): ?bool
+    {
+        return $this->storageWidgetEnabled;
+    }
+
     public function register(Panel $panel): void
     {
+        // Registered whatever the pages do: the widget decides for itself in
+        // canView(), and a panel may want the figure without the explorer's own
+        // page — the record-scoped mode registers no standalone page at all.
+        // $this->storageWidgetEnabled first, and not StandaloneSettings: the
+        // reader resolves the *panel's* plugin, which is not yet this one while
+        // register() runs, so a fluent ->storageWidget() would be read as
+        // silence and fall through to config. Same shape as the helpers below.
+        if ($this->storageWidgetEnabled ?? (bool) config('filament-file-explorer.standalone.storage_widget', false)) {
+            $panel->widgets([StorageWidget::class]);
+        }
+
         if (! $this->registersStandalonePages()) {
             return;
         }
