@@ -18,6 +18,18 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  */
 final class FolderListing
 {
+    /**
+     * What the listing can be ordered by.
+     *
+     * `size` sorts the files and leaves the folders on their name: a folder has
+     * no size of its own, and the only honest one would be the recursive weight
+     * of its subtree — a query per folder, or a denormalised column to keep in
+     * step with every upload, move and delete. Folders fill the window first
+     * whatever the sort, so they are never interleaved with the files they would
+     * be compared against.
+     */
+    public const SORTS = ['name', 'date', 'type', 'size'];
+
     private string $search;
 
     private string $sortBy;
@@ -32,7 +44,7 @@ final class FolderListing
         string $sortDir = 'asc',
     ) {
         $this->search = trim($search);
-        $this->sortBy = in_array($sortBy, ['name', 'date', 'type'], true) ? $sortBy : 'name';
+        $this->sortBy = in_array($sortBy, self::SORTS, true) ? $sortBy : 'name';
 
         // Normalised here because both end up inside an ORDER BY expression.
         $this->sortDir = $sortDir === 'desc' ? 'desc' : 'asc';
@@ -133,8 +145,8 @@ final class FolderListing
      */
     private function sortFolders(Builder $query): Builder
     {
-        // A folder has no kind of its own, so sorting by type falls back to the
-        // name. LOWER() keeps the order case-insensitive on drivers whose
+        // A folder has neither a kind nor a size of its own, so both fall back
+        // to the name. LOWER() keeps the order case-insensitive on drivers whose
         // default collation is not (sqlite, Postgres).
         $query = $this->sortBy === 'date'
             ? $query->orderBy('updated_at', $this->sortDir)
@@ -156,6 +168,10 @@ final class FolderListing
             // Sorting by extension cannot be expressed the same way on every
             // driver, and the mime type groups files into the same kinds.
             'type' => $query->orderBy('mime_type', $this->sortDir)->orderByRaw($label.' asc'),
+            // Ties are common — an empty file, or several copies of one — so the
+            // name breaks them before the primary key does, which keeps the
+            // order readable rather than merely deterministic.
+            'size' => $query->orderBy('size', $this->sortDir)->orderByRaw($label.' asc'),
             default => $query->orderByRaw($label.' '.$this->sortDir),
         };
 

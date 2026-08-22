@@ -201,6 +201,8 @@ It costs one listing query per level of the path, which `folders.max_depth` boun
 
 The explorer renders `listing.per_page` items at a time (100 by default), folders first, with a “Load more” control for the rest. Sorting, filtering and windowing all happen in SQL, so a folder holding thousands of files stays responsive.
 
+Sort by **name**, **date**, **kind** or **size**, ascending or descending. Size sorts the files; a folder has no size of its own — the only honest one would be the recursive weight of its subtree, which is a query per folder or a column to keep in step with every upload, move and delete — so it falls back to its name, as it already did for kind. Folders fill the window first whatever the sort, so they are never interleaved with the files they would be compared against.
+
 ```php
 // config/filament-file-explorer.php
 'listing' => ['per_page' => 100],

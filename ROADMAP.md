@@ -75,9 +75,13 @@ The DOM contract turned out to be honoured best by omission: only the last pane 
 
 It also forced a mislabel into the open. `table` had been labelled *Columns*, which is the Finder's name for this browser and not what `table` renders; `table` is now *Table*.
 
-### Sort by size, and filter by kind
+### ~~Sort by size~~ — done
 
-`FolderListing` already sorts and windows in SQL and `media.size` is a column, so the sort itself is small. What needs deciding is the folders: they fill the window first and have no size of their own. Either they stay grouped ahead of the files, or a recursive weight is computed — which is expensive and would have to be cached.
+`FolderListing::SORTS` is now the single list of what the listing can be ordered by, and `size` is in it. The folders question answered itself: they already fell back to their name for a sort by *kind*, which they have no more of than they have a size, so `size` does the same and stays consistent rather than inventing a special case. A recursive subtree weight would be the only honest folder size and costs a query per folder or a denormalised column to keep in step with every mutation — not worth it for an ordering.
+
+Ties break on the name before the primary key, since an empty file or several copies of one are common and the order should stay readable, not merely deterministic.
+
+**Filter by kind** is still open, and is a different shape of problem: it changes what the window contains rather than how it is ordered, so the counts and "load more" have to follow.
 
 ## After 1.0 — additive, and none of it blocking
 

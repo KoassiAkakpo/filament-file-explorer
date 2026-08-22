@@ -329,3 +329,84 @@ it('renders a load more control only while items are left', function (): void {
 
     $component->assertOk()->assertDontSeeHtml('wire:click="loadMore"');
 });
+
+it('sorts the files by size in SQL', function (): void {
+    $root = feRoot();
+
+    feMediaRow($root, 'big.pdf', ['size' => 9000]);
+    feMediaRow($root, 'small.pdf', ['size' => 10]);
+    feMediaRow($root, 'medium.pdf', ['size' => 500]);
+
+    expect(feListing($root, 50, '', 'size', 'asc')['files']->pluck('file_name')->all())
+        ->toBe(['small.pdf', 'medium.pdf', 'big.pdf'])
+        ->and(feListing($root, 50, '', 'size', 'desc')['files']->pluck('file_name')->all())
+        ->toBe(['big.pdf', 'medium.pdf', 'small.pdf']);
+});
+
+it('breaks size ties on the name rather than the id', function (): void {
+    $root = feRoot();
+
+    // Ties are common — empty files, or several copies of one — so the order has
+    // to stay readable, not merely deterministic.
+    feMediaRow($root, 'charlie.pdf', ['size' => 0]);
+    feMediaRow($root, 'alpha.pdf', ['size' => 0]);
+    feMediaRow($root, 'bravo.pdf', ['size' => 0]);
+
+    expect(feListing($root, 50, '', 'size', 'asc')['files']->pluck('file_name')->all())
+        ->toBe(['alpha.pdf', 'bravo.pdf', 'charlie.pdf']);
+});
+
+it('leaves the folders on their name when sorting by size', function (): void {
+    $root = feRoot();
+
+    feFolder($root, 'Zebra');
+    feFolder($root, 'Alpha');
+    feMediaRow($root, 'file.pdf', ['size' => 10]);
+
+    // A folder has no size of its own, and the only honest one would be the
+    // recursive weight of its subtree — a query per folder, or a column to keep
+    // in step with every upload. So it falls back to the name and still follows
+    // the direction, exactly as it already did for a sort by type. Folders fill
+    // the window first whatever the sort, so they are never interleaved with the
+    // files they would be compared against.
+    expect(feListing($root, 50, '', 'size', 'desc')['folders']->pluck('name')->all())
+        ->toBe(['Zebra', 'Alpha'])
+        ->and(feListing($root, 50, '', 'size', 'asc')['folders']->pluck('name')->all())
+        ->toBe(['Alpha', 'Zebra'])
+        // Same shape as the sort that already worked this way.
+        ->and(feListing($root, 50, '', 'type', 'desc')['folders']->pluck('name')->all())
+        ->toBe(['Zebra', 'Alpha']);
+});
+
+it('windows a size sort without repeating or skipping', function (): void {
+    $root = feRoot();
+
+    foreach (range(1, 12) as $i) {
+        feMediaRow($root, 'f'.$i.'.pdf', ['size' => 100]);
+    }
+
+    $first = feListing($root, 5, '', 'size', 'asc')['files']->pluck('file_name')->all();
+    $wider = feListing($root, 10, '', 'size', 'asc')['files']->pluck('file_name')->all();
+
+    // Every ORDER BY ends with the primary key, so widening only appends.
+    expect(array_slice($wider, 0, 5))->toBe($first);
+});
+
+it('keeps a size preference across mounts', function (): void {
+    $root = feRoot();
+
+    Livewire::test(FileExplorerComponent::class, ['scopeKey' => 'library', 'rootFolderId' => $root->id])
+        ->call('setSort', 'size', 'desc');
+
+    Livewire::test(FileExplorerComponent::class, ['scopeKey' => 'library', 'rootFolderId' => $root->id])
+        ->assertSet('sortBy', 'size')
+        ->assertSet('sortDir', 'desc');
+});
+
+it('refuses a sort it does not know', function (): void {
+    $root = feRoot();
+
+    Livewire::test(FileExplorerComponent::class, ['scopeKey' => 'library', 'rootFolderId' => $root->id])
+        ->call('setSort', 'colour')
+        ->assertSet('sortBy', 'name');
+});

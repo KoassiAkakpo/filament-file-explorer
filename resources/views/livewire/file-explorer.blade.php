@@ -314,6 +314,12 @@
                                         <span class="ms-auto text-[10px] text-teal-600">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.asc') : __('filament-file-explorer::file-explorer.sort.desc') }}</span>
                                     @endif
                                 </button>
+                                <button type="button" class="fe-view-item {{ $sortBy === 'size' ? 'fe-view-item--active' : '' }}" wire:click="setSort('size')" @click="open=false">
+                                    @svg('heroicon-o-scale', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.sort.size') }}
+                                    @if ($sortBy === 'size')
+                                        <span class="ms-auto text-[10px] text-teal-600">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.smallest') : __('filament-file-explorer::file-explorer.sort.largest') }}</span>
+                                    @endif
+                                </button>
                             </div>
                         </div>
 
@@ -592,7 +598,7 @@
                                 <button type="button" class="text-start hover:text-zinc-700 dark:hover:text-zinc-200" wire:click="setSort('name')">{{ __('filament-file-explorer::file-explorer.sort.name') }} @if($sortBy==='name'){{ $sortDir==='asc'?'↑':'↓' }}@endif</button>
                                 <button type="button" class="text-start hover:text-zinc-700 dark:hover:text-zinc-200" wire:click="setSort('type')">{{ __('filament-file-explorer::file-explorer.sort.kind') }} @if($sortBy==='type'){{ $sortDir==='asc'?'↑':'↓' }}@endif</button>
                                 @if ($viewMode === 'details')
-                                    <span>{{ __('filament-file-explorer::file-explorer.size') }}</span>
+                                    <button type="button" class="text-start hover:text-zinc-700 dark:hover:text-zinc-200" wire:click="setSort('size')">{{ __('filament-file-explorer::file-explorer.sort.size') }} @if($sortBy==='size'){{ $sortDir==='asc'?'↑':'↓' }}@endif</button>
                                 @endif
                                 <button type="button" class="text-start hover:text-zinc-700 dark:hover:text-zinc-200" wire:click="setSort('date')">{{ __('filament-file-explorer::file-explorer.sort.date_modified') }} @if($sortBy==='date'){{ $sortDir==='asc'?'↑':'↓' }}@endif</button>
                             </div>
@@ -1157,6 +1163,7 @@
                                 <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('name'))">{{ __('filament-file-explorer::file-explorer.sort.name') }}</button>
                                 <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('date'))">{{ __('filament-file-explorer::file-explorer.sort.date') }}</button>
                                 <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('type'))">{{ __('filament-file-explorer::file-explorer.sort.type') }}</button>
+                                <button type="button" class="fe-ctx-item" @click="run(() => $wire.setSort('size'))">{{ __('filament-file-explorer::file-explorer.sort.size') }}</button>
                             </div>
                         </div>
                     </div>

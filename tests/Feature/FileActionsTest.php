@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Koassi\FilamentFileExplorer\Authorizers\AllowAllAuthorizer;
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer as FileExplorerComponent;
 use Koassi\FilamentFileExplorer\Models\Folder;
@@ -153,4 +155,39 @@ it('pastes a cut file into the current folder', function (): void {
 
     expect((int) $media->refresh()->model_id)->toBe((int) $root->id)
         ->and(Media::query()->count())->toBe(1);
+});
+
+it('captions the delete entry only when there is something to say', function (): void {
+    $media = feActFile(feActRoot(), 'draft.pdf');
+    $folder = feActFolder(feActRoot(), 'Archive');
+
+    // Allowed, with no reason behind it. The caption used to read "Deletable",
+    // which told the reader nothing the button above it had not — it showed up
+    // under every Delete entry in the context menu.
+    expect(feActComponent()->instance()->getDeleteState('file', $media->id)['hint'])->toBe('')
+        ->and(feActComponent()->instance()->getDeleteState('folder', $folder->id)['hint'])->toBe('');
+});
+
+it('keeps the caption when the authorizer has something to say', function (): void {
+    $media = feActFile(feActRoot(), 'draft.pdf');
+
+    app()->instance(FileExplorerAuthorizer::class, new class extends AllowAllAuthorizer
+    {
+        public function mediaDeleteState(string $scopeKey, Media $media): array
+        {
+            return [
+                'allowed' => true,
+                'reason_code' => 'window',
+                'reason' => 'Deletable for 2 more minutes',
+                'remaining_seconds' => 120,
+                'window_seconds' => 600,
+            ];
+        }
+    });
+    app()->forgetScopedInstances();
+
+    // A reason given *while* allowing — a closing time window — is exactly what
+    // the caption is for.
+    expect(feActComponent()->instance()->getDeleteState('file', $media->id)['hint'])
+        ->toBe('Deletable for 2 more minutes');
 });

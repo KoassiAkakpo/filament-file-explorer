@@ -433,7 +433,7 @@ class FileExplorer extends Component
 
     public function setSort(string $by, ?string $dir = null): void
     {
-        if (! in_array($by, ['name', 'date', 'type'], true)) {
+        if (! in_array($by, FolderListing::SORTS, true)) {
             return;
         }
 
@@ -1690,8 +1690,14 @@ class FileExplorer extends Component
             $this->assertMediaUnderRoot($media);
 
             $state = $docs->mediaDeleteState($this->scopeKey, $media);
+
+            // Only when there is something to say. An allowed delete with no
+            // reason behind it used to be captioned "Deletable", which told the
+            // reader nothing they had not just read on the button above it. A
+            // reason given *while* allowing — a closing time window — is worth
+            // showing, and a refusal always is.
             $state['hint'] = $state['allowed']
-                ? (string) ($state['reason'] ?? __('filament-file-explorer::file-explorer.permissions.deletable'))
+                ? (string) ($state['reason'] ?? '')
                 : (string) ($state['reason'] ?? __('filament-file-explorer::file-explorer.delete_not_allowed'));
 
             return $state;
@@ -1702,7 +1708,7 @@ class FileExplorer extends Component
             $this->assertUnderRoot($folder);
             $state = $docs->folderDeleteState($this->scopeKey, $folder);
             $state['hint'] = $state['allowed']
-                ? __('filament-file-explorer::file-explorer.permissions.deletable')
+                ? (string) ($state['reason'] ?? '')
                 : (string) ($state['reason'] ?? __('filament-file-explorer::file-explorer.permissions.folder_delete_denied'));
 
             return $state;
