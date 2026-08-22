@@ -1489,7 +1489,7 @@ class FileExplorer extends Component
                 'name' => MediaLabel::display($media),
                 'size' => $this->formatBytes((int) $media->size),
                 'path' => $this->folderPathString($folder).' / '.$media->file_name,
-                'mime' => $media->mime_type ?: '—',
+                'mime' => MediaLabel::kind($media),
                 'permissions' => $this->mediaPermissionLabel($media),
                 'created' => $media->created_at?->format('Y/m/d H:i'),
                 'updated' => $media->updated_at?->format('Y/m/d H:i'),

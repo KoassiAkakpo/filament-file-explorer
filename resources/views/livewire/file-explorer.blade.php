@@ -550,7 +550,9 @@
                                                     $dispatch('fe-context', { type: 'folder', id: {{ $folder->id }}, name: @js($folder->name), x: $event.clientX, y: $event.clientY });
                                                 "
                                             >
-                                                @svg('heroicon-s-folder', 'fe-column__icon')
+                                                <span class="fe-column__icon">
+                                                    <x-filament-file-explorer::file-explorer.folder-icon class="fe-column__folder" />
+                                                </span>
                                                 <span class="truncate">{{ $folder->name }}</span>
                                                 @svg('heroicon-m-chevron-right', 'fe-column__chevron')
                                             </div>
@@ -562,7 +564,9 @@
                                                 :class="{ 'fe-drop-target': $store.feDrag.dropTargetId === {{ $folder->id }} }"
                                                 wire:click="revealInColumn({{ $folder->id }})"
                                             >
-                                                @svg('heroicon-s-folder', 'fe-column__icon')
+                                                <span class="fe-column__icon">
+                                                    <x-filament-file-explorer::file-explorer.folder-icon class="fe-column__folder" />
+                                                </span>
                                                 <span class="truncate">{{ $folder->name }}</span>
                                                 @svg('heroicon-m-chevron-right', 'fe-column__chevron')
                                             </button>

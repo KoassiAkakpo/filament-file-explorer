@@ -220,3 +220,25 @@ it('closes instead of refusing when the ability is revoked', function (): void {
         ->assertOk()
         ->assertSet('showInfoModal', false);
 });
+
+it('names a file by its extension rather than by its mime type', function (): void {
+    $media = feInMedia('contract.docx');
+    $media->mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    $media->save();
+
+    $component = feInComponent()->call('showInfo', 'file', $media->id);
+
+    // The office mime types are long enough to push every other row of the
+    // panel out of its column, and nobody reads a file's kind that way.
+    expect($component->get('infoItem')['mime'])->toBe('DOCX');
+});
+
+it('falls back to the mime type for a file with no extension', function (): void {
+    $media = feInMedia('LICENSE');
+    $media->mime_type = 'text/plain';
+    $media->save();
+
+    // Something is better than the em dash the panel would otherwise show.
+    expect(feInComponent()->call('showInfo', 'file', $media->id)->get('infoItem')['mime'])
+        ->toBe('text/plain');
+});

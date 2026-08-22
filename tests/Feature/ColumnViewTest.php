@@ -276,3 +276,16 @@ it('shows a thumbnail for an image and an icon for anything else', function (): 
         ->toContain('conversion=thumbnail')
         ->and(substr_count($html, 'fe-column__thumb'))->toBe(1);
 });
+
+it('draws the same folder icon as every other view', function (): void {
+    $docs = feCvFolder('Docs');
+    feCvFolder('Sub', $docs);
+
+    $html = feCvComponent()->call('navigateToFolder', $docs)->assertOk()->html();
+
+    // One in the pane behind, one in the pane being browsed — the two places a
+    // folder is drawn, and both used to be a grey outline icon while the grid
+    // and the details rows drew the macOS folder.
+    expect(substr_count($html, 'fe-column__folder'))->toBe(2)
+        ->and($html)->toContain('folder-macos.webp');
+});

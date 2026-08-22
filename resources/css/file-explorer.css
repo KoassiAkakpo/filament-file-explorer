@@ -854,6 +854,17 @@ body.fe-is-dragging * {
   object-fit: cover;
   pointer-events: none;
 }
+/* The same macOS folder the grid and the details rows draw, rather than an
+   outline icon: the view is the Finder's browser, and a folder that changed
+   colour between two view modes was the only thing giving that away. Contained
+   in the icon well at the size of a mime icon, so every row keeps one left
+   edge whatever it holds. */
+.fe-column__folder {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
 .fe-column__chevron {
   margin-inline-start: auto;
   height: 0.85rem;
