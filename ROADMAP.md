@@ -1,6 +1,6 @@
 # Roadmap to v1.0.0
 
-Current release: **v0.1.1**. Being on `0.x` is the whole point of what follows — it is the only window in which the public API can still change without a major version.
+Current release: **v0.2.0**, which closed all four of the decisions that could not wait. Being on `0.x` is the whole point of what follows — it is the only window in which the public API can still change without a major version.
 
 So this roadmap is not ordered by how appealing a feature is. It is ordered by **what has to be decided before the API freezes**. A feature is cheap to add after 1.0 if it only adds; it is impossible to add after 1.0 if it changes something a host app has already written against.
 
