@@ -23,7 +23,7 @@ final class StandaloneSettings
      * The views the explorer knows how to render. Kept here so the default and
      * the component's own validation cannot drift apart.
      */
-    public const VIEW_MODES = ['grid', 'list', 'table', 'details'];
+    public const VIEW_MODES = ['grid', 'list', 'table', 'details', 'columns'];
 
     public static function plugin(): ?FilamentFileExplorerPlugin
     {

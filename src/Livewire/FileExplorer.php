@@ -92,6 +92,14 @@ class FileExplorer extends Component
     /** @var array{folders: Collection<int, Folder>, files: Collection<int, Media>, shown: int, total: int, hasMore: bool}|null */
     private ?array $listingCache = null;
 
+    /**
+     * Flushed wherever the listing is: the panes are listings, so anything that
+     * makes one stale makes them all stale.
+     *
+     * @var list<array<string, mixed>>|null
+     */
+    private ?array $columnPanesCache = null;
+
     public string $sortBy = 'name';
 
     public string $sortDir = 'asc';
@@ -430,6 +438,7 @@ class FileExplorer extends Component
         }
 
         $this->listingCache = null;
+        $this->columnPanesCache = null;
 
         if ($dir === null) {
             if ($this->sortBy === $by) {
@@ -1798,12 +1807,85 @@ class FileExplorer extends Component
         ))->window($this->perPage > 0 ? $this->perPage : $this->pageSize());
     }
 
+    /**
+     * One pane per level of the path: the Finder's column view.
+     *
+     * Built only for the mode that renders it, because it costs a listing per
+     * level — `folders.max_depth` is what bounds that. Every pane is windowed in
+     * SQL like the main listing: a pane over a folder holding thousands of files
+     * is the same problem the listing already had to solve.
+     *
+     * Empty while searching. A search answers with matches from the whole scope,
+     * which is not a path, so the view falls back to the flat result list rather
+     * than pretending the two shapes are one.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function columnPanes(): array
+    {
+        if ($this->viewMode !== 'columns' || $this->search !== '' || $this->currentFolder === null) {
+            return [];
+        }
+
+        return $this->columnPanesCache ??= $this->buildColumnPanes();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    protected function buildColumnPanes(): array
+    {
+        $path = array_values($this->breadcrumb);
+        $limit = $this->pageSize();
+        $panes = [];
+
+        foreach ($path as $index => $folder) {
+            $next = $path[$index + 1] ?? null;
+            $isLast = $next === null;
+
+            // The last pane is the folder being browsed, so it reuses the
+            // listing the rest of the view is already built from — including
+            // whatever a "load more" has widened it to.
+            $listing = $isLast
+                ? $this->listing()
+                : (new FolderListing($this->rootFolderId, (int) $folder->id, '', $this->sortBy, $this->sortDir))->window($limit);
+
+            $panes[] = [
+                'folder' => $folder,
+                'folders' => $listing['folders'],
+                'files' => $listing['files'],
+                'activeFolderId' => $next === null ? null : (int) $next->id,
+                'isLast' => $isLast,
+                'hasMore' => (bool) $listing['hasMore'],
+            ];
+        }
+
+        return $panes;
+    }
+
+    /**
+     * Clicking an entry in a pane behind the last one.
+     *
+     * A folder moves the path to it, which drops the panes beyond. A file does
+     * the same and then selects the file, which is what the Finder does when you
+     * click into a column behind the one you are in.
+     */
+    public function revealInColumn(int $folderId, ?int $mediaId = null): void
+    {
+        $this->navigateToFolder($folderId);
+
+        if ($mediaId !== null) {
+            $this->selectFile($mediaId);
+        }
+    }
+
     public function loadMore(): void
     {
         abort_unless($this->ability('browse'), 403);
 
         $this->perPage = ($this->perPage > 0 ? $this->perPage : $this->pageSize()) + $this->pageSize();
         $this->listingCache = null;
+        $this->columnPanesCache = null;
     }
 
     /**
@@ -1816,6 +1898,7 @@ class FileExplorer extends Component
     {
         $this->perPage = $this->pageSize();
         $this->listingCache = null;
+        $this->columnPanesCache = null;
 
         app(FolderTree::class)->flush();
         app(Quota::class)->flush();
@@ -1889,6 +1972,7 @@ class FileExplorer extends Component
         app(Quota::class)->flush();
         app(Uploader::class)->flush();
         $this->listingCache = null;
+        $this->columnPanesCache = null;
 
         $folder = $this->currentFolder === null
             ? null

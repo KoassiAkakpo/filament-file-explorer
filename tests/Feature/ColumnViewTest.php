@@ -1,0 +1,179 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\Storage;
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
+use Koassi\FilamentFileExplorer\Livewire\FileExplorer as FileExplorerComponent;
+use Koassi\FilamentFileExplorer\Support\FolderModel;
+use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
+use Koassi\FilamentFileExplorer\Support\UploadRules;
+use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
+
+beforeEach(function (): void {
+    Storage::fake('public');
+});
+
+function feCvRootId(): int
+{
+    return app(FileExplorerRootResolver::class)->rootFolderId();
+}
+
+function feCvComponent(): Testable
+{
+    return Livewire::test(FileExplorerComponent::class, [
+        'scopeKey' => 'library',
+        'rootFolderId' => feCvRootId(),
+    ])->call('setViewMode', 'columns');
+}
+
+function feCvFolder(string $name, ?int $parentId = null): int
+{
+    return (int) FolderModel::query()->create([
+        'name' => $name,
+        'slug' => Str::slug($name),
+        'parent_id' => $parentId ?? feCvRootId(),
+    ])->id;
+}
+
+function feCvMedia(string $name, int $folderId): Media
+{
+    return Media::query()->create([
+        'model_type' => FolderModel::morphClass(),
+        'model_id' => $folderId,
+        'collection_name' => UploadRules::collection(),
+        'name' => $name,
+        'file_name' => $name,
+        'mime_type' => 'application/pdf',
+        'disk' => 'public',
+        'size' => 4,
+        'manipulations' => [],
+        'custom_properties' => [],
+        'generated_conversions' => [],
+        'responsive_images' => [],
+    ]);
+}
+
+it('is a view mode the explorer accepts and remembers', function (): void {
+    expect(StandaloneSettings::VIEW_MODES)->toContain('columns');
+
+    feCvComponent()->assertSet('viewMode', 'columns');
+
+    // Remembered per scope like the others, so it survives a remount.
+    expect(Livewire::test(FileExplorerComponent::class, [
+        'scopeKey' => 'library',
+        'rootFolderId' => feCvRootId(),
+    ])->get('viewMode'))->toBe('columns');
+});
+
+it('builds one pane per level of the path', function (): void {
+    $docs = feCvFolder('Docs');
+    $reports = feCvFolder('Reports', $docs);
+
+    $panes = feCvComponent()->call('navigateToFolder', $reports)->instance()->columnPanes();
+
+    expect($panes)->toHaveCount(3)
+        ->and(array_map(fn (array $pane): string => $pane['folder']->name, $panes))
+        ->toBe(['Library', 'Docs', 'Reports'])
+        ->and($panes[2]['isLast'])->toBeTrue()
+        ->and($panes[0]['isLast'])->toBeFalse();
+});
+
+it('marks the entry the next pane is showing', function (): void {
+    $docs = feCvFolder('Docs');
+    feCvFolder('Other');
+
+    $panes = feCvComponent()->call('navigateToFolder', $docs)->instance()->columnPanes();
+
+    // The trail through the tree, which is not the selection.
+    expect($panes[0]['activeFolderId'])->toBe($docs)
+        ->and($panes[1]['activeFolderId'])->toBeNull();
+});
+
+it('lists each pane from its own folder', function (): void {
+    $docs = feCvFolder('Docs');
+    feCvMedia('root.pdf', feCvRootId());
+    feCvMedia('inside.pdf', $docs);
+
+    $panes = feCvComponent()->call('navigateToFolder', $docs)->instance()->columnPanes();
+
+    expect($panes[0]['files']->pluck('file_name')->all())->toBe(['root.pdf'])
+        ->and($panes[1]['files']->pluck('file_name')->all())->toBe(['inside.pdf']);
+});
+
+it('leaves the DOM contract to the last pane alone', function (): void {
+    $docs = feCvFolder('Docs');
+    feCvMedia('root.pdf', feCvRootId());
+    feCvMedia('inside.pdf', $docs);
+
+    $html = feCvComponent()->call('navigateToFolder', $docs)->assertOk()->html();
+
+    // Two items live in the current folder's pane — the file and nothing else —
+    // and the panes behind it contribute none. That is what keeps the keyboard,
+    // the shift-range and the marquee operating on the folder being browsed
+    // rather than on everything along the path.
+    expect(substr_count($html, 'data-fe-type='))->toBe(1)
+        ->and(substr_count($html, 'data-fe-items'))->toBe(1)
+        ->and($html)->toContain('fe-column--last');
+});
+
+it('falls back to the flat listing while searching', function (): void {
+    $docs = feCvFolder('Docs');
+    feCvMedia('report.pdf', $docs);
+
+    $component = feCvComponent()->call('navigateToFolder', $docs)->set('search', 'report');
+
+    // A search answers from the whole scope, which is not a path: pretending the
+    // two shapes are one would be a lie about where the results are.
+    expect($component->instance()->columnPanes())->toBe([]);
+});
+
+it('navigates from a pane behind the last one', function (): void {
+    $docs = feCvFolder('Docs');
+    $reports = feCvFolder('Reports', $docs);
+
+    $component = feCvComponent()->call('navigateToFolder', $reports);
+
+    expect($component->instance()->columnPanes())->toHaveCount(3);
+
+    // Clicking back up the path drops the panes beyond it.
+    $component->call('revealInColumn', $docs);
+
+    expect($component->instance()->columnPanes())->toHaveCount(2)
+        ->and($component->instance()->currentFolder->id)->toBe($docs);
+});
+
+it('selects the file when a pane behind the last one is clicked', function (): void {
+    $docs = feCvFolder('Docs');
+    feCvFolder('Deeper', $docs);
+    $media = feCvMedia('inside.pdf', $docs);
+
+    $component = feCvComponent()->call('navigateToFolder', $docs);
+
+    $component->call('revealInColumn', $docs, $media->id)
+        ->assertSet('selectedFiles', [$media->id]);
+});
+
+it('rebuilds the panes when the tree changes', function (): void {
+    $docs = feCvFolder('Docs');
+
+    $component = feCvComponent()->call('navigateToFolder', $docs);
+
+    expect($component->instance()->columnPanes()[1]['folders'])->toHaveCount(0);
+
+    $component->call('createNewFolder')->set('newFolderName', 'Fresh')->call('saveNewFolder');
+
+    // The panes are listings, so anything that makes one stale makes them stale.
+    expect($component->instance()->columnPanes()[1]['folders']->pluck('name')->all())->toBe(['Fresh']);
+});
+
+it('builds nothing for the other view modes', function (): void {
+    feCvFolder('Docs');
+
+    $component = feCvComponent()->call('setViewMode', 'grid');
+
+    // A listing per level is not something to pay for when nothing renders it.
+    expect($component->instance()->columnPanes())->toBe([]);
+});

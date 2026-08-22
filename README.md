@@ -66,7 +66,7 @@ Behaviour, not just chrome, is panel-scoped too:
 FilamentFileExplorerPlugin::make()
     ->quota(10 * 1024 ** 3)                 // bytes a scope may hold
     ->refreshEvery(20)                      // seconds between automatic refreshes
-    ->defaultViewMode('list')               // grid, list, table or details
+    ->defaultViewMode('list')               // grid, list, table, columns or details
     ->maxFolderDepth(6)
     ->tableColumns(fn (array $columns) => Arr::except($columns, ['preview']))
 ```
@@ -177,6 +177,21 @@ public static function getPages(): array
 ```
 
 Both modes coexist: registering the plugin does not interfere with record-scoped pages, and they use separate root folders.
+
+## Views
+
+Five ways to look at a folder, remembered per scope: **grid** (icons), **list**, **table** (name, kind, date), **details** (the same with sizes), and **columns**.
+
+**Columns** is the Finder's cascading browser: one pane per level of the path, the contents of the folder you are in on the right, and the trail through the tree marked in the panes behind it. Clicking a folder in any pane moves there and drops the panes beyond; clicking a file in a pane behind the last one moves there and selects it.
+
+Two things about it are deliberate:
+
+- **Only the last pane holds selectable items.** The panes behind it are navigation, and carry none of the `data-fe-type` / `data-id` attributes the selection layer reads. So the keyboard, shift-ranges and the marquee keep operating on the folder being browsed, exactly as in every other view — no new keyboard semantics to learn, and none to get wrong.
+- **Searching falls back to the flat result list.** A search answers with matches from the whole scope, which is not a path; drawing it as one would be a lie about where the results are.
+
+It costs one listing query per level of the path, which `folders.max_depth` bounds, and every pane is windowed in SQL like the main listing — a pane over a folder holding thousands of files is the same problem the listing already solves.
+
+> The `table` view used to be labelled **Columns**, which is the Finder's name for the cascading browser and not what it renders. It is now labelled **Table**, and **Columns** means the browser.
 
 ## Large libraries
 

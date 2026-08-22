@@ -67,11 +67,13 @@ The interesting part was that a public request has no authenticated user, so the
 
 Two extractions came first, so no security rule ended up with two copies: `ServesMediaFiles` for the disk-and-conversion response logic, `Support\MediaScope` for the three-condition containment check that had been written out in both the controller and the component.
 
-### The column view
+### ~~The column view~~ — done
 
-The package calls itself Finder-style and ships grid, list, table and details. The column browser, which is the Finder's signature view, is missing.
+One pane per level of the path, the browsed folder on the right, the trail marked behind it. See [the README](README.md#views).
 
-The ground is prepared: the DOM contract is documented as the extension point for a new mode, and `orderedItems()` already groups by `offsetTop` without knowing the column count.
+The DOM contract turned out to be honoured best by omission: only the last pane carries `data-fe-type` / `data-id`, so the selection, the keyboard and the marquee keep operating on the folder being browsed and no new keyboard semantics had to be invented for panes.
+
+It also forced a mislabel into the open. `table` had been labelled *Columns*, which is the Finder's name for this browser and not what `table` renders; `table` is now *Table*.
 
 ### Sort by size, and filter by kind
 

@@ -11,6 +11,7 @@ return [
     'items_count' => '{0} 0 élément|{1} :count élément|[2,*] :count éléments',
     'search_results' => '{0} Aucun résultat|{1} :count résultat|[2,*] :count résultats',
     'listing' => [
+        'empty' => 'Vide',
         'load_more' => 'Afficher plus',
         'showing' => ':shown sur :total',
     ],
@@ -100,6 +101,7 @@ return [
     'view' => [
         'icons' => 'Icônes',
         'list' => 'Liste',
+        'table' => 'Tableau',
         'columns' => 'Colonnes',
         'details' => 'Détails',
         'view' => 'Affichage',
