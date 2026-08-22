@@ -49,16 +49,6 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
         }
 
         /**
-         * One selection, belonging to one explorer.
-         *
-         * It used to be a single Alpine store, so two explorers on a page — the
-         * page's own and a FileExplorerPicker in a modal — shared one selection,
-         * and setSelection reported to whichever component initialised last.
-         * Clicking in one moved the other's highlight and sent its ids to the
-         * wrong component. Each component now owns one of these, so nothing is
-         * addressed globally and each syncs to its own $wire.
-         */
-        /**
          * Selections outlive the Alpine component that shows them.
          *
          * The root x-data embeds server state, so every Livewire round trip
@@ -83,6 +73,16 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
             return feSelections.get(key);
         }
 
+        /**
+         * One selection, belonging to one explorer.
+         *
+         * It used to be a single Alpine store, so two explorers on a page — the
+         * page's own and a FileExplorerPicker in a modal — shared one selection,
+         * and setSelection reported to whichever component initialised last.
+         * Clicking in one moved the other's highlight and sent its ids to the
+         * wrong component. Each component owns one of these now, so nothing is
+         * addressed globally and each syncs to its own $wire.
+         */
         function createFeSelection() {
             // The $wire proxy lives in this closure and never becomes a property
             // of the returned object. That object is part of the component's
@@ -98,7 +98,6 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
             let wire = null;
 
             return {
-
                 folders: [],
                 files: [],
                 marqueeFolders: [],
@@ -541,12 +540,12 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
         }
 
         document.addEventListener('alpine:init', () => {
-            registerQfSelStore();
+            registerQfDragStore();
             registerQfUiStore();
             registerQfUploadStore();
         });
         if (window.Alpine) {
-            registerQfSelStore();
+            registerQfDragStore();
             registerQfUiStore();
             registerQfUploadStore();
         }

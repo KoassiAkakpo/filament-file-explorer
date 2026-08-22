@@ -62,7 +62,15 @@ function createRealm() {
     const context = {
         // Enough of window for the drag store, which binds its pointer
         // listeners there.
+        //
+        // Alpine is on it deliberately: the script registers its stores at load
+        // when it finds window.Alpine, and without that the whole bootstrap path
+        // never ran here — a call to a function renamed out from under it threw
+        // in the browser with every test green.
         window: {
+            get Alpine() {
+                return Alpine;
+            },
             addEventListener() {},
             removeEventListener() {},
             dispatchEvent() {},
