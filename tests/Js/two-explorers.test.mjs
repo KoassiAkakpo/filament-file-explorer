@@ -132,3 +132,17 @@ test('a drag prepares the selection of the explorer it started in', () => {
     assert.deepEqual(selected(picker.sel), ['file:22']);
     assert.equal(feDrag.sel, page.sel);
 });
+
+test('the selection reaches its component through a closure, not a property', () => {
+    const { page } = twoExplorers();
+
+    // The harness's $wire refuses to be called on a wrapper, the way the real
+    // Livewire proxy effectively does. Held as a property of the selection —
+    // which is reactive x-data — it would be handed out wrapped and this would
+    // throw instead of recording the call.
+    page.sel.select([], [12]);
+    page.sel.flushSync();
+
+    assert.equal(page.sel.hasWire(), true);
+    assert.deepEqual(wireCalls(page.calls), ['setSelection([], [12])']);
+});

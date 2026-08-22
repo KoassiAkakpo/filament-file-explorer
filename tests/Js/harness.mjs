@@ -68,6 +68,41 @@ function createRealm() {
     return { context, Alpine };
 }
 
+/**
+ * Enough of Alpine's reactivity to model the one constraint that matters: nested
+ * objects are handed out wrapped, so anything stored as a property gets a
+ * wrapper around it.
+ *
+ * The Livewire $wire proxy cannot survive that — its methods stop working when
+ * invoked on a wrapper — which is why the selection keeps it in a closure. A
+ * stub without this could not tell the difference, and did not: the bug shipped
+ * with all seventeen tests green.
+ */
+function reactive(target, seen = new WeakMap()) {
+    if (target === null || typeof target !== 'object') return target;
+    if (seen.has(target)) return seen.get(target);
+
+    const proxy = new Proxy(target, {
+        get(object, key, receiver) {
+            const value = Reflect.get(object, key, receiver);
+
+            // $wire, $el, $refs and friends are Alpine magics: they are resolved
+            // beside the data, not inside it, so they come back untouched. That
+            // is what makes holding $wire in a closure work and holding it as a
+            // property of the data not.
+            if (typeof key === 'string' && key.startsWith('$')) {
+                return value;
+            }
+
+            return (typeof value === 'object' && value !== null) ? reactive(value, seen) : value;
+        },
+    });
+
+    seen.set(target, proxy);
+
+    return proxy;
+}
+
 function createExplorer(realm, { items = [], columns = 4 } = {}) {
     const elements = items.map((item, index) => ({
         _item: item,
@@ -91,13 +126,20 @@ function createExplorer(realm, { items = [], columns = 4 } = {}) {
     };
 
     const calls = [];
+
+    /**
+     * Stands in for the Livewire proxy, and refuses to be called on a wrapper
+     * the way the real one effectively does.
+     */
     const wire = {
         selectedFolders: [],
         selectedFiles: [],
         setSelection(folders, files) {
+            assertRawWire(this, wire);
             calls.push(['setSelection', folders, files]);
         },
         clearSelection() {
+            assertRawWire(this, wire);
             calls.push(['clearSelection']);
         },
     };
@@ -116,11 +158,15 @@ function createExplorer(realm, { items = [], columns = 4 } = {}) {
         $refs: {},
     });
 
-    component.init();
+    // Handed out the way Alpine hands out x-data: everything the tests touch
+    // goes through the wrapper, as it does in a browser.
+    const view = reactive(component);
+
+    view.init();
 
     // The selection belongs to the component now, not to a global store: that
     // is the whole point of it, and two components give two selections.
-    return { component, sel: component.sel, calls, items, elements, container, wire };
+    return { component: view, sel: view.sel, calls, items, elements, container, wire };
 }
 
 /**
@@ -151,4 +197,13 @@ export function selected(sel) {
  */
 export function wireCalls(list) {
     return list.map(([method, ...args]) => `${method}(${args.map((arg) => JSON.stringify(arg)).join(', ')})`);
+}
+
+function assertRawWire(received, wire) {
+    if (received !== wire) {
+        throw new Error(
+            'A $wire method was invoked on a wrapper, not on the proxy itself. '
+            + 'Something is holding $wire as a property of a reactive object — keep it in a closure.'
+        );
+    }
 }

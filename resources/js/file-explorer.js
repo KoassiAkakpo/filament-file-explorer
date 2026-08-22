@@ -59,6 +59,19 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
          * addressed globally and each syncs to its own $wire.
          */
         function createFeSelection() {
+            // The $wire proxy lives in this closure and never becomes a property
+            // of the returned object. That object is part of the component's
+            // x-data, so Alpine makes it reactive, and a reactive wrapper around
+            // the Livewire proxy breaks method calls on it — the warning above
+            // is not about stores in particular, it is about the proxy.
+            //
+            // A property here was a real regression: setSelection stopped
+            // reaching the server, $wire.selectedFolders stayed empty, and the
+            // watch below read that as a server-side clear and wiped the local
+            // selection — so arrows and shift+arrows selected and immediately
+            // lost it.
+            let wire = null;
+
             return {
 
                 folders: [],
@@ -73,14 +86,16 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 // shift+arrow re-select the same two items.
                 cursor: null,
                 _syncTimer: null,
-                _wire: null,
-                setWire(wire) {
-                    if (wire) {
-                        this._wire = wire;
+                setWire(next) {
+                    if (next) {
+                        wire = next;
                     }
                 },
+                hasWire() {
+                    return wire !== null;
+                },
                 callWire(method, ...args) {
-                    return invokeWire(this._wire, method, ...args);
+                    return invokeWire(wire, method, ...args);
                 },
                 replace(folders, files) {
                     this.folders = (folders || []).map(Number);

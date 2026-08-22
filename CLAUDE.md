@@ -19,7 +19,13 @@ composer install
 node --test "tests/Js/*.test.mjs"                    # selection / keyboard logic
 ```
 
-`tests/Js/` has **no dependencies and no build step**: [tests/Js/harness.mjs](tests/Js/harness.mjs) runs `resources/js/file-explorer.js` in a `node:vm` context with just enough of Alpine and the DOM to drive the selection store. It exists because the keyboard and selection layer is where the bugs actually are and no PHP test can reach it. Objects cross the vm boundary, so their prototype is not the test realm's — compare them by value (`at()`), never with `deepStrictEqual`.
+`tests/Js/` has **no dependencies and no build step**: [tests/Js/harness.mjs](tests/Js/harness.mjs) runs `resources/js/file-explorer.js` in a `node:vm` context with just enough of Alpine and the DOM to drive the selection. It exists because the keyboard and selection layer is where the bugs actually are and no PHP test can reach it.
+
+Three things about it are load-bearing:
+
+- Objects cross the vm boundary, so their prototype is not the test realm's — compare them by value (`at()`, `selected()`, `wireCalls()`), never with `deepStrictEqual`.
+- `spawn()` puts a **second explorer in the same realm**, sharing the Alpine stores. Two `loadExplorer()` calls give two isolated realms instead, which proves nothing about anything shared.
+- The stub **models Alpine's reactivity**: nested objects are handed out wrapped, `$`-prefixed keys are not (they are magics, resolved beside the data). The fake `$wire` throws when a method is invoked on a wrapper, the way the real Livewire proxy effectively breaks. That is not decoration — holding `$wire` as a property of the selection instead of in a closure shipped once with every test green, and it stopped `setSelection` reaching the server, which the `$wire.selectedFolders` watch then read as a server-side clear and wiped the selection with. Arrows and shift+arrows selected and immediately lost it.
 
 `larastan`/`phpstan` are dev dependencies but there is **no `phpstan.neon`** — static analysis is not wired up. Running `./vendor/bin/pint` on the whole repo currently reports pre-existing style drift in several files (import order, strict-type declarations in `config/` and `resources/lang/`); scope formatting to the files you touch rather than reformatting the tree.
 
