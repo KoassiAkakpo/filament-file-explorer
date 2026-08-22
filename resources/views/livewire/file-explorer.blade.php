@@ -36,7 +36,7 @@
             @new-folder-created.window="focusInput('[data-fe-new-folder-input]', $event.detail)"
             @focus-rename-input.window="focusInput('[data-fe-rename-input]', $event.detail)"
             @click.window="closeContext()"
-            @keydown.escape.window="closeContext(); $wire.cancelRename(); $wire.cancelNewFolder(); $wire.closeInfo(); $wire.cancelDelete(); $wire.closePreview()"
+            @keydown.escape.window="closeContext(); $wire.cancelRename(); $wire.cancelNewFolder(); $wire.closeInfo(); $wire.cancelDelete(); $wire.closePreview(); $wire.closeShare()"
         >
             <div class="fe-finder w-full overflow-hidden rounded-xl border border-zinc-200/90 bg-zinc-50/80 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40" dir="ltr" lang="{{ $locale }}" translate="no">
                 <div class="flex min-h-[560px]">
@@ -817,6 +817,69 @@
                 </div>
             @endif
 
+            {{-- Share link. Inside the component, like the other dialogs: the
+                 picker embeds this same component where no page-level modal
+                 exists. --}}
+            @if ($shareItem)
+                @php $shareId = 'fe-share-'.$this->getId(); @endphp
+                <div class="fe-overlay" wire:key="fe-share-{{ $shareItem['id'] }}">
+                    <div
+                        class="fe-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="{{ $shareId }}"
+                        x-data="{ copied: false }"
+                        x-init="$nextTick(() => $refs.feShareUrl?.focus())"
+                        @keydown.tab.prevent="trapTab($event, $el)"
+                    >
+                        <h2 id="{{ $shareId }}" class="fe-modal__title">
+                            {{ __('filament-file-explorer::file-explorer.share.title') }}
+                        </h2>
+
+                        <p class="fe-modal__note truncate">{{ $shareItem['name'] }}</p>
+                        <p class="fe-modal__note">{{ __('filament-file-explorer::file-explorer.share.description') }}</p>
+
+                        <div class="fe-share__row">
+                            <input
+                                type="text"
+                                class="fe-input fe-share__url"
+                                readonly
+                                x-ref="feShareUrl"
+                                value="{{ $shareItem['url'] }}"
+                                @focus="$el.select()"
+                            >
+                            <button
+                                type="button"
+                                class="fe-btn shrink-0"
+                                @click="navigator.clipboard?.writeText(@js($shareItem['url'])); copied = true; setTimeout(() => copied = false, 1500)"
+                            >
+                                <span x-show="!copied">{{ __('filament-file-explorer::file-explorer.share.copy') }}</span>
+                                <span x-show="copied" x-cloak>{{ __('filament-file-explorer::file-explorer.share.copied') }}</span>
+                            </button>
+                        </div>
+
+                        <p class="fe-modal__note">
+                            {{ __('filament-file-explorer::file-explorer.share.expires') }}:
+                            {{ $shareItem['expires_at'] ?? __('filament-file-explorer::file-explorer.share.never_expires') }}
+                            &middot;
+                            {{ trans_choice('filament-file-explorer::file-explorer.share.views', $shareItem['views'], ['count' => $shareItem['views']]) }}
+                        </p>
+
+                        <div class="fe-modal__actions">
+                            <button type="button" class="fe-btn fe-btn--danger me-auto" wire:click="revokeShare">
+                                {{ __('filament-file-explorer::file-explorer.share.revoke') }}
+                            </button>
+                            <a class="fe-btn" href="{{ $shareItem['url'] }}" target="_blank" rel="noopener">
+                                {{ __('filament-file-explorer::file-explorer.share.open') }}
+                            </a>
+                            <button type="button" class="fe-btn" wire:click="closeShare">
+                                {{ __('filament-file-explorer::file-explorer.inspector.close') }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             {{-- Preview lightbox --}}
             @if ($previewItem)
                 <div
@@ -1021,6 +1084,12 @@
                         <button type="button" class="fe-ctx-item" x-show="abilities.download" @click="run(() => window.location.href = ctx.type === 'folder' ? folderZipUrl(ctx.id) : mediaZipUrl(ctx.id))">
                             @svg('heroicon-o-archive-box', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.context.compress_zip') }}
                         </button>
+                        @if (\Koassi\FilamentFileExplorer\Support\Sharing::enabled())
+                            <div class="fe-ctx-sep" x-show="abilities.share && ctx.type === 'file'"></div>
+                            <button type="button" class="fe-ctx-item" x-show="abilities.share && ctx.type === 'file'" @click="run(() => $wire.shareFile(ctx.id))">
+                                @svg('heroicon-o-link', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.share.action') }}
+                            </button>
+                        @endif
                         <div class="fe-ctx-sep" x-show="abilities.getInfo"></div>
                         <button type="button" class="fe-ctx-item" x-show="abilities.getInfo" @click="run(() => $wire.showInfo(ctx.type, ctx.id))">
                             @svg('heroicon-o-information-circle', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.context.info') }}

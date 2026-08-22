@@ -81,14 +81,13 @@ it('serves the file to someone with no session at all', function (): void {
 
 it('takes nothing but the token', function (): void {
     $share = feShShare();
-    $other = feShMedia('secret.pdf');
 
-    // No scope key, no media id, nothing to edit into a link for another file.
-    $url = app(Sharing::class)->url($share);
-
-    expect($url)->not->toContain('library')
-        ->and($url)->not->toContain((string) $other->id)
-        ->and($url)->toContain($share->token);
+    // The token is the whole path: no scope key, no media id, no conversion —
+    // nothing that could be edited into a link for another file. Asserted
+    // exactly, because "does not contain the other id" passes by luck when the
+    // id is a single digit and the token is 64 random characters.
+    expect(app(Sharing::class)->url($share))
+        ->toBe(url('file-explorer/share/'.$share->token));
 });
 
 it('stops serving once revoked', function (): void {
@@ -274,4 +273,45 @@ it('reports the link to the panel', function (): void {
     expect($state['media_id'])->toBe($media->id)
         ->and($state['url'])->toContain('file-explorer/share/')
         ->and($state['expires_at'])->not->toBeNull();
+});
+
+it('offers the action on a file and renders the dialog', function (): void {
+    $media = feShMedia();
+
+    $html = feShComponent()->assertOk()->html();
+
+    // Files only: no folder entry, and gated on the ability so an authorizer
+    // that refuses sharing hides it.
+    expect($html)->toContain("abilities.share && ctx.type === 'file'")
+        ->toContain('$wire.shareFile(ctx.id)');
+
+    $dialog = feShComponent()->call('shareFile', $media->id)->html();
+
+    expect($dialog)->toContain(app(Sharing::class)->activeForMedia($media->id, 'library', feShRootId())->token)
+        ->toContain('revokeShare');
+});
+
+it('hides the action when the ability is refused', function (): void {
+    app()->instance(FileExplorerAuthorizer::class, new class extends AllowAllAuthorizer
+    {
+        public function abilities(string $scopeKey, int $rootFolderId): array
+        {
+            return [...parent::abilities($scopeKey, $rootFolderId), 'share' => false];
+        }
+    });
+    app()->forgetScopedInstances();
+
+    feShMedia();
+
+    // The entry is in the markup but Alpine never shows it, so what matters is
+    // that the ability reaching the JS is false.
+    expect(feShComponent()->instance()->abilities()['share'])->toBeFalse();
+});
+
+it('drops the action entirely when sharing is off', function (): void {
+    config(['filament-file-explorer.share.enabled' => false]);
+
+    feShMedia();
+
+    expect(feShComponent()->assertOk()->html())->not->toContain('$wire.shareFile');
 });

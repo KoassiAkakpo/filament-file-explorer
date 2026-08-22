@@ -366,6 +366,36 @@ Two things this deliberately does *not* change:
 - **Media rows keep storing the package's class in `model_type`.** `getMorphClass()` answers for the base model on purpose, so switching does not orphan a library already uploaded: every row still passes the containment guard, which checks that value. Set `morph_class` only if you are migrating from some other implementation.
 - **Config, not a plugin setting.** A model cannot know which panel it is being browsed from — the same reason the thumbnail conversion is config only.
 
+## Share links
+
+Right-click a file and **Share** gives it a link that works with no account and no session — which is the point: it is how you send a file to someone outside the panel. The dialog shows the link, when it expires, how many times it has been opened, and a button to stop sharing.
+
+```php
+// config/filament-file-explorer.php
+'share' => [
+    'enabled' => true,
+    'default_ttl_days' => 7,
+    'max_ttl_days' => 30,   // a ceiling, not a default; null allows links that never expire
+],
+```
+
+Gated on the `share` ability, which **follows `download`** for any authorizer that does not answer it — so an authorizer written before this existed keeps meaning what its author meant, and one that refuses downloads refuses sharing too.
+
+### How it holds up without a session
+
+The package's two guards cannot both run on a request with no authenticated user, so they are split in time:
+
+- **The ability is checked when the link is made**, and that decision is what the row records. There is nobody to ask afterwards.
+- **Containment is checked on every request**, against the root stored on the row — never against anything derived from the media, which would only prove the file sits under its own ancestor.
+
+That split is what makes a link die on its own, with nothing to keep in step: a file **moved out of the scope it was shared from** fails the containment walk, a **trashed** file leaves the explorer's collection and fails the same check, and a **deleted** file has no row. Revoking is a database write and takes effect immediately.
+
+The route takes the token and nothing else — no scope key, no media id, no conversion name — so a link cannot be edited into a link for another file or another rendition. A bad token, an expired one, a revoked one and a file that has gone all answer 404 alike; telling them apart would say whether a token was ever real.
+
+Links are stored rather than signed, because revoking is the half of sharing that matters. Revoking keeps the row, so a withdrawn share is still there to inspect — and `FileShared` / `ShareRevoked` are fired for both, like every other mutation.
+
+Upgrading an existing install adds the shares table, so run `php artisan migrate`.
+
 ## Events
 
 Every mutation fires an event, so an application can keep an audit trail, notify, scan, index or replicate without extending the component.
@@ -401,6 +431,8 @@ Event::listen(FileUploaded::class, ScanUpload::class);
 | `FolderRestored` | `folder` |
 | `FileDeleted` | `mediaId`, `name`, `fileName`, `folderId`, `size`, `purgedFromTrash` |
 | `FolderDeleted` | `folderId`, `name`, `parentId`, `purgedFromTrash` |
+| `FileShared` | `media`, `share` |
+| `ShareRevoked` | `share` |
 
 All of them carry `scopeKey`, `rootFolderId` and `actor` (nullable — a console command has none). The scope is on every event because it is the only way to tell two explorers apart: the same tree is reachable from a page and from a picker in a modal, and the per-user and per-tenant resolvers run the same code for every scope.
 

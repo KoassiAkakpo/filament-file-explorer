@@ -752,6 +752,19 @@ body.fe-is-dragging * {
   background: rgba(251, 191, 36, 0.12);
   color: #fcd34d;
 }
+.fe-share__row {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+}
+/* The link is long and the dialog is narrow: the input has to be allowed to
+   shrink, or it pushes the copy button out of the modal. */
+.fe-share__url {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.5rem;
+}
 .fe-modal__actions {
   margin-top: 1.1rem;
   display: flex;

@@ -59,11 +59,13 @@ Closing this also fixed a data-loss bug it uncovered: the files table's delete c
 
 ## Features planned before 1.0
 
-### Signed, expiring share links
+### ~~Expiring share links~~ — done
 
-The most asked-for capability of any file manager, and the security model is already shaped for it: the media route takes the scope key as a URL segment and resolves the root through `ScopeRoots`, so a sibling route without `auth` and with a signed, expiring URL fits the existing containment check rather than working around it.
+Stored tokens rather than signed URLs, because revoking is the half of sharing that matters. See [the README](README.md#share-links).
 
-Unblocked: the `share` ability is declared and resolves for every authorizer, so what is left is the route, the expiry and the UI.
+The interesting part was that a public request has no authenticated user, so the ability check and the containment check cannot both run at request time. They are split in time: the ability is checked when the link is made and the decision is recorded; containment runs on every request against the root stored on the row. That is what makes a link die on its own when the file is moved out of scope, trashed or deleted — no bookkeeping, and no way to keep serving something the explorer would no longer show.
+
+Two extractions came first, so no security rule ended up with two copies: `ServesMediaFiles` for the disk-and-conversion response logic, `Support\MediaScope` for the three-condition containment check that had been written out in both the controller and the component.
 
 ### The column view
 
