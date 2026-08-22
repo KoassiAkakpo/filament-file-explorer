@@ -319,10 +319,8 @@
 
                         <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false">
                             <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.view_options') }}" @click="open = !open">
-                                @if ($viewMode === 'list')
-                                    @svg('heroicon-o-list-bullet', 'h-3.5 w-3.5')
-                                @elseif ($viewMode === 'table')
-                                    @svg('heroicon-o-table-cells', 'h-3.5 w-3.5')
+                                @if ($viewMode === 'columns')
+                                    @svg('heroicon-o-view-columns', 'h-3.5 w-3.5')
                                 @elseif ($viewMode === 'details')
                                     @svg('heroicon-o-bars-3', 'h-3.5 w-3.5')
                                 @else
@@ -341,8 +339,6 @@
                                 class="fe-menu absolute end-0 top-full z-30 mt-1 w-44 overflow-hidden py-1"
                             >
                                 <button type="button" class="fe-view-item {{ $viewMode === 'grid' ? 'fe-view-item--active' : '' }}" wire:click="setViewMode('grid')" @click="open=false">@svg('heroicon-o-squares-2x2', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.view.icons') }}</button>
-                                <button type="button" class="fe-view-item {{ $viewMode === 'list' ? 'fe-view-item--active' : '' }}" wire:click="setViewMode('list')" @click="open=false">@svg('heroicon-o-list-bullet', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.view.list') }}</button>
-                                <button type="button" class="fe-view-item {{ $viewMode === 'table' ? 'fe-view-item--active' : '' }}" wire:click="setViewMode('table')" @click="open=false">@svg('heroicon-o-table-cells', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.view.table') }}</button>
                                 <button type="button" class="fe-view-item {{ $viewMode === 'columns' ? 'fe-view-item--active' : '' }}" wire:click="setViewMode('columns')" @click="open=false">@svg('heroicon-o-view-columns', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.view.columns') }}</button>
                                 <button type="button" class="fe-view-item {{ $viewMode === 'details' ? 'fe-view-item--active' : '' }}" wire:click="setViewMode('details')" @click="open=false">@svg('heroicon-o-bars-3', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.view.details') }}</button>
                             </div>
@@ -430,7 +426,7 @@
                         @class([
                             'relative min-h-[500px] select-none overflow-y-auto p-2 pb-8',
                             'flex flex-wrap content-start gap-x-0 gap-y-1' => in_array($viewMode, ['grid', 'icons'], true),
-                            'space-y-0.5' => in_array($viewMode, ['list', 'table', 'details'], true),
+                            'space-y-0.5' => $viewMode === 'details',
                             'fe-columns' => $viewMode === 'columns' && $panes !== [],
                         ])
                     >
@@ -446,7 +442,7 @@
                             } : {}"
                         ></div>
                         @if ($isCreatingNewFolder)
-                            @if (in_array($viewMode, ['list', 'table', 'details'], true))
+                            @if ($viewMode === 'details')
                                 <div class="flex items-center gap-3 rounded-lg bg-teal-50/70 px-3 py-2 dark:bg-teal-950/20" @click.outside="$wire.cancelNewFolder">
                                     <x-filament-file-explorer::file-explorer.folder-icon class="h-7 w-7 shrink-0" />
                                     <input type="text" data-fe-new-folder-input wire:model="newFolderName" wire:keydown.enter.prevent="saveNewFolder" wire:keydown.escape.prevent="cancelNewFolder" class="fe-input w-full px-2 py-1 text-sm">
@@ -465,12 +461,8 @@
                         @endif
 
                         @php
-                            $isRowView = in_array($viewMode, ['list', 'table', 'details'], true);
-                            $cols = match ($viewMode) {
-                                'details' => 'grid-cols-[minmax(0,1fr)_6rem_7rem_8rem]',
-                                'table' => 'grid-cols-[minmax(0,1fr)_6rem_8rem]',
-                                default => 'grid-cols-[minmax(0,1fr)_7rem_8rem]',
-                            };
+                            $isRowView = $viewMode === 'details';
+                            $cols = 'grid-cols-[minmax(0,1fr)_6rem_7rem_8rem]';
                         @endphp
 
                         @if ($viewMode === 'columns' && $panes !== [])
@@ -534,6 +526,11 @@
                                         @php
                                             $paneLabel = \Koassi\FilamentFileExplorer\Support\MediaLabel::display($media);
                                             $paneIcon = \Koassi\FilamentFileExplorer\Support\MimeIcon::forMedia($media);
+                                            // Through the media route, never getUrl(): that is a raw disk URL,
+                                            // readable by anyone holding the link and checked by nothing.
+                                            $paneThumb = str_starts_with((string) $media->mime_type, 'image/')
+                                                ? $this->mediaThumbnailUrl((int) $media->id)
+                                                : null;
                                         @endphp
                                         @if ($pane['isLast'])
                                             <div
@@ -552,7 +549,13 @@
                                                     $dispatch('fe-context', { type: 'file', id: {{ $media->id }}, name: @js($paneLabel), x: $event.clientX, y: $event.clientY });
                                                 "
                                             >
-                                                <span class="fe-column__icon"><x-filament-file-explorer::file-explorer.mime-icon :icon="$paneIcon" size="sm" /></span>
+                                                <span class="fe-column__icon">
+                                                    @if ($paneThumb)
+                                                        <img src="{{ $paneThumb }}" alt="" loading="lazy" class="fe-column__thumb">
+                                                    @else
+                                                        <x-filament-file-explorer::file-explorer.mime-icon :icon="$paneIcon" size="sm" />
+                                                    @endif
+                                                </span>
                                                 <span class="truncate">{{ $paneLabel }}</span>
                                             </div>
                                         @else
@@ -561,7 +564,13 @@
                                                 class="fe-column__row"
                                                 wire:click="revealInColumn({{ $pane['folder']->id }}, {{ $media->id }})"
                                             >
-                                                <span class="fe-column__icon"><x-filament-file-explorer::file-explorer.mime-icon :icon="$paneIcon" size="sm" /></span>
+                                                <span class="fe-column__icon">
+                                                    @if ($paneThumb)
+                                                        <img src="{{ $paneThumb }}" alt="" loading="lazy" class="fe-column__thumb">
+                                                    @else
+                                                        <x-filament-file-explorer::file-explorer.mime-icon :icon="$paneIcon" size="sm" />
+                                                    @endif
+                                                </span>
                                                 <span class="truncate">{{ $paneLabel }}</span>
                                             </button>
                                         @endif
@@ -623,7 +632,6 @@
                                     "
                                     @class([
                                         'folder fe-list-row grid cursor-default items-center gap-2 px-3 py-1.5 text-[13px] transition-colors duration-75 ' . $cols,
-                                        'rounded-lg border border-zinc-100 dark:border-zinc-700/60' => $viewMode === 'table',
                                         'rounded-none' => $viewMode === 'details',
                                         'fe-list-row--stripe' => $isStripe,
                                     ])
@@ -687,7 +695,6 @@
                                     "
                                     @class([
                                         'file fe-list-row grid cursor-default items-center gap-2 px-3 py-1.5 text-[13px] transition-colors duration-75 ' . $cols,
-                                        'rounded-lg border border-zinc-100 dark:border-zinc-700/60' => $viewMode === 'table',
                                         'rounded-none' => $viewMode === 'details',
                                         'fe-list-row--stripe' => $isStripe,
                                     ])
@@ -1125,8 +1132,6 @@
                                  x-transition:leave-start="opacity-100"
                                  x-transition:leave-end="opacity-0">
                                 <button type="button" class="fe-ctx-item" @click="run(() => $wire.setViewMode('grid'))">@svg('heroicon-o-squares-2x2', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.view.icons') }}</button>
-                                <button type="button" class="fe-ctx-item" @click="run(() => $wire.setViewMode('list'))">@svg('heroicon-o-list-bullet', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.view.list') }}</button>
-                                <button type="button" class="fe-ctx-item" @click="run(() => $wire.setViewMode('table'))">@svg('heroicon-o-table-cells', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.view.table') }}</button>
                                 <button type="button" class="fe-ctx-item" @click="run(() => $wire.setViewMode('columns'))">@svg('heroicon-o-view-columns', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.view.columns') }}</button>
                                 <button type="button" class="fe-ctx-item" @click="run(() => $wire.setViewMode('details'))">@svg('heroicon-o-bars-3', 'fe-ctx-icon') {{ __('filament-file-explorer::file-explorer.view.details') }}</button>
                             </div>

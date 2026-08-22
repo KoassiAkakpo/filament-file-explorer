@@ -845,6 +845,15 @@ body.fe-is-dragging * {
 .dark .fe-column__icon {
   color: #a1a1aa;
 }
+/* The thumbnail stands in for the mime icon at exactly its size, so a pane of
+   photos and a pane of documents line up on the same left edge. */
+.fe-column__thumb {
+  height: 100%;
+  width: 100%;
+  border-radius: 3px;
+  object-fit: cover;
+  pointer-events: none;
+}
 .fe-column__chevron {
   margin-inline-start: auto;
   height: 0.85rem;

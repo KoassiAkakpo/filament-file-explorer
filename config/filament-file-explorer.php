@@ -300,9 +300,9 @@ return [
     | Default view
     |--------------------------------------------------------------------------
     |
-    | The view the explorer opens in: grid, list, table or details. Whatever the
+    | The view the explorer opens in: grid, columns or details. Whatever the
     | user picks afterwards is remembered per scope, so this only applies until
-    | they choose. Per panel: ->defaultViewMode('list').
+    | they choose. Per panel: ->defaultViewMode('columns').
     |
     */
     'view' => [

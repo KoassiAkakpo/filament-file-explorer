@@ -258,3 +258,21 @@ it('tells the JS which view is rendered without putting it in x-data', function 
     // is a fact about what is rendered.
     expect(feCvComponent()->assertOk()->html())->toContain('data-fe-view="columns"');
 });
+
+it('shows a thumbnail for an image and an icon for anything else', function (): void {
+    $docs = feCvFolder('Docs');
+
+    $photo = feCvMedia('photo.png', $docs);
+    $photo->mime_type = 'image/png';
+    $photo->save();
+
+    feCvMedia('report.pdf', $docs);
+
+    $html = feCvComponent()->call('navigateToFolder', $docs)->assertOk()->html();
+
+    // Through the media route with ?conversion=thumbnail, never getUrl(): that
+    // is a raw disk URL, readable by anyone holding the link.
+    expect($html)->toContain('fe-column__thumb')
+        ->toContain('conversion=thumbnail')
+        ->and(substr_count($html, 'fe-column__thumb'))->toBe(1);
+});

@@ -66,7 +66,7 @@ Behaviour, not just chrome, is panel-scoped too:
 FilamentFileExplorerPlugin::make()
     ->quota(10 * 1024 ** 3)                 // bytes a scope may hold
     ->refreshEvery(20)                      // seconds between automatic refreshes
-    ->defaultViewMode('list')               // grid, list, table, columns or details
+    ->defaultViewMode('columns')            // grid, columns or details
     ->maxFolderDepth(6)
     ->tableColumns(fn (array $columns) => Arr::except($columns, ['preview']))
 ```
@@ -180,13 +180,16 @@ Both modes coexist: registering the plugin does not interfere with record-scoped
 
 ## Views
 
-Five ways to look at a folder, remembered per scope: **grid** (icons), **list**, **table** (name, kind, date), **details** (the same with sizes), and **columns**.
+Three ways to look at a folder, remembered per scope: **icons**, **columns**, and **details** (rows with kind, size and date).
+
+Three, not five: `list` and `table` were variations on `details` with a column dropped, so they offered three ways to look at the same rows and nothing to choose between them. A stored preference naming one of them falls back to the default, which is what an unknown mode has always done.
 
 **Columns** is the Finder's cascading browser: one pane per level of the path, the contents of the folder you are in on the right, and the trail through the tree marked in the panes behind it. Clicking a folder in any pane moves there and drops the panes beyond; clicking a file in a pane behind the last one moves there and selects it.
 
 Two things about it are deliberate:
 
 - **Left and right walk the panes.** Right descends into the selected folder and lands on the first entry of the pane it opens, so you can keep descending; left walks back out with the folder you just left selected. Up and down stay inside the pane, and with shift held every arrow extends the selection there instead of navigating.
+- **Images show their thumbnail**, through the media route like everywhere else, at exactly the size of the icon it replaces so panes of photos and panes of documents line up on the same edge.
 - **Only the last pane holds selectable items.** The panes behind it are navigation, and carry none of the `data-fe-type` / `data-id` attributes the selection layer reads — so shift-ranges and the marquee operate on the folder being browsed, exactly as in every other view. Folders in *any* pane are drop targets, though: a destination you can see is a destination you can drop on.
 - **Searching falls back to the flat result list.** A search answers with matches from the whole scope, which is not a path; drawing it as one would be a lie about where the results are.
 

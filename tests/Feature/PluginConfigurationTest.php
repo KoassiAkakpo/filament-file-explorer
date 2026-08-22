@@ -82,14 +82,14 @@ class CustomExplorerPage extends StandaloneFileExplorerPage
 }
 
 it('opens in the view the panel chose', function (): void {
-    config(['filament-file-explorer.view.default' => 'list']);
+    config(['filament-file-explorer.view.default' => 'columns']);
 
     $root = app(FileExplorerManager::class)->ensureRoot('library', 'Library');
 
     Livewire\Livewire::test(Koassi\FilamentFileExplorer\Livewire\FileExplorer::class, [
         'scopeKey' => 'library',
         'rootFolderId' => $root->id,
-    ])->assertSet('viewMode', 'list');
+    ])->assertSet('viewMode', 'columns');
 });
 
 it('falls back to the grid when the configured view does not exist', function (): void {
@@ -99,7 +99,7 @@ it('falls back to the grid when the configured view does not exist', function ()
 });
 
 it('still remembers what the user picked over the default', function (): void {
-    config(['filament-file-explorer.view.default' => 'list']);
+    config(['filament-file-explorer.view.default' => 'columns']);
 
     $root = app(FileExplorerManager::class)->ensureRoot('library', 'Library');
 

@@ -23,7 +23,14 @@ final class StandaloneSettings
      * The views the explorer knows how to render. Kept here so the default and
      * the component's own validation cannot drift apart.
      */
-    public const VIEW_MODES = ['grid', 'list', 'table', 'details', 'columns'];
+    /**
+     * Three, on purpose. `list` and `table` were variations on `details` with
+     * a column dropped, so they gave a user three ways to look at the same rows
+     * and nothing to choose between them. A preference stored on one of them
+     * falls back to the default, which is what normalise() already did for any
+     * mode it does not know.
+     */
+    public const VIEW_MODES = ['grid', 'columns', 'details'];
 
     public static function plugin(): ?FilamentFileExplorerPlugin
     {

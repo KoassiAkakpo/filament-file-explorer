@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\File;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer as FileExplorerComponent;
 use Koassi\FilamentFileExplorer\Support\MimeIcon;
+use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -33,12 +34,12 @@ it('remembers the view mode and the sort across mounts', function (): void {
 it('keeps the preferences of two scopes apart', function (): void {
     $root = app(FileExplorerRootResolver::class)->rootFolderId();
 
-    fePrefComponent()->call('setViewMode', 'list');
+    fePrefComponent()->call('setViewMode', 'details');
 
     Livewire::test(FileExplorerComponent::class, ['scopeKey' => 'other', 'rootFolderId' => $root])
         ->assertSet('viewMode', 'grid');
 
-    fePrefComponent()->assertSet('viewMode', 'list');
+    fePrefComponent()->assertSet('viewMode', 'details');
 });
 
 it('falls back to the default when a stored preference no longer exists', function (): void {
@@ -69,4 +70,21 @@ it('accepts by default every kind the shipped icons can render', function (): vo
 it('does not accept svg, which the media route would serve inline', function (): void {
     expect(UploadRules::acceptedExtensions())->not->toContain('svg')
         ->and(UploadRules::acceptedMimeTypes())->not->toContain('image/svg+xml');
+});
+
+it('falls back for a mode the package used to have', function (): void {
+    // `list` and `table` were dropped for being variations on `details`. Anyone
+    // who had picked one keeps a stored preference naming it, and must land on
+    // the default rather than on a view that no longer renders.
+    session(['view.library' => ['viewMode' => 'list', 'sortBy' => 'name', 'sortDir' => 'asc']]);
+
+    fePrefComponent()->assertSet('viewMode', 'grid');
+
+    session(['view.library' => ['viewMode' => 'table', 'sortBy' => 'name', 'sortDir' => 'asc']]);
+
+    fePrefComponent()->assertSet('viewMode', 'grid');
+});
+
+it('offers three views and no more', function (): void {
+    expect(StandaloneSettings::VIEW_MODES)->toBe(['grid', 'columns', 'details']);
 });

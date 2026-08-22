@@ -100,8 +100,6 @@ return [
 
     'view' => [
         'icons' => 'Icônes',
-        'list' => 'Liste',
-        'table' => 'Tableau',
         'columns' => 'Colonnes',
         'details' => 'Détails',
         'view' => 'Affichage',
