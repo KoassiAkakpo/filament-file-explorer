@@ -1,4 +1,16 @@
-function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
+        /**
+         * How long a finger has to stay put before the hold means something, and
+         * how far it may drift while doing so.
+         *
+         * 500ms is what the platforms settled on for a long press, and 10px is
+         * about how much a finger moves without meaning to. Above that the
+         * gesture is a scroll, and taking it for anything else is how a folder
+         * becomes impossible to scroll on a tablet.
+         */
+        const FE_LONG_PRESS_MS = 500;
+        const FE_TOUCH_SLOP = 10;
+
+        function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
             return {
                 open: false,
                 _timer: null,
@@ -292,6 +304,16 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 startY: 0,
                 _onMove: null,
                 _onUp: null,
+                _holdTimer: null,
+                /**
+                 * Whether the gesture in progress comes from a finger.
+                 *
+                 * A pointer that can hover has somewhere else to be when it is
+                 * not dragging; a finger touching the page is also how the page
+                 * is scrolled. So the two get different gestures — see
+                 * pointerDown.
+                 */
+                coarse: false,
                 abilities: {},
                 // The selection the drag started in. A drag is one at a time
                 // across the page, so remembering it here is enough — but it
@@ -327,6 +349,23 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.active = false;
                     this.moved = false;
                     this.dropTargetId = null;
+                    this.cancelLongPress();
+
+                    // A finger is not a mouse. The five pixels that mean "this
+                    // is a drag" for a pointer that can hover mean "scroll this
+                    // folder" for one that is touching the glass, and a drag
+                    // that preventDefault()s the move takes the scroll away —
+                    // which is exactly what a tablet user does first.
+                    //
+                    // So a touch never arms a drag. It arms a long press, which
+                    // opens the item's context menu, and moving cancels it and
+                    // leaves the browser to scroll. Moving items is still
+                    // reachable from there: cut, navigate, paste.
+                    this.coarse = !!event.pointerType && event.pointerType !== 'mouse';
+
+                    if (this.coarse) {
+                        this.armLongPress(event, type, id);
+                    }
 
                     this._onMove = (e) => this.pointerMove(e);
                     this._onUp = (e) => this.pointerUp(e);
@@ -335,12 +374,63 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     window.addEventListener('pointercancel', this._onUp, true);
                 },
 
-                pointerMove(event) {
-                    const canMove = !!(this.abilities.move || this.abilities.copy);
-                    if (!canMove) return;
+                /**
+                 * Opens the item's context menu after a hold, by dispatching the
+                 * very event the right-click handler dispatches.
+                 *
+                 * Here rather than in the views because pointerDown is already
+                 * the one place every view hands a press to — the grid, the two
+                 * row views and the column panes — and a long press written five
+                 * times is a long press that behaves five ways.
+                 */
+                armLongPress(event, type, id) {
+                    const el = (event.target.closest && event.target.closest('[data-fe-type]')) || event.target;
+                    const itemId = Number(id);
 
+                    this._holdTimer = setTimeout(() => {
+                        this._holdTimer = null;
+
+                        // The hold has consumed the gesture: the release that
+                        // follows must not also select.
+                        this.suppressClick = true;
+
+                        const held = type === 'folder'
+                            ? this.sel?.hasFolder(itemId)
+                            : this.sel?.hasFile(itemId);
+
+                        if (this.sel && !held) {
+                            this.sel.toggle(type, itemId, false);
+                        }
+
+                        el.dispatchEvent(new CustomEvent('fe-context', {
+                            bubbles: true,
+                            detail: { type, id: itemId, name: this.label, x: this.startX, y: this.startY },
+                        }));
+                    }, FE_LONG_PRESS_MS);
+                },
+
+                cancelLongPress() {
+                    if (this._holdTimer) clearTimeout(this._holdTimer);
+                    this._holdTimer = null;
+                },
+
+                pointerMove(event) {
                     const dx = event.clientX - this.startX;
                     const dy = event.clientY - this.startY;
+
+                    if (this.coarse) {
+                        // Past the slop the finger is scrolling, so the hold is
+                        // off and nothing else happens: no drag, no
+                        // preventDefault, and the folder scrolls as it should.
+                        if (Math.abs(dx) > FE_TOUCH_SLOP || Math.abs(dy) > FE_TOUCH_SLOP) {
+                            this.cancelLongPress();
+                        }
+
+                        return;
+                    }
+
+                    const canMove = !!(this.abilities.move || this.abilities.copy);
+                    if (!canMove) return;
 
                     if (!this.active && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
                         this.active = true;
@@ -359,6 +449,7 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                 },
 
                 pointerUp(event) {
+                    this.cancelLongPress();
                     window.removeEventListener('pointermove', this._onMove, true);
                     window.removeEventListener('pointerup', this._onUp, true);
                     window.removeEventListener('pointercancel', this._onUp, true);
@@ -428,9 +519,11 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this.hideGhost();
                     document.body.classList.remove('fe-is-dragging');
                     this.active = false;
+                    this.coarse = false;
                     this.dropTargetId = null;
                     this.folders = [];
                     this.files = [];
+                    this.cancelLongPress();
                     window.dispatchEvent(new CustomEvent('fe-item-drag-end'));
                 },
 
@@ -1006,6 +1099,66 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                     this._onMarqueeMove = null;
                     this._onMarqueeUp = null;
                 },
+                /**
+                 * A hold on empty space opens the folder's own context menu.
+                 *
+                 * The counterpart of the item hold in the drag store, and it has
+                 * to live here because the empty-space menu is the component's:
+                 * there is no item to hand the press to. Nothing is armed for a
+                 * mouse — right-click already does this, and a mouse press on
+                 * empty space is how the marquee starts.
+                 */
+                onEmptyPointerDown(event) {
+                    if (!event.pointerType || event.pointerType === 'mouse') return;
+                    if (event.target.closest('.folder, .file, [data-fe-type], input, textarea, button, a')) return;
+
+                    const x = event.clientX;
+                    const y = event.clientY;
+
+                    this.cancelEmptyHold();
+
+                    const give = () => this.cancelEmptyHold();
+
+                    this._emptyHoldMove = (e) => {
+                        if (Math.abs(e.clientX - x) > FE_TOUCH_SLOP || Math.abs(e.clientY - y) > FE_TOUCH_SLOP) {
+                            give();
+                        }
+                    };
+                    this._emptyHoldUp = give;
+
+                    window.addEventListener('pointermove', this._emptyHoldMove, true);
+                    window.addEventListener('pointerup', this._emptyHoldUp, true);
+                    window.addEventListener('pointercancel', this._emptyHoldUp, true);
+
+                    this._emptyHoldTimer = setTimeout(() => {
+                        this._emptyHoldTimer = null;
+                        this.cancelEmptyHold();
+                        // openEmptyContext reads a real event, so it is handed
+                        // the two things it uses and a target that answers the
+                        // guard it runs first.
+                        this.openEmptyContext({
+                            clientX: x,
+                            clientY: y,
+                            target: event.target,
+                            preventDefault() {},
+                        });
+                    }, FE_LONG_PRESS_MS);
+                },
+
+                cancelEmptyHold() {
+                    if (this._emptyHoldTimer) clearTimeout(this._emptyHoldTimer);
+                    this._emptyHoldTimer = null;
+
+                    if (this._emptyHoldMove) window.removeEventListener('pointermove', this._emptyHoldMove, true);
+                    if (this._emptyHoldUp) {
+                        window.removeEventListener('pointerup', this._emptyHoldUp, true);
+                        window.removeEventListener('pointercancel', this._emptyHoldUp, true);
+                    }
+
+                    this._emptyHoldMove = null;
+                    this._emptyHoldUp = null;
+                },
+
                 initiateDrawing(event) {
                     if (this.isDraggingItems || Alpine.store('feDrag')?.active) return;
                     if (event.button !== 0) return;

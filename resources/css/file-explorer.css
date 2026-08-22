@@ -1212,6 +1212,51 @@ body.fe-is-dragging * {
 
 [data-fe-items] {
   background: transparent;
+  /* Pan and pinch stay; double-tap-to-zoom goes, which is what makes dblclick
+     fire on a tablet at all — the two handlers the views already carry are the
+     ones that open a file, so the gesture is worth more than the zoom. */
+  touch-action: manipulation;
+}
+
+/* Touch ---------------------------------------------------------------------
+   The finder is a mouse layout, and two things about a finger break it: iOS
+   answers a long press with its own callout over ours, and a 28px control is
+   below every hit-target guideline there is. Neither is a media query away from
+   a redesign — these are the two that matter. */
+.folder,
+.file,
+.fe-list-row,
+.fe-column__row,
+.fe-side-node {
+  -webkit-touch-callout: none;
+}
+
+@media (pointer: coarse) {
+  .fe-tool-btn {
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+  }
+  .fe-ctx-item,
+  .fe-view-item {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .fe-list-row {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+  .fe-column__row {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .fe-side-node {
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+  .fe-tag__remove {
+    height: 1.35rem;
+    width: 1.35rem;
+  }
 }
 
 @keyframes fe-fade-in {

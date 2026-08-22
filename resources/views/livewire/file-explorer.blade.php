@@ -506,6 +506,11 @@
                         aria-label="{{ __('filament-file-explorer::file-explorer.explorer') }}"
                         @keydown="onKeydown($event)"
                         @mousedown.left="initiateDrawing($event)"
+                        {{-- The touch counterpart of the right-click below: a
+                             hold on empty space opens the folder's own menu.
+                             Nothing is armed for a mouse, which starts the
+                             marquee on the line above instead. --}}
+                        x-on:pointerdown="onEmptyPointerDown($event)"
                         @if ($abilities['upload'])
                         x-on:drop="dropingFile = false"
                         x-on:drop.prevent="handleFileDrop($event)"
@@ -590,7 +595,10 @@
                                                     'fe-drop-target': $store.feDrag.dropTargetId === {{ $folder->id }},
                                                 }"
                                                 x-on:pointerdown="$store.feDrag.pointerDown($event, 'folder', {{ $folder->id }}, @js($folder->name), $wire, sel)"
-                                                x-on:click.stop="sel.click('folder', {{ $folder->id }}, $event, $el)"
+                                                x-on:click.stop="
+                                                    if ($store.feDrag.consumeClickSuppression()) return;
+                                                    sel.click('folder', {{ $folder->id }}, $event, $el);
+                                                "
                                                 x-on:dblclick.stop="$wire.navigateToFolder({{ $folder->id }})"
                                                 x-on:contextmenu.stop.prevent="
                                                     if (!sel.hasFolder({{ $folder->id }})) { sel.toggle('folder', {{ $folder->id }}, false); }
@@ -640,7 +648,10 @@
                                                 class="fe-column__row"
                                                 :class="{ 'is-selected': sel.hasFile({{ $media->id }}), 'drag-hover': sel.inMarqueeFile({{ $media->id }}) }"
                                                 x-on:pointerdown="$store.feDrag.pointerDown($event, 'file', {{ $media->id }}, @js($paneLabel), $wire, sel)"
-                                                x-on:click.stop="sel.click('file', {{ $media->id }}, $event, $el)"
+                                                x-on:click.stop="
+                                                    if ($store.feDrag.consumeClickSuppression()) return;
+                                                    sel.click('file', {{ $media->id }}, $event, $el);
+                                                "
                                                 x-on:dblclick.stop="openFile({{ $media->id }})"
                                                 x-on:contextmenu.stop.prevent="
                                                     if (!sel.hasFile({{ $media->id }})) { sel.toggle('file', {{ $media->id }}, false); }

@@ -45,11 +45,17 @@ export function loadExplorer(options = {}) {
         // The stores really are shared between the two, which is what makes
         // the isolation worth asserting.
         Alpine: realm.Alpine,
+        /** Lets a scheduled long press elapse. Nothing fires without it. */
+        runTimers: realm.runTimers,
+        pending: () => realm.timers.length,
     };
 }
 
 function createRealm() {
     const source = readFileSync(resolve(here, '../../resources/js/file-explorer.js'), 'utf8');
+
+    const timers = [];
+    let timerId = 0;
 
     const stores = {};
     const Alpine = {
@@ -75,13 +81,57 @@ function createRealm() {
             addEventListener() {},
             removeEventListener() {},
             dispatchEvent() {},
+            // The context menu positions itself inside the viewport, so it has
+            // to have one.
+            innerWidth: 1200,
+            innerHeight: 800,
         },
-        document: { querySelector: () => null, hidden: false, addEventListener() {} },
+        // Enough document for the mouse drag path, which is under test now that
+        // touch takes a different one: it makes a ghost, marks the body, and asks
+        // what is under the pointer.
+        document: {
+            querySelector: () => null,
+            hidden: false,
+            addEventListener() {},
+            body: {
+                classList: { add() {}, remove() {} },
+                appendChild() {},
+            },
+            createElement: () => ({
+                style: {},
+                classList: { add() {}, remove() {} },
+                remove() {},
+            }),
+            elementFromPoint: () => null,
+        },
         Alpine,
         setInterval: () => 0,
         clearInterval: () => {},
-        setTimeout: (fn) => fn === undefined ? 0 : 0,
-        clearTimeout: () => {},
+        // Timers are queued, never fired on their own: the debounced selection
+        // sync must stay unfired for the tests that count $wire calls, while the
+        // long press has to be able to elapse on demand. runTimers() below is
+        // the only thing that runs them.
+        setTimeout(fn, delay) {
+            if (typeof fn !== 'function') return 0;
+
+            timers.push({ id: ++timerId, fn, delay });
+
+            return timerId;
+        },
+        clearTimeout(id) {
+            const at = timers.findIndex((timer) => timer.id === id);
+
+            if (at !== -1) timers.splice(at, 1);
+        },
+        // The drag store announces a long press with one, and dispatches the
+        // same event the right-click handler does.
+        CustomEvent: class {
+            constructor(type, options = {}) {
+                this.type = type;
+                this.detail = options.detail ?? null;
+                this.bubbles = !!options.bubbles;
+            }
+        },
         console,
     };
     context.globalThis = context;
@@ -89,7 +139,23 @@ function createRealm() {
     vm.createContext(context);
     vm.runInContext(source, context);
 
-    return { context, Alpine, spawned: 0 };
+    /**
+     * Runs every timer whose delay has come, longest first is not needed — the
+     * explorer never schedules a timer from a timer.
+     */
+    const runTimers = (elapsed = Infinity) => {
+        const due = timers.filter((timer) => timer.delay <= elapsed);
+
+        for (const timer of due) {
+            const at = timers.indexOf(timer);
+
+            if (at !== -1) timers.splice(at, 1);
+
+            timer.fn();
+        }
+    };
+
+    return { context, Alpine, spawned: 0, runTimers, timers };
 }
 
 /**

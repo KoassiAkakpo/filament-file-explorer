@@ -99,11 +99,18 @@ A tag is a row per scope rather than a string per item, because a shared row is 
 
 Items are keyed by `'folder'` / `'file'` rather than by a morph class — the same trap the swappable folder model walked into, avoided this time by not storing a class name at all.
 
+### ~~Touch support~~ — done
+
+The gap turned out to be one line of arithmetic: the drag arms after five pixels, and five pixels is also how far a finger travels when it means to scroll. Dragging a folder to scroll the folder moved the folder.
+
+So the two pointers get different gestures rather than the drag getting a touch translation. A touch never arms a drag; it arms a hold, which opens the context menu — and moving items stays reachable from there through cut and paste, which is a better answer on a tablet than a drag fighting the scroll. The marquee needed nothing: it is bound to `mousedown` and a finger never started one, which was right all along.
+
+Written in the drag store rather than in the five views that hand it a press, for the reason every other rule in this package ended up in one place.
+
 ## After 1.0 — additive, and none of it blocking
 
 - **File versioning.** The `replace` conflict policy destroys what was there. Keeping the last N versions would follow the pattern the trash already proved: move aside rather than destroy.
 - **Chunked and direct-to-S3 uploads.** `upload.max_size_kb` defaults to 50 MB, but the real ceiling is the host's `post_max_size`. This is what unblocks video and large media.
-- **Touch support.** The drag geometry and the marquee assume a mouse. A functional gap rather than a refinement as soon as a panel is opened on a tablet.
 - **A storage widget.** The quota already renders in the sidebar; exposing it as a per-scope dashboard widget is nearly free.
 - **PDF and video thumbnails, opt-in.** Deliberately absent today because they need Imagick or ffmpeg on the host and a failing generator costs more than the icon already drawn. Worth offering behind an explicit flag — never by default.
 

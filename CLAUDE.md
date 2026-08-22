@@ -97,6 +97,23 @@ Selection lives on the component, built by `createFeSelection()` ([resources/js/
 
 **`anchor` and `cursor` are two different things.** The anchor is the fixed end of a shift-range and moves only on a plain click or `toggle()`; the cursor is where the keyboard is, and `selectRange()` moves it to the far end. `moveSelection()` has to read the cursor — reading the anchor for both meant every `shift+arrow` recomputed the same two-item range, so a keyboard selection could never grow past two items.
 
+## Touch
+
+A finger and a mouse get **different gestures**, because the drag arms at 5px and that is also how far a finger moves when it means to scroll — on a tablet, dragging to scroll a folder moved the folder.
+
+`feDrag.coarse` is set in `pointerDown` from `event.pointerType !== 'mouse'` and decides everything:
+
+- **A touch never arms a drag.** `pointerMove` returns early for a coarse pointer, so nothing calls `preventDefault()` and the browser goes on scrolling. Moving items stays reachable through cut/paste, which the hold's menu offers.
+- **A hold opens the item's context menu**, by dispatching the same `fe-context` event the right-click handler dispatches. `armLongPress()` lives in the drag store and not in the views because `pointerDown` is already the single place every view hands a press to — grid, both row views, column panes — and a long press written five times behaves five ways. It also sets `suppressClick`, or the release lands as a plain click that re-selects the item alone under the open menu.
+- **A hold on empty space** is the component's (`onEmptyPointerDown`), since there is no item to hand the press to. It arms nothing for a mouse: right-click already does this, and a mouse press on empty space is how the marquee starts.
+- **The marquee is left alone.** It is bound to `@mousedown.left`, so a finger never starts one — which is correct, a finger dragging across empty space should scroll.
+
+`FE_LONG_PRESS_MS` (500) and `FE_TOUCH_SLOP` (10) are the two constants; the slop is what stops a finger's natural drift from cancelling its own hold.
+
+CSS side: `touch-action: manipulation` on `[data-fe-items]` is what makes `dblclick` fire on a tablet at all (it drops double-tap-to-zoom and keeps pan/pinch), `-webkit-touch-callout: none` stops iOS opening its callout over ours, and `@media (pointer: coarse)` grows the controls.
+
+The harness models this: `setTimeout` is a queue that fires only through `runTimers()`, so the debounced `setSelection` stays unfired for the tests that count `$wire` calls while a long press can elapse on demand. Setting `coarse` to false fails four of the eleven touch tests.
+
 ## Dialogs
 
 The delete confirmation and the preview lightbox live **inside** the Livewire component, not in the host panel's modal stack, because the component is also embedded by `FileExplorerPicker` where no page-level modal exists.

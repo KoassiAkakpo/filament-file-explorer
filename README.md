@@ -380,6 +380,28 @@ The listing is a `listbox`: it takes focus, and the items are options.
 
 Shortcuts only fire while the listing has focus, never while typing in the search or rename field, and each one still goes through its ability check. Downloading a multi-item selection produces a single archive (`selection/zip`, capped at 500 items).
 
+## Touch
+
+The finder is a mouse layout, and a finger breaks it in one specific way: the drag arms after five pixels of movement, which is also how far a finger travels when it means to scroll. On a tablet, dragging a folder to scroll it moved the folder.
+
+So the two pointers get different gestures.
+
+| Gesture | Mouse | Touch |
+| --- | --- | --- |
+| Select | click | tap |
+| Open | double-click | double-tap |
+| Context menu | right-click | hold |
+| Drag to move or copy | press and move | — |
+| Marquee select | press empty space and move | — |
+
+A touch **never** arms a drag: it arms a hold, and moving cancels the hold and leaves the browser to scroll. Moving items is still fully reachable — the hold opens the context menu, where cut, navigate and paste do what the drag would have.
+
+A hold on empty space opens the folder's own menu, the counterpart of right-clicking the background.
+
+Double-tap works because the items container is `touch-action: manipulation`, which keeps pan and pinch and drops double-tap-to-zoom. iOS's own long-press callout is suppressed on items so it does not open over ours, and controls grow under `@media (pointer: coarse)` to a real hit target.
+
+The marquee is untouched, and deliberately: it is bound to `mousedown`, so a finger never starts one. A finger dragging across empty space should scroll.
+
 ## Preview and confirmation
 
 Double-clicking a file (or pressing Enter, or picking *Open* in the context menu) opens it in a lightbox: images, video, audio, PDFs and text render inline, anything else offers a download. Left and right arrows walk through the files of the current listing. Previewing requires the `download` ability, since it streams the same bytes as a download.
