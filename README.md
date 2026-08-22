@@ -1,5 +1,11 @@
 # Filament File Explorer
 
+[![Latest version](https://img.shields.io/packagist/v/koassi/filament-file-explorer.svg?style=flat-square)](https://packagist.org/packages/koassi/filament-file-explorer)
+[![Tests](https://img.shields.io/github/actions/workflow/status/KoassiAkakpo/filament-file-explorer/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/KoassiAkakpo/filament-file-explorer/actions/workflows/tests.yml)
+[![Downloads](https://img.shields.io/packagist/dt/koassi/filament-file-explorer.svg?style=flat-square)](https://packagist.org/packages/koassi/filament-file-explorer)
+[![PHP](https://img.shields.io/packagist/dependency-v/koassi/filament-file-explorer/php?style=flat-square)](https://packagist.org/packages/koassi/filament-file-explorer)
+[![License](https://img.shields.io/packagist/l/koassi/filament-file-explorer.svg?style=flat-square)](LICENSE)
+
 Finder-style file explorer for Filament v4/v5, powered by Spatie Media Library.
 
 Works two ways:
@@ -481,6 +487,8 @@ node --test "tests/Js/*.test.mjs"     # selection and keyboard logic
 ```
 
 The JS tests need nothing installed: they run the shipped script in a `node:vm` context with a stubbed Alpine and DOM.
+
+Both suites run in CI on every push and pull request, on PHP 8.3 and 8.4. **8.3 is the floor for the test suite, not for the package** — the explorer itself runs on PHP 8.2, but Pest and Testbench both require 8.3, so there is no toolchain to run the suite with below it.
 
 > Provider order matters when booting Filament under Testbench: `Filament\Support\SupportServiceProvider` binds Livewire's `DataStore` mechanism non-shared, so it must register **before** `LivewireServiceProvider`. See `tests/TestCase.php`.
 

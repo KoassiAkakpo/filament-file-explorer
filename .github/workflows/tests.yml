@@ -1,0 +1,59 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  php:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.3 is the floor for the test suite, not for the package: it runs on
+        # PHP 8.2, but Pest 4.7 and Testbench 11 both require ^8.3, so there is
+        # no toolchain to run it with on 8.2.
+        php: ['8.3', '8.4']
+
+    name: PHP ${{ matrix.php }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: gd, fileinfo, zip
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.json') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      # No lock file is committed, so this resolves the highest set the
+      # constraints allow — which is what a host app installing the package
+      # gets.
+      - run: composer update --prefer-dist --no-interaction --no-progress
+
+      - run: vendor/bin/pest
+
+  js:
+    runs-on: ubuntu-latest
+    name: JS
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Nothing to install: the harness runs the shipped script in a node:vm
+      # context with Alpine and the DOM stubbed.
+      - run: node --test "tests/Js/*.test.mjs"
