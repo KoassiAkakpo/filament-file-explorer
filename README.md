@@ -301,6 +301,8 @@ Tags are also a filter, beside the kind filter in the toolbar. It narrows folder
 
 Gated on the `annotate` ability, which follows `rename` for any authorizer that does not answer it: both change what an item is called rather than what it holds.
 
+Three tables come with the package's own migrations, so upgrading is `php artisan migrate`. Set `enabled` to `false` and nothing reads or writes them.
+
 Read or write them from your own code through `Support\Annotations`:
 
 ```php

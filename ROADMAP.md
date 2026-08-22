@@ -1,8 +1,10 @@
 # Roadmap to v1.0.0
 
-Current release: **v0.5.0**, which emptied the pre-1.0 list entirely — every decision below is settled and every feature shipped. The four decisions that could not wait closed in v0.2.0. Being on `0.x` is the whole point of what follows — it is the only window in which the public API can still change without a major version.
+Everything on this list is done. The four decisions that could not wait closed in v0.2.0, the features planned before 1.0 closed by v0.5.0, and three of the six items parked *after* 1.0 — tags and descriptions, touch support, the storage widget — landed before it too, and have moved up into the shipped list accordingly.
 
-So this roadmap is not ordered by how appealing a feature is. It is ordered by **what has to be decided before the API freezes**. A feature is cheap to add after 1.0 if it only adds; it is impossible to add after 1.0 if it changes something a host app has already written against.
+That is the point at which 1.0.0 is the honest number: nothing structural is pending, and the public API is what it is going to be.
+
+This roadmap was never ordered by how appealing a feature is. It is ordered by **what has to be decided before the API freezes** — a feature is cheap to add after 1.0 if it only adds, and impossible to add after 1.0 if it changes something a host app has already written against. Being on `0.x` was the window in which those changes were still free, and it was used for exactly that: the ability set, the folder model, the selection and the events all changed shape in it.
 
 No dates. The order is the commitment.
 
@@ -18,6 +20,8 @@ Everything a host app writes code against:
 - The config keys, and the `StandaloneSettings` precedence rules
 - The media route names, and their scope-key URL segment
 - The DOM contract the JS is built on: `data-fe-items`, `data-fe-type`, `data-id`
+- `Support\Annotations`, its `'folder'` / `'file'` item types and its three tables
+- `Widgets\StorageWidget`, and the touch gestures the JS now answers to
 
 ## Before 1.0 — decisions that cannot be deferred
 
@@ -57,9 +61,9 @@ An interface rather than a shared base class because Laravel's dispatcher resolv
 
 Closing this also fixed a data-loss bug it uncovered: the files table's delete called `$record->delete()` directly, destroying the file even with the trash on, so the same button meant two different things depending on the page it was pressed from. It now routes through `Support\Trash` like the explorer's own delete.
 
-## Features planned before 1.0
+## Features shipped before 1.0
 
-All done. What follows is kept for the record of why each was shaped the way it was.
+All done. What follows is kept for the record of why each was shaped the way it was — the last three were on the after-1.0 list and were brought forward, which is the right way round: an addition made inside `0.x` can still change its mind about a table or a key.
 
 ### ~~Expiring share links~~ — done
 
@@ -115,7 +119,9 @@ Off by default, because a dashboard is not the package's. And it shows the total
 
 Wiring it up did find one real bug in the plugin's own pattern — `register()` cannot use the `StandaloneSettings` reader, because the reader resolves the panel's plugin and during `register()` that is not yet this one.
 
-## After 1.0 — additive, and none of it blocking
+## Still after 1.0 — additive, and none of it blocking
+
+All three only add. None of them changes anything a host app has written against, which is why none of them had to happen first.
 
 - **File versioning.** The `replace` conflict policy destroys what was there. Keeping the last N versions would follow the pattern the trash already proved: move aside rather than destroy.
 - **Chunked and direct-to-S3 uploads.** `upload.max_size_kb` defaults to 50 MB, but the real ceiling is the host's `post_max_size`. This is what unblocks video and large media.
