@@ -186,7 +186,8 @@ Five ways to look at a folder, remembered per scope: **grid** (icons), **list**,
 
 Two things about it are deliberate:
 
-- **Only the last pane holds selectable items.** The panes behind it are navigation, and carry none of the `data-fe-type` / `data-id` attributes the selection layer reads. So the keyboard, shift-ranges and the marquee keep operating on the folder being browsed, exactly as in every other view — no new keyboard semantics to learn, and none to get wrong.
+- **Left and right walk the panes.** Right descends into the selected folder and lands on the first entry of the pane it opens, so you can keep descending; left walks back out with the folder you just left selected. Up and down stay inside the pane, and with shift held every arrow extends the selection there instead of navigating.
+- **Only the last pane holds selectable items.** The panes behind it are navigation, and carry none of the `data-fe-type` / `data-id` attributes the selection layer reads — so shift-ranges and the marquee operate on the folder being browsed, exactly as in every other view. Folders in *any* pane are drop targets, though: a destination you can see is a destination you can drop on.
 - **Searching falls back to the flat result list.** A search answers with matches from the whole scope, which is not a path; drawing it as one would be a lie about where the results are.
 
 It costs one listing query per level of the path, which `folders.max_depth` bounds, and every pane is windowed in SQL like the main listing — a pane over a folder holding thousands of files is the same problem the listing already solves.

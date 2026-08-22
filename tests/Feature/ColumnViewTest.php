@@ -177,3 +177,84 @@ it('builds nothing for the other view modes', function (): void {
     // A listing per level is not something to pay for when nothing renders it.
     expect($component->instance()->columnPanes())->toBe([]);
 });
+
+it('descends into a folder and lands on the first entry of the new pane', function (): void {
+    $docs = feCvFolder('Docs');
+    $inner = feCvFolder('Inner', $docs);
+    feCvMedia('inside.pdf', $docs);
+
+    $component = feCvComponent()->call('columnInto', $docs);
+
+    // Folders come first in the listing, so that is where the Finder leaves you
+    // — and a further right arrow can keep descending without the mouse.
+    expect($component->instance()->currentFolder->id)->toBe($docs);
+    $component->assertSet('selectedFolders', [$inner]);
+});
+
+it('lands on the first file when the folder holds no folders', function (): void {
+    $docs = feCvFolder('Docs');
+    $media = feCvMedia('only.pdf', $docs);
+
+    feCvComponent()->call('columnInto', $docs)->assertSet('selectedFiles', [$media->id]);
+});
+
+it('refuses to descend into a folder outside the root', function (): void {
+    $outside = (int) FolderModel::query()->create(['name' => 'Out', 'slug' => 'out', 'parent_id' => null])->id;
+
+    feCvComponent()->call('columnInto', $outside)->assertForbidden();
+});
+
+it('walks back out with the folder just left selected', function (): void {
+    $docs = feCvFolder('Docs');
+    $reports = feCvFolder('Reports', $docs);
+
+    $component = feCvComponent()->call('navigateToFolder', $reports)->call('columnBack');
+
+    // Selected, so a further left arrow keeps walking up and the pane you came
+    // from stays marked.
+    expect($component->instance()->currentFolder->id)->toBe($docs);
+    $component->assertSet('selectedFolders', [$reports]);
+});
+
+it('stays put at the root', function (): void {
+    $component = feCvComponent()->call('columnBack');
+
+    expect($component->instance()->currentFolder->id)->toBe(feCvRootId());
+});
+
+it('makes every pane a drop target and its empty space a way to deselect', function (): void {
+    $docs = feCvFolder('Docs');
+    feCvFolder('Deeper', $docs);
+
+    $html = feCvComponent()->call('navigateToFolder', $docs)->assertOk()->html();
+
+    // Counted on the pane rows themselves: the sidebar tree exposes drop
+    // targets too, so counting the whole page would prove nothing.
+    preg_match_all('/<(?:div|button)\b[^>]*fe-column__row[^>]*>/', $html, $matches);
+    $rows = $matches[0];
+    $droppable = array_values(array_filter($rows, fn (string $tag): bool => str_contains($tag, 'data-fe-drop-folder')));
+
+    // Dropping onto a folder in a pane behind the last one has to work, or the
+    // view shows a destination that cannot be used.
+    expect($rows)->toHaveCount(2)
+        ->and($droppable)->toHaveCount(2)
+        // The panes fill the container, so the container never receives the
+        // click that used to clear the selection.
+        ->and($html)->toContain('sel.clear()')
+        ->and($html)->toContain('data-fe-pane');
+});
+
+it('gives the selection marker something to look like', function (): void {
+    // is-selected is only a marker — each view supplies its own visual. Without
+    // a rule the toolbar counted a selection the panes never showed.
+    $css = (string) file_get_contents(__DIR__.'/../../resources/css/file-explorer.css');
+
+    expect($css)->toContain('.fe-column__row.is-selected')
+        ->toContain('.fe-column__row.fe-drop-target');
+});
+
+it('tells the JS which view is rendered without putting it in x-data', function (): void {
+    // In x-data it would rewrite that attribute on every switch; in the DOM it
+    // is a fact about what is rendered.
+    expect(feCvComponent()->assertOk()->html())->toContain('data-fe-view="columns"');
+});

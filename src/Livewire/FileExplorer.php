@@ -1879,6 +1879,57 @@ class FileExplorer extends Component
         }
     }
 
+    /**
+     * Right arrow in the column view: into the selected folder.
+     *
+     * Leaves the first entry of the column it opened selected, which is where
+     * the Finder leaves you and what lets a further right arrow keep descending
+     * without reaching for the mouse.
+     */
+    public function columnInto(int $folderId): void
+    {
+        abort_unless($this->ability('browse'), 403);
+
+        $folder = FolderModel::query()->find($folderId);
+        $this->assertUnderRoot($folder);
+
+        $this->navigateToFolder($folderId);
+
+        $listing = $this->listing();
+        $firstFolder = $listing['folders']->first();
+
+        if ($firstFolder !== null) {
+            $this->selectFolder((int) $firstFolder->id);
+
+            return;
+        }
+
+        $firstFile = $listing['files']->first();
+
+        if ($firstFile !== null) {
+            $this->selectFile((int) $firstFile->id);
+        }
+    }
+
+    /**
+     * Left arrow in the column view: out to the parent, with the folder just
+     * left selected — so a further left arrow keeps walking up, and the pane you
+     * came from stays marked.
+     */
+    public function columnBack(): void
+    {
+        abort_unless($this->ability('browse'), 403);
+
+        if ($this->currentFolder === null || (int) $this->currentFolder->id === $this->rootFolderId) {
+            return;
+        }
+
+        $leaving = (int) $this->currentFolder->id;
+
+        $this->navigateToParent();
+        $this->selectFolder($leaving);
+    }
+
     public function loadMore(): void
     {
         abort_unless($this->ability('browse'), 403);

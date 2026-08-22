@@ -409,6 +409,7 @@
 
                     <div
                         data-fe-items
+                        data-fe-view="{{ $viewMode }}"
                         tabindex="0"
                         role="listbox"
                         aria-multiselectable="true"
@@ -480,7 +481,13 @@
                                  they do in every other view — the panes behind it
                                  are navigation, not items. --}}
                             @foreach ($panes as $pane)
-                                <div class="fe-column {{ $pane['isLast'] ? 'fe-column--last' : '' }}" wire:key="fe-col-{{ $pane['folder']->id }}">
+                                <div
+                                    class="fe-column {{ $pane['isLast'] ? 'fe-column--last' : '' }}"
+                                    data-fe-pane
+                                    wire:key="fe-col-{{ $pane['folder']->id }}"
+                                    x-on:click.self="sel.clear()"
+                                    x-on:contextmenu.self.prevent.stop="openEmptyContext($event)"
+                                >
                                     @foreach ($pane['folders'] as $folder)
                                         @if ($pane['isLast'])
                                             <div
@@ -491,7 +498,11 @@
                                                 role="option"
                                                 :aria-selected="sel.hasFolder({{ $folder->id }}) ? 'true' : 'false'"
                                                 class="fe-column__row"
-                                                :class="{ 'is-selected': sel.hasFolder({{ $folder->id }}), 'drag-hover': sel.inMarqueeFolder({{ $folder->id }}) }"
+                                                :class="{
+                                                    'is-selected': sel.hasFolder({{ $folder->id }}),
+                                                    'drag-hover': sel.inMarqueeFolder({{ $folder->id }}),
+                                                    'fe-drop-target': $store.feDrag.dropTargetId === {{ $folder->id }},
+                                                }"
                                                 x-on:pointerdown="$store.feDrag.pointerDown($event, 'folder', {{ $folder->id }}, @js($folder->name), $wire, sel)"
                                                 x-on:click.stop="sel.click('folder', {{ $folder->id }}, $event, $el)"
                                                 x-on:dblclick.stop="$wire.navigateToFolder({{ $folder->id }})"
@@ -508,6 +519,8 @@
                                             <button
                                                 type="button"
                                                 class="fe-column__row {{ $pane['activeFolderId'] === (int) $folder->id ? 'is-path' : '' }}"
+                                                data-fe-drop-folder="{{ $folder->id }}"
+                                                :class="{ 'fe-drop-target': $store.feDrag.dropTargetId === {{ $folder->id }} }"
                                                 wire:click="revealInColumn({{ $folder->id }})"
                                             >
                                                 @svg('heroicon-s-folder', 'fe-column__icon')

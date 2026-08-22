@@ -817,6 +817,22 @@ body.fe-is-dragging * {
 .dark .fe-column__row.is-path {
   background: rgba(255, 255, 255, 0.09);
 }
+/* `is-selected` is only a marker — each view supplies its own visual, the way
+   the grid does through fe-icon-well--selected. Without a rule here the toolbar
+   counted a selection the panes never showed. */
+.fe-column__row.is-selected {
+  background: rgba(24, 24, 27, 0.1);
+  font-weight: 500;
+}
+.dark .fe-column__row.is-selected {
+  background: rgba(255, 255, 255, 0.13);
+}
+.fe-column__row.drag-hover,
+.fe-column__row.fe-drop-target {
+  background: rgba(13, 148, 136, 0.14);
+  outline: 1.5px solid rgba(13, 148, 136, 0.35);
+  outline-offset: -1px;
+}
 .fe-column__icon {
   display: inline-flex;
   height: 1rem;

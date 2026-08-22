@@ -798,8 +798,38 @@ function qfCtxFlyout(openDelay = 160, closeDelay = 100) {
                         this.openFile(sel.files[0]);
                     }
                 },
+                /**
+                 * Read from the DOM rather than kept in x-data: putting the view
+                 * mode in that attribute would rewrite it on every switch, and
+                 * the mode is a fact about what is rendered anyway.
+                 */
+                isColumnView() {
+                    return this.$root?.querySelector?.('[data-fe-items]')?.getAttribute?.('data-fe-view') === 'columns';
+                },
                 moveSelection(key, extend) {
                     const sel = this.sel;
+
+                    // Left and right walk the panes in the column view, which is
+                    // what the view is for — the Finder's whole point is moving
+                    // through the tree from the keyboard. Up and down stay inside
+                    // the pane, and with shift held every arrow keeps extending
+                    // there instead of navigating.
+                    if (!extend && this.isColumnView()) {
+                        if (key === 'ArrowRight') {
+                            if (sel.folders.length === 1 && sel.files.length === 0) {
+                                this.$wire.columnInto(sel.folders[0]);
+                            }
+
+                            return;
+                        }
+
+                        if (key === 'ArrowLeft') {
+                            this.$wire.columnBack();
+
+                            return;
+                        }
+                    }
+
                     const items = sel.orderedItems(this.$el);
 
                     if (!items.length) return;

@@ -14,9 +14,10 @@ const here = dirname(fileURLToPath(import.meta.url));
  * goes through data-fe-items / data-fe-type / data-id, which makes fake items
  * cheap to build.
  */
-export function loadExplorer({ items = [], columns = 4 } = {}) {
+export function loadExplorer(options = {}) {
+    const { columns = 4 } = options;
     const realm = createRealm();
-    const first = createExplorer(realm, { items, columns });
+    const first = createExplorer(realm, { columns, ...options });
 
     return {
         ...first,
@@ -25,7 +26,7 @@ export function loadExplorer({ items = [], columns = 4 } = {}) {
          * the Alpine stores — which is the situation the selection used to get
          * wrong.
          */
-        spawn: (options = {}) => createExplorer(realm, { columns, ...options }),
+        spawn: (extra = {}) => createExplorer(realm, { columns, ...options, ...extra }),
         /**
          * The same explorer, initialised again.
          *
@@ -33,13 +34,13 @@ export function loadExplorer({ items = [], columns = 4 } = {}) {
          * rewritten and Alpine runs the initialiser afresh. The selection has to
          * survive it, or every keystroke starts from nothing.
          */
-        reinit: (options = {}) => createExplorer(realm, {
+        reinit: (extra = {}) => createExplorer(realm, {
             columns,
-            items,
+            ...options,
             componentId: first.componentId,
             // Same component, so the same $wire and the same record of calls.
             reuse: { wire: first.wire, calls: first.calls },
-            ...options,
+            ...extra,
         }),
         // The stores really are shared between the two, which is what makes
         // the isolation worth asserting.
@@ -129,7 +130,7 @@ function reactive(target) {
     return proxy;
 }
 
-function createExplorer(realm, { items = [], columns = 4, componentId = null, reuse = null } = {}) {
+function createExplorer(realm, { items = [], columns = 4, componentId = null, reuse = null, viewMode = 'grid' } = {}) {
     // Livewire gives every component on the page its own id, and the selection
     // is keyed by it — so the harness has to hand out distinct ones too, or two
     // explorers would look like one.
@@ -154,6 +155,9 @@ function createExplorer(realm, { items = [], columns = 4, componentId = null, re
         querySelectorAll: () => elements,
         closest: () => container,
         matches: () => true,
+        // The view mode is read off this attribute rather than kept in x-data,
+        // so the harness has to answer it the way the DOM does.
+        getAttribute: (name) => (name === 'data-fe-view' ? viewMode : null),
     };
 
     const calls = reuse?.calls ?? [];
@@ -179,12 +183,21 @@ function createExplorer(realm, { items = [], columns = 4, componentId = null, re
             this.selectedFiles = [];
             calls.push(['clearSelection']);
         },
+        columnInto(folderId) {
+            assertRawWire(this, wire);
+            calls.push(['columnInto', folderId]);
+        },
+        columnBack() {
+            assertRawWire(this, wire);
+            calls.push(['columnBack']);
+        },
     };
 
     const component = realm.context.window.FileExplorerUi({
         scopeKey: 'library',
         rootFolderId: 1,
         componentId: id,
+        viewMode,
         abilities: { browse: true, copy: true, move: true, rename: true, delete: true, deleteFolder: true },
     });
 
@@ -192,7 +205,9 @@ function createExplorer(realm, { items = [], columns = 4, componentId = null, re
         $wire: wire,
         $watch: () => {},
         $el: container,
-        $root: container,
+        // The real $root is the component element and the items container sits
+        // inside it, so querySelector has to find it from there.
+        $root: { querySelector: () => container },
         $refs: {},
     });
 
