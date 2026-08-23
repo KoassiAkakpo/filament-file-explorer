@@ -59,11 +59,11 @@ it('keeps the breadcrumb at its own height whatever is beside it', function (): 
     $html = feIlComponent()->call('showInfo', 'file', $media->id)->assertOk()->html();
 
     // shrink-0 on the nav and flex-1 on the items container: the breadcrumb
-    // never gives up its height, and the scroll area is the browser's own.
-    // min-h-0 rather than a pixel floor, or the container could not shrink into
-    // the space available and its overflow-y would never come into play.
+    // never gives up its height, and the scroll area is the browser's own. The
+    // 0 floor that lets it shrink into that space lives in the stylesheet, not
+    // in a utility — see the scroll-chain test below.
     expect($html)->toContain('<nav class="flex shrink-0 select-none items-center')
-        ->toContain('relative min-h-0 flex-1 select-none overflow-y-auto');
+        ->toContain('relative flex-1 select-none overflow-y-auto');
 });
 
 it('scrolls its items inside itself rather than growing the page', function (): void {
@@ -101,20 +101,42 @@ it('lets the bound reach the scrolling child through every flex item', function 
 
     $html = feIlComponent()->call('showInfo', 'file', $media->id)->assertOk()->html();
 
-    // A flex item's min-height is auto — "at least my content" — so one link in
-    // the chain without min-h-0 grows past the bound instead of letting the end
-    // of the chain scroll, and the page scrolls again with nothing to show why.
+    // Every link is addressable from the stylesheet, which is where the floor
+    // and the refusal to shrink live: a Tailwind utility only exists once the
+    // host app rebuilds its theme, so a chain built from utilities would work
+    // here and break there.
     expect($html)
         ->toContain('class="fe-body flex min-h-[560px]"')
-        ->toContain('class="fe-sidebar hidden min-h-0 shrink-0')
-        ->toContain('<div class="flex min-h-0 min-w-0 flex-1 flex-col">')
-        ->toContain('class="fe-inspector flex min-h-0 w-[300px] shrink-0')
-        ->toContain('relative min-h-0 flex-1 select-none overflow-y-auto');
+        ->toContain('class="fe-sidebar')
+        ->toContain('<div class="fe-main flex min-w-0 flex-1 flex-col">')
+        ->toContain('class="fe-inspector')
+        ->toContain('relative flex-1 select-none overflow-y-auto');
+
+    $css = (string) file_get_contents(__DIR__.'/../../resources/css/file-explorer.css');
+
+    // A flex item's min-height is auto — "at least my content" — so one link
+    // without a 0 floor grows past the bound, and flex takes the difference out
+    // of whatever can shrink instead. That was the toolbar: it has a height but
+    // no refusal to shrink, so a folder with enough items to scroll squashed it
+    // and one without did not. Both halves of the rule, or neither works.
+    expect($css)->toContain('.fe-main,
+.fe-sidebar,
+.fe-inspector,
+.fe-trash-list,
+[data-fe-items] {
+  min-height: 0;
+}')
+        ->toContain('.fe-head,
+.fe-toolbar,
+.fe-inspector-head,
+.fe-list-head {
+  flex-shrink: 0;
+}');
 });
 
 it('scrolls the trash list on its own terms', function (): void {
     // The trash replaces the items container, so it needs its own scroll or a
     // full trash overflows the bound the folder view respects.
     expect(feIlComponent()->call('toggleTrash')->assertOk()->html())
-        ->toContain('<div class="min-h-0 flex-1 overflow-y-auto p-2">');
+        ->toContain('<div class="fe-trash-list flex-1 overflow-y-auto p-2">');
 });

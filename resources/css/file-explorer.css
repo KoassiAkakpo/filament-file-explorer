@@ -225,6 +225,33 @@
 .fe-body {
   max-height: var(--fe-max-h);
 }
+
+/* The scroll chain, declared here rather than with Tailwind utilities in the
+   template.
+   A flex item's min-height is auto — "at least my content" — so every item
+   between the bound above and a scrolling child needs a 0 floor, or it grows
+   past the bound and flex takes the difference out of whatever *can* shrink
+   instead. That was the toolbar: it has a height, but not a refusal to shrink,
+   so a folder with enough items to scroll squashed it and one without did not.
+   Hence both halves of the rule below.
+
+   In this file and not as `min-h-0` in the Blade because these are load-bearing:
+   the package ships this stylesheet directly, while a utility class only exists
+   once the host app rebuilds its own theme — so the chain would work here and
+   break there, which is the worst way for it to break. */
+.fe-main,
+.fe-sidebar,
+.fe-inspector,
+.fe-trash-list,
+[data-fe-items] {
+  min-height: 0;
+}
+.fe-head,
+.fe-toolbar,
+.fe-inspector-head,
+.fe-list-head {
+  flex-shrink: 0;
+}
 /* The picker puts the whole finder in a modal, which already spends height on a
    heading and scrolls on its own. */
 .fe-in-modal {
