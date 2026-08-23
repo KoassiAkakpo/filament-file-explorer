@@ -266,17 +266,31 @@
                     this.anchor = null;
                     this.cursor = null;
                     this.clearMarquee();
-                    if (this._syncTimer) clearTimeout(this._syncTimer);
-                    this._syncTimer = null;
+                    this.cancelSync();
                     if (sync) this.callWire('clearSelection');
                 },
-                flushSync() {
+                /**
+                 * Drops a sync that has not gone out yet.
+                 *
+                 * The timer has one owner because dropping it is a decision, not
+                 * a detail: a queued setSelection that lands *after* a navigation
+                 * tells the server to select something the new folder does not
+                 * contain, and the $wire.selectedFolders watch then reads that
+                 * back as a real selection. See enterFolder().
+                 */
+                cancelSync() {
                     if (this._syncTimer) clearTimeout(this._syncTimer);
                     this._syncTimer = null;
+                },
+                syncPending() {
+                    return this._syncTimer !== null;
+                },
+                flushSync() {
+                    this.cancelSync();
                     this.callWire('setSelection', [...this.folders], [...this.files]);
                 },
                 queueSync() {
-                    if (this._syncTimer) clearTimeout(this._syncTimer);
+                    this.cancelSync();
                     this._syncTimer = setTimeout(() => {
                         this._syncTimer = null;
                         this.callWire('setSelection', [...this.folders], [...this.files]);
@@ -697,7 +711,7 @@
                             this.sel.replace([], []);
                             return;
                         }
-                        if (this.sel._syncTimer) {
+                        if (this.sel.syncPending()) {
                             return;
                         }
                         this.sel.replace(v, this.$wire.selectedFiles);
@@ -734,13 +748,33 @@
 
                     if (!folders.length && !files.length) return;
 
-                    if (this.sel._syncTimer) clearTimeout(this.sel._syncTimer);
-                    this.sel._syncTimer = null;
+                    this.sel.cancelSync();
                     this.sel.clearMarquee();
 
                     // The dialog is built server-side: it knows what a recursive
                     // delete takes with it and which items are refused.
                     this.$wire.requestDelete(folders, files);
+                },
+                /**
+                 * Opens a folder from a double-click.
+                 *
+                 * A double-click is a click first, and that click queued a
+                 * debounced setSelection. The navigation goes out on the second
+                 * click and the sync forty milliseconds after it, so the server
+                 * cleared the selection and was then told to select the folder we
+                 * had just left — which the $wire.selectedFolders watch read back
+                 * as a real selection, and the toolbar reported as "1 selected"
+                 * with nothing on screen selected, since the folder is not in its
+                 * own listing.
+                 *
+                 * So the queued sync is dropped rather than raced, and the
+                 * selection goes now rather than when the server says so.
+                 */
+                enterFolder(id) {
+                    this.sel.cancelSync();
+                    this.sel.replace([], []);
+
+                    this.$wire.navigateToFolder(id);
                 },
                 openFile(id) {
                     // The preview streams the same bytes as a download, so
@@ -1264,8 +1298,7 @@
                     const files = [...this.sel.marqueeFiles];
                     if (folders.length > 0 || files.length > 0) {
                         this.sel.replace(folders, files);
-                        if (this.sel._syncTimer) clearTimeout(this.sel._syncTimer);
-                        this.sel._syncTimer = null;
+                        this.sel.cancelSync();
                         this.$wire.setSelection(folders, files);
                     }
                 },

@@ -188,3 +188,33 @@ it('registers no selection store at all', function (): void {
     expect($js)->not->toContain("Alpine.store('feSel'")
         ->toContain('function createFeSelection()');
 });
+
+it('opens a folder through the one path that drops a pending sync', function (): void {
+    $views = [
+        __DIR__.'/../../resources/views/livewire/file-explorer.blade.php',
+        __DIR__.'/../../resources/views/components/file-explorer/directory.blade.php',
+        __DIR__.'/../../resources/views/components/file-explorer/sidebar-tree.blade.php',
+    ];
+
+    foreach ($views as $view) {
+        $source = (string) file_get_contents($view);
+
+        // Calling $wire.navigateToFolder straight from a handler leaves the
+        // debounced setSelection the click queued to land after the navigation,
+        // which the $wire.selectedFolders watch reads back as a real selection —
+        // "1 selected" over a folder that is not in its own listing.
+        expect($source)->not->toContain('$wire.navigateToFolder')
+            ->and($source)->not->toContain('wire:click="navigateToFolder');
+    }
+
+    expect((string) file_get_contents(__DIR__.'/../../resources/js/file-explorer.js'))
+        ->toContain('enterFolder(id) {')
+        // And the timer has one owner now: three places outside the selection
+        // used to clear it themselves. What is left is the declaration, the two
+        // reads and the two writes inside cancelSync/syncPending/queueSync — all
+        // in the selection that owns it.
+        ->toContain('cancelSync() {')
+        ->toContain('syncPending() {')
+        ->and(substr_count((string) file_get_contents(__DIR__.'/../../resources/js/file-explorer.js'), '_syncTimer'))
+        ->toBeLessThanOrEqual(7);
+});

@@ -610,7 +610,7 @@
                                                     if ($store.feDrag.consumeClickSuppression()) return;
                                                     sel.click('folder', {{ $folder->id }}, $event, $el);
                                                 "
-                                                x-on:dblclick.stop="$wire.navigateToFolder({{ $folder->id }})"
+                                                x-on:dblclick.stop="enterFolder({{ $folder->id }})"
                                                 x-on:contextmenu.stop.prevent="
                                                     if (!sel.hasFolder({{ $folder->id }})) { sel.toggle('folder', {{ $folder->id }}, false); }
                                                     $dispatch('fe-context', { type: 'folder', id: {{ $folder->id }}, name: @js($folder->name), x: $event.clientX, y: $event.clientY });
@@ -736,7 +736,7 @@
                                             if ($store.feDrag.consumeClickSuppression()) return;
                                             sel.click('folder', {{ $folder->id }}, $event, $el);
                                         "
-                                        x-on:dblclick.stop="$wire.navigateToFolder({{ $folder->id }})"
+                                        x-on:dblclick.stop="enterFolder({{ $folder->id }})"
                                     @endunless
                                     x-on:dragover.prevent="
                                         if ($event.dataTransfer.types.includes('Files')) {

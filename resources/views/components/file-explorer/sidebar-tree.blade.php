@@ -49,7 +49,10 @@
                     'fe-side-item--primary' => $isPrimary,
                 ])
                 title="{{ $name }}"
-                wire:click="navigateToFolder({{ $id }})"
+                {{-- Through enterFolder like the double-click, so "open this folder"
+                     is one path: it drops a selection sync that has not gone out
+                     yet, which would otherwise land after the navigation. --}}
+                x-on:click="enterFolder({{ $id }})"
                 data-fe-drop-folder="{{ $id }}"
                 :class="{ 'fe-side-item--drop': $store.feDrag.dropTargetId === {{ $id }} }"
             >

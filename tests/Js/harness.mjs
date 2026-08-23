@@ -249,6 +249,10 @@ function createExplorer(realm, { items = [], columns = 4, componentId = null, re
             this.selectedFiles = [];
             calls.push(['clearSelection']);
         },
+        navigateToFolder(folderId) {
+            assertRawWire(this, wire);
+            calls.push(['navigateToFolder', folderId]);
+        },
         columnInto(folderId) {
             assertRawWire(this, wire);
             calls.push(['columnInto', folderId]);

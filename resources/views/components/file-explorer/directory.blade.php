@@ -27,7 +27,7 @@
             if ($store.feDrag.consumeClickSuppression()) return;
             sel.click('folder', {{ $folder->id }}, $event, $el);
         "
-        x-on:dblclick.stop="$wire.navigateToFolder({{ $folder->id }})"
+        x-on:dblclick.stop="enterFolder({{ $folder->id }})"
     @endunless
     x-on:dragover.prevent="
         if ($event.dataTransfer.types.includes('Files')) {
