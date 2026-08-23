@@ -252,6 +252,17 @@
 .fe-list-head {
   flex-shrink: 0;
 }
+/* The inspector's body is the second scroller in the finder, and it needed the
+   same two halves: a 0 floor so the bound reaches it, and a refusal to shrink on
+   everything inside it. Without the second, its panels squashed instead of
+   scrolling — the description list came out shorter than its own rows, which is
+   what `overflow: hidden` on .fe-inspector-meta was hiding. */
+.fe-inspector-body {
+  min-height: 0;
+}
+.fe-inspector-body > * {
+  flex-shrink: 0;
+}
 /* The picker puts the whole finder in a modal, which already spends height on a
    heading and scrolls on its own. */
 .fe-in-modal {
@@ -695,12 +706,16 @@ body.fe-is-dragging * {
   background: #27272a;
   border-color: rgba(255, 255, 255, 0.1);
 }
+/* No `overflow: hidden` here, and no flex-shrink either — the two go together.
+   The body scrolls, so this box has nothing to clip; what it had was rows cut
+   off, because a flex item shrinks by default and the shrunk box then hid the
+   description list it was meant to round. The rows round their own outer
+   corners instead, which is all the clip was ever doing. */
 .fe-inspector-meta {
   border-radius: 10px;
   border: 1px solid rgba(24, 24, 27, 0.08);
   background: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
 }
 .dark .fe-inspector-meta {
   background: #27272a;
@@ -716,6 +731,12 @@ body.fe-is-dragging * {
 }
 .fe-inspector-row:first-child {
   border-top: 0;
+  border-start-start-radius: 9px;
+  border-start-end-radius: 9px;
+}
+.fe-inspector-row:last-child {
+  border-end-start-radius: 9px;
+  border-end-end-radius: 9px;
 }
 .fe-inspector-row:nth-child(even) {
   background: rgba(24, 24, 27, 0.025);

@@ -171,3 +171,45 @@ it('lines the column header up with the rows under it', function (): void {
         ->and((string) strstr((string) strstr($html, 'class="fe-list-head'), '>', true))
         ->not->toMatch('/\bp[xse]-/');
 });
+
+it('scrolls the inspector rather than squashing what it describes', function (): void {
+    $media = Media::query()->create([
+        'model_type' => FolderModel::morphClass(),
+        'model_id' => feIlRootId(),
+        'collection_name' => UploadRules::collection(),
+        'name' => 'report.pdf',
+        'file_name' => 'report.pdf',
+        'mime_type' => 'application/pdf',
+        'disk' => 'public',
+        'size' => 8,
+        'manipulations' => [],
+        'custom_properties' => [],
+        'generated_conversions' => [],
+        'responsive_images' => [],
+    ]);
+
+    $html = feIlComponent()->call('showInfo', 'file', $media->id)->assertOk()->html();
+    $css = (string) file_get_contents(__DIR__.'/../../resources/css/file-explorer.css');
+
+    // The inspector's body is the finder's second scroller, so it needs the same
+    // two halves as the first: the floor that lets the bound reach it, and the
+    // refusal to shrink on what is inside it. Only the second was missing, and
+    // the description list paid for it — a shrunk box with `overflow: hidden`
+    // clipped its own rows, so the panel described less than it had been asked.
+    expect($html)->toContain('class="fe-inspector-body ')
+        ->and($css)->toContain('.fe-inspector-body {
+  min-height: 0;
+}')
+        ->and($css)->toContain('.fe-inspector-body > * {
+  flex-shrink: 0;
+}');
+
+    // And with the body scrolling, the box has nothing left to clip: a clip here
+    // can only ever hide a row. The outer rows round their own corners instead,
+    // which is all it was doing for the look.
+    $meta = (string) preg_replace('/\s+/', ' ', (string) strstr($css, '.fe-inspector-meta {'));
+
+    expect($meta)->toStartWith('.fe-inspector-meta { border-radius: 10px;')
+        ->and(substr($meta, 0, (int) strpos($meta, '}')))->not->toContain('overflow')
+        ->and($css)->toContain('.fe-inspector-row:last-child {');
+});

@@ -954,7 +954,7 @@
                                     @svg('heroicon-o-x-mark', 'h-3.5 w-3.5')
                                 </button>
                             </div>
-                            <div class="flex flex-1 flex-col gap-3 overflow-y-auto p-3">
+                            <div class="fe-inspector-body flex flex-1 flex-col gap-3 overflow-y-auto p-3">
                                 <div class="fe-inspector-hero flex flex-col items-center px-2 py-3 text-center">
                                     @if (($infoItem['type'] ?? '') === 'folder' || ($infoItem['type'] ?? '') === 'multi')
                                         <x-filament-file-explorer::file-explorer.folder-icon class="mb-2 h-16 w-16" />
