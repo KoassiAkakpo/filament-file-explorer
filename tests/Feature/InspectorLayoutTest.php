@@ -140,3 +140,34 @@ it('scrolls the trash list on its own terms', function (): void {
     expect(feIlComponent()->call('toggleTrash')->assertOk()->html())
         ->toContain('<div class="fe-trash-list flex-1 overflow-y-auto p-2">');
 });
+
+it('pins the column header over the list rather than in it', function (): void {
+    $css = (string) file_get_contents(__DIR__.'/../../resources/css/file-explorer.css');
+
+    // Opaque: at 0.95 the rows passing underneath showed through, which is what
+    // made the header read as one more row. And spanning the scroller's own side
+    // padding, or the bar stops short of the edges and looks like it is floating.
+    expect($css)->toContain('.fe-list-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin-inline: -0.5rem;
+  padding-inline: 1.25rem;
+  background: #fafafa;')
+        // A shadow rather than a border, so pinning it costs no height.
+        ->toContain('box-shadow: 0 1px 0 rgba(24, 24, 27, 0.08);');
+});
+
+it('lines the column header up with the rows under it', function (): void {
+    $html = feIlComponent()->call('setViewMode', 'details')->assertOk()->html();
+
+    // The header owns its inline padding in the stylesheet and the rows keep
+    // px-3 inside the container's p-2. Both content boxes come out at the
+    // container width less 2.5rem, which is what makes the columns line up —
+    // and it breaks the moment a px- utility comes back to the header, since two
+    // single-class selectors setting padding is a fight decided by which
+    // stylesheet loaded second.
+    expect($html)->toContain('class="fe-list-head mb-0 grid ')
+        ->and((string) strstr((string) strstr($html, 'class="fe-list-head'), '>', true))
+        ->not->toMatch('/\bp[xse]-/');
+});

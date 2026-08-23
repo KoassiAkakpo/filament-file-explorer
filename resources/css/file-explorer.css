@@ -593,14 +593,32 @@ body.fe-is-dragging * {
 .dark .fe-list-row.fe-row--selected {
   background: rgba(var(--fe-accent), 0.22) !important;
 }
+/* The column header of the row views, pinned while the list scrolls under it.
+   Three things it needs now that the list really does scroll:
+
+   - An **opaque** background. At 0.95 the rows passing underneath showed
+     through it, which is what made the header look like one more row rather
+     than a header.
+   - The **full width of the scroller**, including the container's own 0.5rem
+     side padding, which it stops short of otherwise — a bar that does not reach
+     the edges reads as floating. Hence the negative inline margin, and the
+     inline padding owned here rather than by a px-3 utility in the template:
+     two single-class selectors setting padding is a fight decided by stylesheet
+     order.
+   - A **hairline under it**, so there is a line between the header and the row
+     currently sliding beneath it. */
 .fe-list-head {
-  background: rgba(250, 250, 250, 0.95);
   position: sticky;
   top: 0;
   z-index: 5;
+  margin-inline: -0.5rem;
+  padding-inline: 1.25rem;
+  background: #fafafa;
+  box-shadow: 0 1px 0 rgba(24, 24, 27, 0.08);
 }
 .dark .fe-list-head {
-  background: rgba(24, 24, 27, 0.92);
+  background: #27272a;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .fe-input {

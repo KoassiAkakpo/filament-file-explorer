@@ -708,7 +708,7 @@
                                 </div>
                             @endforeach
                         @elseif ($isRowView)
-                            <div class="fe-list-head mb-0 grid {{ $cols }} gap-2 border-b border-zinc-200/80 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:border-zinc-700">
+                            <div class="fe-list-head mb-0 grid {{ $cols }} gap-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
                                 <button type="button" class="text-start hover:text-zinc-700 dark:hover:text-zinc-200" wire:click="setSort('name')">{{ __('filament-file-explorer::file-explorer.sort.name') }} @if($sortBy==='name'){{ $sortDir==='asc'?'↑':'↓' }}@endif</button>
                                 <button type="button" class="text-start hover:text-zinc-700 dark:hover:text-zinc-200" wire:click="setSort('type')">{{ __('filament-file-explorer::file-explorer.sort.kind') }} @if($sortBy==='type'){{ $sortDir==='asc'?'↑':'↓' }}@endif</button>
                                 @if ($viewMode === 'details')
