@@ -399,9 +399,7 @@ class FileExplorer extends Component
     {
         abort_unless($this->ability('search'), 403);
 
-        $this->selectedFolders = [];
-        $this->selectedFiles = [];
-        $this->dispatch('fe-sel-cleared');
+        $this->forgetSelection();
         $this->resetListing();
     }
 
@@ -455,10 +453,8 @@ class FileExplorer extends Component
         $this->assertUnderRoot($folder);
 
         $this->search = '';
-        $this->selectedFolders = [];
-        $this->selectedFiles = [];
+        $this->forgetSelection();
         $this->dispatch('reset-folder');
-        $this->dispatch('fe-sel-cleared');
 
         $this->currentFolder = $folder;
         $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
@@ -518,6 +514,29 @@ class FileExplorer extends Component
         $this->selectedFiles = [];
 
         $this->refreshInfo();
+    }
+
+    /**
+     * Clears the selection on the component's own initiative.
+     *
+     * clearSelection() is the browser asking; this is the server deciding — a
+     * navigation, a search, the trash, a delete. The only difference is the
+     * announcement: the browser has to be told to drop its own copy, which it
+     * does not need when it was the one to ask.
+     *
+     * It exists because nine places used to empty the two properties themselves
+     * and dispatch the event, and every one of them therefore skipped
+     * refreshInfo() — the single hook that keeps the inspector on the selection.
+     * That is how the panel came to go on describing a file the trash view does
+     * not show, and it was one bug waiting in each of the nine.
+     */
+    protected function forgetSelection(): void
+    {
+        $this->selectedFolders = [];
+        $this->selectedFiles = [];
+
+        $this->refreshInfo();
+        $this->dispatch('fe-sel-cleared');
     }
 
     public function hasClipboard(): bool
@@ -950,9 +969,15 @@ class FileExplorer extends Component
         abort_unless($this->ability('browse'), 403);
 
         $this->showTrash = Trash::enabled() && ! $this->showTrash;
-        $this->selectedFolders = [];
-        $this->selectedFiles = [];
-        $this->dispatch('fe-sel-cleared');
+
+        $this->forgetSelection();
+
+        // And the panel goes even when it describes the current folder rather
+        // than a selection in it: the trash is neither. This is the one thing
+        // refreshInfo() will not do on its own, by design — a 'current' panel
+        // stays put precisely because nothing about the folder changed, and
+        // here the folder is simply not what is on screen any more.
+        $this->closeInfo();
     }
 
     /**
@@ -2121,8 +2146,7 @@ class FileExplorer extends Component
 
         // Nothing selected, held or navigated in the old root means anything
         // here.
-        $this->selectedFolders = [];
-        $this->selectedFiles = [];
+        $this->forgetSelection();
         $this->search = '';
         $this->navHistory = [(int) $folder->id];
         $this->navIndex = 0;
@@ -2562,6 +2586,11 @@ class FileExplorer extends Component
         $this->isCreatingNewFolder = false;
         $this->selectedFolders = [(int) $newFolder->id];
         $this->selectedFiles = [];
+
+        // The other side of the same rule: this sets a selection rather than
+        // clearing one, and the inspector follows the selection either way.
+        $this->refreshInfo();
+
         $this->currentFolder = $parent->fresh(['children', 'parent']);
         $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
         session([$this->sessionKey() => $parent->id]);
@@ -2576,9 +2605,7 @@ class FileExplorer extends Component
         }
 
         $this->search = '';
-        $this->selectedFolders = [];
-        $this->selectedFiles = [];
-        $this->dispatch('fe-sel-cleared');
+        $this->forgetSelection();
 
         if ($this->currentFolder->parent_id === null) {
             return;
@@ -2600,10 +2627,8 @@ class FileExplorer extends Component
         $this->assertUnderRoot($folder);
 
         $this->search = '';
-        $this->selectedFolders = [];
-        $this->selectedFiles = [];
+        $this->forgetSelection();
         $this->dispatch('reset-folder');
-        $this->dispatch('fe-sel-cleared');
 
         $this->currentFolder = $folder;
         $this->breadcrumb = $this->generateBreadcrumb($this->currentFolder);
@@ -2616,9 +2641,7 @@ class FileExplorer extends Component
     public function navigateToBreadcrumb($breadcrumbIndex): void
     {
         $this->search = '';
-        $this->selectedFolders = [];
-        $this->selectedFiles = [];
-        $this->dispatch('fe-sel-cleared');
+        $this->forgetSelection();
 
         $this->breadcrumb = array_slice($this->breadcrumb, 0, $breadcrumbIndex + 1);
         $this->currentFolder = end($this->breadcrumb);
@@ -3064,12 +3087,10 @@ class FileExplorer extends Component
                 ->send();
         }
 
-        $this->selectedFiles = [];
-        $this->selectedFolders = [];
+        $this->forgetSelection();
         $this->dispatch('reset-media');
         $this->dispatch('reset-folder');
         $this->dispatch('clear-all-selections');
-        $this->dispatch('fe-sel-cleared');
 
         if (! FolderModel::query()->find($this->currentFolder->id)) {
             $this->currentFolder = FolderModel::query()->with(['children', 'parent'])->findOrFail($this->rootFolderId);
@@ -3173,11 +3194,9 @@ class FileExplorer extends Component
             ));
         }
 
-        $this->selectedFolders = [];
-        $this->selectedFiles = [];
+        $this->forgetSelection();
         $this->dispatch('reset-media');
         $this->dispatch('reset-folder');
-        $this->dispatch('fe-sel-cleared');
         $this->currentFolder = $this->currentFolder->fresh(['children']);
         $this->afterMutation();
     }

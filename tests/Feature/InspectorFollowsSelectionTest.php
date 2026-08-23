@@ -242,3 +242,109 @@ it('falls back to the mime type for a file with no extension', function (): void
     expect(feInComponent()->call('showInfo', 'file', $media->id)->get('infoItem')['mime'])
         ->toBe('text/plain');
 });
+
+it('closes when the trash view takes over', function (): void {
+    $media = feInMedia('report.pdf');
+
+    $component = feInComponent()
+        ->call('setSelection', [], [$media->id])
+        ->call('showInfo', 'file', $media->id)
+        ->assertSet('showInfoModal', true);
+
+    // The panel used to keep describing a file the trash view does not show,
+    // because toggleTrash() emptied the two properties itself and so never
+    // reached refreshInfo().
+    $component->call('toggleTrash')
+        ->assertSet('showTrash', true)
+        ->assertSet('showInfoModal', false);
+});
+
+it('closes the current-folder panel on the way to the trash too', function (): void {
+    $component = feInComponent()
+        ->call('showInfo')
+        ->assertSet('showInfoModal', true)
+        ->assertSet('infoItem.scope', 'current');
+
+    // This one refreshInfo() deliberately leaves alone — it describes the folder
+    // rather than a selection in it, and nothing about the folder changed. What
+    // changed is that the folder is not on screen any more.
+    $component->call('toggleTrash')->assertSet('showInfoModal', false);
+});
+
+it('closes on the way back out of the trash', function (): void {
+    $component = feInComponent()->call('toggleTrash')->assertSet('showTrash', true);
+
+    $component->call('showInfo')->assertSet('showInfoModal', true);
+
+    $component->call('toggleTrash')
+        ->assertSet('showTrash', false)
+        ->assertSet('showInfoModal', false);
+});
+
+it('closes when the selection is dropped by a navigation', function (): void {
+    $folder = feInFolder('Docs');
+    $media = feInMedia('report.pdf');
+
+    $component = feInComponent()
+        ->call('setSelection', [], [$media->id])
+        ->call('showInfo', 'file', $media->id)
+        ->assertSet('showInfoModal', true);
+
+    // Navigating clears the selection, so the panel has nothing left to follow.
+    $component->call('navigateToFolder', $folder->id)->assertSet('showInfoModal', false);
+});
+
+it('closes when the selection is dropped by a search', function (): void {
+    $media = feInMedia('report.pdf');
+
+    feInComponent()
+        ->call('setSelection', [], [$media->id])
+        ->call('showInfo', 'file', $media->id)
+        ->assertSet('showInfoModal', true)
+        ->set('search', 'invoice')
+        ->assertSet('showInfoModal', false);
+});
+
+it('closes when the file it describes is deleted', function (): void {
+    $media = feInMedia('report.pdf');
+
+    feInComponent()
+        ->call('setSelection', [], [$media->id])
+        ->call('showInfo', 'file', $media->id)
+        ->assertSet('showInfoModal', true)
+        ->call('deleteTarget', 'file', $media->id)
+        ->assertSet('showInfoModal', false);
+});
+
+it('clears the selection through the one method that refreshes the panel', function (): void {
+    // Nine places used to empty the two properties themselves, and every one of
+    // them skipped refreshInfo(). One bug was reported; there were nine.
+    $source = (string) file_get_contents(__DIR__.'/../../src/Livewire/FileExplorer.php');
+
+    $direct = preg_match_all('/\$this->selected(Folders|Files) = \[\];/', $source);
+
+    // What is left, and why: two lines inside clearSelection(), two inside
+    // forgetSelection(), and five that *set* a selection rather than clearing
+    // one — deleteTarget (two), applyFolderSelection, applyFileSelection and
+    // saveNewFolder. Each of those five refreshes the panel itself or hands over
+    // to something that does.
+    expect($direct)->toBeLessThanOrEqual(9)
+        ->and($source)->toContain('protected function forgetSelection(): void');
+});
+
+it('follows the selection a new folder takes', function (): void {
+    $media = feInMedia('report.pdf');
+
+    // Creating a folder selects it, and the panel follows a selection whichever
+    // side it moves from.
+    feInComponent()
+        ->call('setSelection', [], [$media->id])
+        ->call('showInfo', 'file', $media->id)
+        ->assertSet('infoItem.name', 'report.pdf')
+        ->call('createNewFolder')
+        ->set('newFolderName', 'Contracts')
+        ->call('saveNewFolder')
+        ->assertSet('showInfoModal', true)
+        ->assertSet('infoItem.type', 'folder')
+        ->assertSet('infoItem.name', 'Contracts');
+});
