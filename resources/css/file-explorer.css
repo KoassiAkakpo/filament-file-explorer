@@ -18,6 +18,11 @@
   /* Readable as text on a light tint of the accent, which the raw accent is not. */
   --fe-accent-text: #0b57d0;
   --fe-accent-on-solid: #fff;
+
+  /* The height of the three headers across the top of the finder — see
+     .fe-head below. Comfortably clears the 2rem tool button, and the 2.25rem
+     it becomes on a coarse pointer. */
+  --fe-header-h: 2.75rem;
 }
 .dark {
   --fe-accent: 10, 132, 255;
@@ -35,6 +40,29 @@
     Roboto,
     sans-serif;
   color: #18181b;
+}
+
+/* The three headers ---------------------------------------------------------
+   The sidebar's, the toolbar's and the inspector's sit side by side across the
+   top of the finder, so their bottom borders have to be one line. They used to
+   be sized by their own padding around their own content — py-2 around a 20px
+   icon, py-1.5 around a 32px button, py-2.5 around a line of text — which came
+   out at three different heights, and the eye reads that as three panels that
+   do not belong to the same window.
+
+   One height instead, declared once, with the padding horizontal only.
+   border-box, so the 1px bottom border is inside the number and the borders
+   really do meet. Everything inside centres. */
+.fe-head,
+.fe-toolbar,
+.fe-inspector-head {
+  box-sizing: border-box;
+  height: var(--fe-header-h);
+}
+.fe-head,
+.fe-inspector-head {
+  display: flex;
+  align-items: center;
 }
 
 .fe-toolbar {

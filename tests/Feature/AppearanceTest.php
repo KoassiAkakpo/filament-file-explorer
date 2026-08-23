@@ -18,7 +18,7 @@ function feApCss(): string
     return (string) file_get_contents(__DIR__.'/../../resources/css/file-explorer.css');
 }
 
-function feApHtml(): string
+function feApHtml(bool $withInspector = false): string
 {
     $rootId = app(FileExplorerRootResolver::class)->rootFolderId();
 
@@ -28,10 +28,16 @@ function feApHtml(): string
         'parent_id' => $rootId,
     ]);
 
-    return Livewire::test(FileExplorerComponent::class, [
+    $component = Livewire::test(FileExplorerComponent::class, [
         'scopeKey' => 'library',
         'rootFolderId' => $rootId,
-    ])->assertOk()->html();
+    ]);
+
+    if ($withInspector) {
+        $component->call('showInfo');
+    }
+
+    return $component->assertOk()->html();
 }
 
 it('draws one folder icon everywhere, the sidebar included', function (): void {
@@ -97,4 +103,37 @@ it('gives a selected icon label the solid pill the Finder gives it', function ()
     // tinted text is what made the icon view read as something else.
     expect(feApCss())->toContain('background: var(--fe-accent-solid);
   color: var(--fe-accent-on-solid) !important;');
+});
+
+it('gives the three headers across the top one height', function (): void {
+    $css = feApCss();
+
+    // The sidebar's, the toolbar's and the inspector's sit side by side, so their
+    // bottom borders have to be one line. Sized by their own padding around
+    // their own content they came out at 37, 45 and 53 pixels, which the eye
+    // reads as three panels that do not belong to the same window.
+    expect($css)->toContain('--fe-header-h:')
+        ->toContain('.fe-head,
+.fe-toolbar,
+.fe-inspector-head {
+  box-sizing: border-box;
+  height: var(--fe-header-h);
+}');
+});
+
+it('keeps vertical padding off the headers, which would defeat the height', function (): void {
+    // With the inspector open, so all three headers are actually on the page —
+    // asserting about a tag that is not rendered passes for the wrong reason.
+    $html = feApHtml(withInspector: true);
+
+    foreach (['fe-head', 'fe-toolbar', 'fe-inspector-head'] as $head) {
+        expect($html)->toContain('class="'.$head);
+
+        $tag = (string) strstr((string) strstr($html, 'class="'.$head), '>', true);
+
+        // border-box plus a fixed height means padding-y would only squeeze the
+        // content, but the utility coming back is how the three drifted apart in
+        // the first place.
+        expect($tag)->not->toMatch('/\bp[ytb]-/');
+    }
 });

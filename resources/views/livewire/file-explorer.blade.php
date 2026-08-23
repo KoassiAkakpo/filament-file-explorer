@@ -48,7 +48,7 @@
                         class="fe-sidebar hidden shrink-0 flex-col border-e border-zinc-200/80 bg-zinc-50/90 dark:border-zinc-700 dark:bg-zinc-900/50 sm:flex"
                         x-bind:class="$store.feUi.sidebarOpen ? 'fe-sidebar--open' : 'fe-sidebar--closed'"
                     >
-                        <div class="flex items-center gap-2 border-b border-zinc-200/80 px-2.5 py-2 dark:border-zinc-700" x-show="$store.feUi.sidebarOpen" x-cloak>
+                        <div class="fe-head gap-2 border-b border-zinc-200/80 px-2.5 dark:border-zinc-700" x-show="$store.feUi.sidebarOpen" x-cloak>
                             @svg('heroicon-o-folder', 'h-5 w-5 text-zinc-500')
                             <span class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{{ __('filament-file-explorer::file-explorer.explorer') }}</span>
                         </div>
@@ -107,7 +107,7 @@
 
                     <div class="flex min-w-0 flex-1 flex-col">
                 {{-- Toolbar --}}
-                <div class="fe-toolbar border-b border-zinc-200/80 px-2.5 py-1.5 dark:border-zinc-700/80" dir="ltr">
+                <div class="fe-toolbar border-b border-zinc-200/80 px-2.5 dark:border-zinc-700/80" dir="ltr">
                     <div class="fe-toolbar__primary flex shrink-0 items-center gap-0.5">
                         <button type="button" class="fe-tool-btn hidden sm:inline-flex" title="{{ __('filament-file-explorer::file-explorer.toolbar.toggle_sidebar') }}" @click="$store.feUi.sidebarOpen = !$store.feUi.sidebarOpen">
                             <span x-show="$store.feUi.sidebarOpen">@svg('heroicon-o-bars-3', 'h-4 w-4')</span>
@@ -937,7 +937,7 @@
                                translate="no"
                                wire:key="info-{{ $locale }}-{{ $infoItem['type'] ?? 'x' }}-{{ $infoItem['id'] ?? 0 }}"
                                x-data x-init="$el.animate([{opacity:0,transform:'translateX(8px)'},{opacity:1,transform:'translateX(0)'}],{duration:160,easing:'cubic-bezier(.2,.8,.2,1)'})">
-                            <div class="fe-inspector-head flex items-center justify-between gap-2 px-3 py-2.5">
+                            <div class="fe-inspector-head justify-between gap-2 px-3">
                                 <span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500" translate="no">{{ __('filament-file-explorer::file-explorer.inspector.title') }}</span>
                                 <button type="button" class="fe-tool-btn" wire:click="closeInfo" title="{{ __('filament-file-explorer::file-explorer.inspector.close') }}">
                                     @svg('heroicon-o-x-mark', 'h-3.5 w-3.5')
