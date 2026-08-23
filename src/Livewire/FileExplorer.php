@@ -503,10 +503,78 @@ class FileExplorer extends Component
 
     public function setSelection($folders, $files): void
     {
-        $this->selectedFolders = array_values(array_map('intval', (array) $folders));
-        $this->selectedFiles = array_values(array_map('intval', (array) $files));
+        // The browser's mirror, and the only caller that gets narrowed: it is
+        // the one that can be describing a folder the component has left.
+        [$folderIds, $fileIds] = $this->narrowToListing(
+            array_values(array_map('intval', (array) $folders)),
+            array_values(array_map('intval', (array) $files)),
+        );
+
+        $this->replaceSelection($folderIds, $fileIds);
+    }
+
+    /**
+     * Sets the selection to exactly these ids.
+     *
+     * The server's own setter, for the callers that name what they mean rather
+     * than mirror a browser: a delete requested on the current folder, or on the
+     * root, is legitimate and neither appears in its own listing.
+     *
+     * @param  list<int>  $folderIds
+     * @param  list<int>  $fileIds
+     */
+    protected function replaceSelection(array $folderIds, array $fileIds): void
+    {
+        $this->selectedFolders = $folderIds;
+        $this->selectedFiles = $fileIds;
 
         $this->refreshInfo();
+    }
+
+    /**
+     * Keeps only what the folder on screen is actually showing.
+     *
+     * The browser mirrors its selection here through a debounced call, so a
+     * request can arrive after the component has moved on — and then it names
+     * items of the folder just left. That is what made a double-click report
+     * "1 selected" over a folder absent from its own listing: the sync went out
+     * forty milliseconds behind the navigation and the watch read it back as a
+     * real selection.
+     *
+     * `enterFolder()` in the JS drops the pending sync on the one path where the
+     * race was guaranteed. This is the guard for the paths nobody has found yet,
+     * and for the ones that only happen on a slow connection — a selection of
+     * something the listing does not show is not a selection.
+     *
+     * It costs nothing: the render computes the listing anyway, and this reads
+     * the memoised copy.
+     *
+     * Deliberately not applied to selectFolder() / selectFile(), which are the
+     * public API: an application selecting an item it is about to navigate to
+     * means it, and it is not mirroring a browser that may be behind.
+     *
+     * @param  list<int>  $folderIds
+     * @param  list<int>  $fileIds
+     * @return array{list<int>, list<int>}
+     */
+    protected function narrowToListing(array $folderIds, array $fileIds): array
+    {
+        if (($folderIds === [] && $fileIds === []) || $this->currentFolder === null) {
+            return [[], []];
+        }
+
+        $listing = $this->listing();
+
+        return [
+            array_values(array_intersect(
+                $folderIds,
+                $listing['folders']->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+            )),
+            array_values(array_intersect(
+                $fileIds,
+                $listing['files']->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+            )),
+        ];
     }
 
     public function clearSelection(): void
@@ -845,7 +913,13 @@ class FileExplorer extends Component
         abort_unless($this->ability('delete') || $this->ability('deleteFolder'), 403);
 
         if ($folders !== [] || $files !== []) {
-            $this->setSelection($folders, $files);
+            // Not setSelection(): a delete names its targets, and the current
+            // folder and the root are both legitimate ones that a listing of
+            // their own contents can never contain.
+            $this->replaceSelection(
+                array_values(array_map('intval', $folders)),
+                array_values(array_map('intval', $files)),
+            );
         }
 
         $folderIds = array_values(array_unique(array_map('intval', $this->selectedFolders)));
@@ -2972,8 +3046,10 @@ class FileExplorer extends Component
     public function deleteSelected(array $folders = [], array $files = []): void
     {
         if ($folders !== [] || $files !== []) {
-            $this->selectedFolders = array_values(array_map('intval', $folders));
-            $this->selectedFiles = array_values(array_map('intval', $files));
+            $this->replaceSelection(
+                array_values(array_map('intval', $folders)),
+                array_values(array_map('intval', $files)),
+            );
         }
 
         $this->deleteItems();

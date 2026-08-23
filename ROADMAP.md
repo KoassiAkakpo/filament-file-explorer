@@ -135,5 +135,6 @@ All three only add. None of them changes anything a host app has written against
 ## Known gaps to close along the way
 
 - With the trash **off**, a folder purged by another session while a user stands in it leaves Livewire unable to restore the model at all, and the component fails until the page is reloaded. Soft-deleted folders take the fallback correctly.
+- The breadcrumb calls `navigateToBreadcrumb()` straight from its handler rather than through the JS `enterFolder()`, so a debounced selection sync could in principle land behind it. `setSelection()` narrowing to the listing catches the consequence, so what is left is a redundant round trip rather than a wrong selection.
 - `pint` reports pre-existing style drift in `config/` and `resources/lang/` (strict types, import order). Worth clearing in one pass rather than file by file.
 - `larastan` is a dev dependency with no `phpstan.neon`. Static analysis is not wired up, so nothing enforces the type annotations the code already carries.

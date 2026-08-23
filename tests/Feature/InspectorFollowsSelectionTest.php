@@ -348,3 +348,90 @@ it('follows the selection a new folder takes', function (): void {
         ->assertSet('infoItem.type', 'folder')
         ->assertSet('infoItem.name', 'Contracts');
 });
+
+it('drops a selection the listing does not show', function (): void {
+    $here = feInMedia('here.pdf');
+
+    $elsewhere = feInFolder('Docs');
+    $there = Media::query()->create([
+        'model_type' => (new Folder)->getMorphClass(),
+        'model_id' => $elsewhere->id,
+        'collection_name' => UploadRules::collection(),
+        'name' => 'there.pdf',
+        'file_name' => 'there.pdf',
+        'mime_type' => 'application/pdf',
+        'disk' => 'public',
+        'size' => 2048,
+        'manipulations' => [],
+        'custom_properties' => [],
+        'generated_conversions' => [],
+        'responsive_images' => [],
+    ]);
+
+    // The browser mirrors its selection through a debounced call, so a request
+    // can arrive after the component has moved on and then name items of the
+    // folder just left. A selection of something the listing does not show is
+    // not a selection.
+    feInComponent()
+        ->call('setSelection', [], [$here->id, $there->id])
+        ->assertSet('selectedFiles', [$here->id]);
+});
+
+it('drops the folder it is standing in, which is never in its own listing', function (): void {
+    $root = feInRoot();
+
+    feInComponent()
+        ->call('setSelection', [$root->id], [])
+        ->assertSet('selectedFolders', []);
+});
+
+it('still lets a delete name the folder it is standing in', function (): void {
+    $root = feInRoot();
+
+    // requestDelete goes through the server's own setter, not the browser's
+    // mirror: a delete names its targets, and the current folder and the root
+    // are legitimate ones that a listing of their own contents cannot contain.
+    $request = feInComponent()->call('requestDelete', [$root->id], [])->get('deleteRequest');
+
+    expect($request)->not->toBeNull()
+        ->and($request['blocked'][0]['name'])->toBe($root->name);
+});
+
+it('keeps a selection the search results do show', function (): void {
+    $elsewhere = feInFolder('Docs');
+    $there = Media::query()->create([
+        'model_type' => (new Folder)->getMorphClass(),
+        'model_id' => $elsewhere->id,
+        'collection_name' => UploadRules::collection(),
+        'name' => 'lease.pdf',
+        'file_name' => 'lease.pdf',
+        'mime_type' => 'application/pdf',
+        'disk' => 'public',
+        'size' => 2048,
+        'manipulations' => [],
+        'custom_properties' => [],
+        'generated_conversions' => [],
+        'responsive_images' => [],
+    ]);
+
+    // A search answers from the whole scope, so an item of another folder is
+    // genuinely on screen — the guard follows the listing, not the folder.
+    feInComponent()
+        ->set('search', 'lease')
+        ->call('setSelection', [], [$there->id])
+        ->assertSet('selectedFiles', [$there->id]);
+});
+
+it('narrows without a query when there is nothing to narrow', function (): void {
+    $component = feInComponent();
+
+    DB::enableQueryLog();
+    $component->call('setSelection', [], []);
+    $queries = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    // The empty case short-circuits, so clearing costs nothing. The listing the
+    // rest of it reads is the memoised one the render computes anyway.
+    expect($component->get('selectedFiles'))->toBe([])
+        ->and($queries)->toBeLessThan(12);
+});
