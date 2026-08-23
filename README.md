@@ -565,6 +565,29 @@ Four things worth knowing about the shape:
 - **`FolderCopied` fires once** for the folder that was asked for, never per descendant — but each file the copy created does fire `FileCopied`, because every new file row is a new object to index or scan.
 - **An upload whose thumbnail failed still fires.** `CouldNotLoadImage` is thrown after the row and the original are written, so the file is there; the event would otherwise be missing exactly where an upload went half-wrong.
 
+## The accent colour
+
+The selection, the drop targets, the marquee and the active sidebar row are all built from one accent, declared once in the package stylesheet. It defaults to the macOS system blue, because the layout is the Finder's and so is the selection.
+
+Override it in your own theme — nothing else needs touching:
+
+```css
+:root {
+  --fe-accent: 175, 82, 222;      /* the rgb triple: most uses are translucent tints */
+  --fe-accent-solid: #af52de;     /* the icon view's label pill */
+  --fe-accent-text: #7d2fa8;      /* readable as text on a light tint */
+  --fe-accent-on-solid: #fff;
+}
+.dark {
+  --fe-accent: 191, 90, 242;
+  --fe-accent-solid: #bf5af2;
+  --fe-accent-text: #dcb0ff;
+  --fe-accent-on-solid: #fff;
+}
+```
+
+It is deliberately **not** Filament's `--primary-*`. Those belong to the panel; this is a file browser's selection colour, and the two are not the same decision. The quota bar does follow the panel's primary, because a quota is the application's business rather than the finder's.
+
 ## Assets
 
 There is no build step: `php artisan filament:assets` publishes the package's JS and CSS straight from its sources. Re-run it after upgrading, as you would for any Filament plugin — and keep the `@source` line from the installation steps so your theme still sees the Tailwind classes the views use.

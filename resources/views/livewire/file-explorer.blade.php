@@ -301,25 +301,25 @@
                                 <button type="button" class="fe-view-item {{ $sortBy === 'name' ? 'fe-view-item--active' : '' }}" wire:click="setSort('name')" @click="open=false">
                                     @svg('heroicon-o-document-text', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.sort.name') }}
                                     @if ($sortBy === 'name')
-                                        <span class="ms-auto text-[10px] text-teal-600">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.asc') : __('filament-file-explorer::file-explorer.sort.desc') }}</span>
+                                        <span class="fe-menu-hint ms-auto">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.asc') : __('filament-file-explorer::file-explorer.sort.desc') }}</span>
                                     @endif
                                 </button>
                                 <button type="button" class="fe-view-item {{ $sortBy === 'date' ? 'fe-view-item--active' : '' }}" wire:click="setSort('date')" @click="open=false">
                                     @svg('heroicon-o-calendar', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.sort.date') }}
                                     @if ($sortBy === 'date')
-                                        <span class="ms-auto text-[10px] text-teal-600">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.old') : __('filament-file-explorer::file-explorer.sort.new') }}</span>
+                                        <span class="fe-menu-hint ms-auto">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.old') : __('filament-file-explorer::file-explorer.sort.new') }}</span>
                                     @endif
                                 </button>
                                 <button type="button" class="fe-view-item {{ $sortBy === 'type' ? 'fe-view-item--active' : '' }}" wire:click="setSort('type')" @click="open=false">
                                     @svg('heroicon-o-document', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.sort.type') }}
                                     @if ($sortBy === 'type')
-                                        <span class="ms-auto text-[10px] text-teal-600">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.asc') : __('filament-file-explorer::file-explorer.sort.desc') }}</span>
+                                        <span class="fe-menu-hint ms-auto">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.asc') : __('filament-file-explorer::file-explorer.sort.desc') }}</span>
                                     @endif
                                 </button>
                                 <button type="button" class="fe-view-item {{ $sortBy === 'size' ? 'fe-view-item--active' : '' }}" wire:click="setSort('size')" @click="open=false">
                                     @svg('heroicon-o-scale', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.sort.size') }}
                                     @if ($sortBy === 'size')
-                                        <span class="ms-auto text-[10px] text-teal-600">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.smallest') : __('filament-file-explorer::file-explorer.sort.largest') }}</span>
+                                        <span class="fe-menu-hint ms-auto">{{ $sortDir === 'asc' ? __('filament-file-explorer::file-explorer.sort.smallest') : __('filament-file-explorer::file-explorer.sort.largest') }}</span>
                                     @endif
                                 </button>
                             </div>
@@ -542,7 +542,7 @@
                         ></div>
                         @if ($isCreatingNewFolder)
                             @if ($viewMode === 'details')
-                                <div class="flex items-center gap-3 rounded-lg bg-teal-50/70 px-3 py-2 dark:bg-teal-950/20" @click.outside="$wire.cancelNewFolder">
+                                <div class="fe-newfolder-row flex items-center gap-3 rounded-lg px-3 py-2" @click.outside="$wire.cancelNewFolder">
                                     <x-filament-file-explorer::file-explorer.folder-icon class="h-7 w-7 shrink-0" />
                                     <input type="text" data-fe-new-folder-input wire:model="newFolderName" wire:keydown.enter.prevent="saveNewFolder" wire:keydown.escape.prevent="cancelNewFolder" class="fe-input w-full px-2 py-1 text-sm">
                                 </div>

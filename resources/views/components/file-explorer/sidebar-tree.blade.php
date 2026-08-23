@@ -53,11 +53,15 @@
                 data-fe-drop-folder="{{ $id }}"
                 :class="{ 'fe-side-item--drop': $store.feDrag.dropTargetId === {{ $id }} }"
             >
-                @if ($isPrimary)
-                    @svg('heroicon-o-folder-open', 'h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400')
-                @else
-                    @svg('heroicon-o-folder', 'h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400')
-                @endif
+                {{-- The same folder the grid, the details rows and the column
+                     panes draw. The sidebar was the last place still using an
+                     outline icon, and a folder that changed appearance between
+                     the tree and the folder it opens was the only thing saying
+                     they were not the same object. The root gets a slightly
+                     larger one, as it did before. --}}
+                <x-filament-file-explorer::file-explorer.folder-icon
+                    :class="$isPrimary ? 'h-4 w-4 shrink-0' : 'h-3.5 w-3.5 shrink-0'"
+                />
                 <span @class(['truncate', 'font-semibold' => $isPrimary])>{{ $name }}</span>
             </button>
         </div>

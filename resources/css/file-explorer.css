@@ -1,3 +1,31 @@
+/* The accent -----------------------------------------------------------------
+   Finder's selection is the system accent colour, and on macOS that is blue by
+   default. The explorer used to hardcode teal in twenty-one places, which is why
+   it read as a Filament panel wearing a Finder layout rather than as the Finder.
+
+   Declared once, as an rgb triple as well as a solid, because most of the uses
+   are translucent tints of it: a selection sits over a thumbnail and has to let
+   it through. Everything that means "selected", "dropping here" or "being
+   marqueed" is built from these three, so the accent moves in one edit — a host
+   app that wants its own only has to redefine them.
+
+   Not Filament's --primary-*: those are the panel's, and this is a file
+   browser's selection colour. The quota bar deliberately still follows the
+   panel, because a quota is the application's business rather than the finder's. */
+:root {
+  --fe-accent: 10, 124, 255;
+  --fe-accent-solid: #0a7cff;
+  /* Readable as text on a light tint of the accent, which the raw accent is not. */
+  --fe-accent-text: #0b57d0;
+  --fe-accent-on-solid: #fff;
+}
+.dark {
+  --fe-accent: 10, 132, 255;
+  --fe-accent-solid: #0a84ff;
+  --fe-accent-text: #9dc6ff;
+  --fe-accent-on-solid: #fff;
+}
+
 .fe-finder {
   font-family:
     ui-sans-serif,
@@ -90,26 +118,26 @@
 }
 .fe-side-row--active,
 .fe-side-row:has(.fe-side-item:focus) {
-  background: rgba(13, 148, 136, 0.12);
+  background: rgba(var(--fe-accent), 0.12);
 }
 .fe-side-row--active .fe-side-item {
-  color: #0f766e;
+  color: var(--fe-accent-text);
   font-weight: 600;
 }
 .fe-side-row--primary:not(.fe-side-row--active) {
-  background: rgba(13, 148, 136, 0.08);
+  background: rgba(var(--fe-accent), 0.08);
 }
 .fe-side-item--primary {
-  color: #0f766e;
+  color: var(--fe-accent-text);
 }
 .dark .fe-side-row--active {
-  background: rgba(45, 212, 191, 0.12);
+  background: rgba(var(--fe-accent), 0.12);
 }
 .dark .fe-side-row--active .fe-side-item {
   color: #99f6e4;
 }
 .dark .fe-side-row--primary:not(.fe-side-row--active) {
-  background: rgba(45, 212, 191, 0.1);
+  background: rgba(var(--fe-accent), 0.1);
 }
 .dark .fe-side-item--primary {
   color: #5eead4;
@@ -143,11 +171,11 @@
   color: #d4d4d8;
 }
 .fe-side-item:hover {
-  color: #0f766e;
+  color: var(--fe-accent-text);
 }
 .fe-side-item--drop {
-  background: rgba(13, 148, 136, 0.14) !important;
-  color: #0f766e !important;
+  background: rgba(var(--fe-accent), 0.14) !important;
+  color: var(--fe-accent-text) !important;
   border-radius: 6px;
 }
 /* The browsing area is what absorbs a column taller than its content.
@@ -164,7 +192,7 @@
   min-height: 500px;
 }
 .fe-browser--drop {
-  background: rgba(13, 148, 136, 0.06);
+  background: rgba(var(--fe-accent), 0.06);
 }
 .dark .fe-browser {
   background: transparent;
@@ -281,22 +309,22 @@
 }
 
 .drag-hover {
-  background-color: rgba(13, 148, 136, 0.1) !important;
-  outline: 1.5px solid rgba(13, 148, 136, 0.35);
+  background-color: rgba(var(--fe-accent), 0.1) !important;
+  outline: 1.5px solid rgba(var(--fe-accent), 0.35);
   outline-offset: -1px;
   border-radius: 14px;
 }
 .dark .drag-hover {
-  background-color: rgba(45, 212, 191, 0.12) !important;
-  outline-color: rgba(45, 212, 191, 0.35);
+  background-color: rgba(var(--fe-accent), 0.12) !important;
+  outline-color: rgba(var(--fe-accent), 0.35);
 }
 .drag-hover .fe-icon-well,
 .drag-hover.fe-icon-item .fe-icon-well {
-  background: rgba(13, 148, 136, 0.14) !important;
+  background: rgba(var(--fe-accent), 0.14) !important;
 }
 .drag-hover .fe-label {
-  background: rgba(13, 148, 136, 0.18) !important;
-  color: #0f766e !important;
+  background: rgba(var(--fe-accent), 0.18) !important;
+  color: var(--fe-accent-text) !important;
   display: inline-block;
   -webkit-line-clamp: unset;
   overflow: visible;
@@ -309,8 +337,8 @@
   pointer-events: none;
   transition: none;
   border-radius: 6px;
-  border: 1.5px solid rgba(13, 148, 136, 0.55) !important;
-  background: rgba(13, 148, 136, 0.12) !important;
+  border: 1.5px solid rgba(var(--fe-accent), 0.55) !important;
+  background: rgba(var(--fe-accent), 0.12) !important;
   z-index: 20;
 }
 
@@ -424,13 +452,17 @@ body.fe-is-dragging * {
   z-index: 21;
   max-width: min(160px, 42vw);
   white-space: normal;
-  background: rgba(13, 148, 136, 0.18);
-  color: #0f766e !important;
-  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.06);
+  /* Solid, with white on it: this is the one selection cue the Finder makes
+     unmistakable, and a tinted pill with tinted text was what made the icon view
+     read as something else. The well behind the icon stays translucent, because
+     it sits over a thumbnail. */
+  background: var(--fe-accent-solid);
+  color: var(--fe-accent-on-solid) !important;
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.12);
 }
 .dark .fe-label--selected {
-  background: rgba(45, 212, 191, 0.22);
-  color: #99f6e4 !important;
+  background: var(--fe-accent-solid);
+  color: var(--fe-accent-on-solid) !important;
 }
 .fe-icon-item:hover .fe-icon-well:not(.fe-icon-well--selected) {
   background: rgba(24, 24, 27, 0.04);
@@ -445,20 +477,22 @@ body.fe-is-dragging * {
   overflow: visible;
 }
 .fe-icon-well--selected {
-  background: rgba(13, 148, 136, 0.12);
+  background: rgba(var(--fe-accent), 0.12);
 }
 .dark .fe-icon-well--selected {
-  background: rgba(45, 212, 191, 0.14);
+  background: rgba(var(--fe-accent), 0.14);
 }
 .fe-drop-target .fe-icon-well {
-  background: rgba(13, 148, 136, 0.18);
-  box-shadow: inset 0 0 0 1.5px rgba(13, 148, 136, 0.4);
+  background: rgba(var(--fe-accent), 0.18);
+  box-shadow: inset 0 0 0 1.5px rgba(var(--fe-accent), 0.4);
 }
+/* Accent, not grey: grey is what the Finder uses for the row you came through,
+   which is a different statement from the row you have selected. */
 .fe-row--selected {
-  background: rgba(24, 24, 27, 0.08) !important;
+  background: rgba(var(--fe-accent), 0.14) !important;
 }
 .dark .fe-row--selected {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(var(--fe-accent), 0.22) !important;
 }
 .fe-list-row--stripe {
   background: rgba(24, 24, 27, 0.03);
@@ -466,13 +500,16 @@ body.fe-is-dragging * {
 .dark .fe-list-row--stripe {
   background: rgba(255, 255, 255, 0.03);
 }
+/* The details rows carry the same accent as every other selection. These two are
+   the specific pair that has to beat the zebra stripe, so they repeat the value
+   rather than inheriting it. */
 .fe-list-row--stripe.fe-row--selected,
 .fe-list-row.fe-row--selected {
-  background: rgba(24, 24, 27, 0.08) !important;
+  background: rgba(var(--fe-accent), 0.14) !important;
 }
 .dark .fe-list-row--stripe.fe-row--selected,
 .dark .fe-list-row.fe-row--selected {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(var(--fe-accent), 0.22) !important;
 }
 .fe-list-head {
   background: rgba(250, 250, 250, 0.95);
@@ -654,12 +691,12 @@ body.fe-is-dragging * {
   cursor: not-allowed;
 }
 .fe-tool-btn--primary {
-  background: #0f766e;
-  color: #fff;
+  background: var(--fe-accent-solid);
+  color: var(--fe-accent-on-solid);
 }
 .fe-tool-btn--primary:hover:not(:disabled) {
-  background: #0d9488;
-  color: #fff;
+  background: var(--fe-accent-text);
+  color: var(--fe-accent-on-solid);
 }
 .fe-tool-btn--ghost-danger {
   color: #dc2626;
@@ -676,19 +713,19 @@ body.fe-is-dragging * {
   color: #fafafa;
 }
 .dark .fe-tool-btn--primary {
-  background: #14b8a6;
-  color: #042f2e;
+  background: var(--fe-accent-solid);
+  color: var(--fe-accent-on-solid);
 }
 
 /* Keyboard navigation needs a visible focus ring: the items are the
            only way to move a selection without a mouse. */
 [data-fe-items]:focus-visible {
-  outline: 2px solid rgba(15, 118, 110, 0.35);
+  outline: 2px solid rgba(var(--fe-accent), 0.45);
   outline-offset: -2px;
 }
 .fe-icon-item:focus-visible,
 .fe-list-row:focus-visible {
-  outline: 2px solid #0f766e;
+  outline: 2px solid var(--fe-accent-text);
   outline-offset: -2px;
   border-radius: 0.6rem;
 }
@@ -830,16 +867,16 @@ body.fe-is-dragging * {
    the grid does through fe-icon-well--selected. Without a rule here the toolbar
    counted a selection the panes never showed. */
 .fe-column__row.is-selected {
-  background: rgba(24, 24, 27, 0.1);
+  background: rgba(var(--fe-accent), 0.14);
   font-weight: 500;
 }
 .dark .fe-column__row.is-selected {
-  background: rgba(255, 255, 255, 0.13);
+  background: rgba(var(--fe-accent), 0.24);
 }
 .fe-column__row.drag-hover,
 .fe-column__row.fe-drop-target {
-  background: rgba(13, 148, 136, 0.14);
-  outline: 1.5px solid rgba(13, 148, 136, 0.35);
+  background: rgba(var(--fe-accent), 0.14);
+  outline: 1.5px solid rgba(var(--fe-accent), 0.35);
   outline-offset: -1px;
 }
 .fe-column__icon {
@@ -1085,7 +1122,7 @@ body.fe-is-dragging * {
 .fe-btn:focus-visible,
 .fe-lightbox__btn:focus-visible,
 .fe-load-more:focus-visible {
-  outline: 2px solid #0f766e;
+  outline: 2px solid var(--fe-accent-text);
   outline-offset: 2px;
 }
 .dark .fe-btn:focus-visible,
@@ -1149,12 +1186,27 @@ body.fe-is-dragging * {
   background: #fff;
 }
 
+/* The last two accents that were Tailwind utilities in Blade.
+   Moved here so the accent has one owner: a utility class cannot read
+   --fe-accent, so `text-teal-600` in a template was a second definition of the
+   colour that this file could not reach. */
+.fe-menu-hint {
+  font-size: 10px;
+  color: var(--fe-accent-text);
+}
+.fe-newfolder-row {
+  background: rgba(var(--fe-accent), 0.08);
+}
+.dark .fe-newfolder-row {
+  background: rgba(var(--fe-accent), 0.14);
+}
+
 .fe-tool-btn--active {
-  background: rgba(13, 148, 136, 0.12);
-  color: #0f766e;
+  background: rgba(var(--fe-accent), 0.12);
+  color: var(--fe-accent-text);
 }
 .dark .fe-tool-btn--active {
-  background: rgba(45, 212, 191, 0.16);
+  background: rgba(var(--fe-accent), 0.16);
   color: #5eead4;
 }
 
@@ -1251,7 +1303,7 @@ body.fe-is-dragging * {
 }
 .fe-widget__link {
   font-size: 11px;
-  color: #0d9488;
+  color: var(--fe-accent-solid);
 }
 .fe-widget__link:hover {
   text-decoration: underline;
@@ -1277,7 +1329,7 @@ body.fe-is-dragging * {
 .fe-widget__fill {
   height: 100%;
   border-radius: 9999px;
-  background: #14b8a6;
+  background: var(--fe-accent-solid);
   transition: width 0.2s ease;
 }
 .fe-widget__fill--warning {
