@@ -124,6 +124,11 @@
                             @svg('heroicon-o-arrow-uturn-up', 'h-4 w-4')
                         </button>
 
+                        {{-- Everything from here to the end of the group acts on
+                             the folder being browsed, which the trash view is not
+                             showing. Offered there, a new folder and an upload
+                             landed somewhere invisible and read as a failure. --}}
+                        @unless ($showTrash)
                         <div class="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-600"></div>
 
                         @if ($abilities['mkdir'])
@@ -167,6 +172,7 @@
                         </button>
                         @endif
                         @endif
+                        @endunless
                     </div>
 
                     <div class="fe-toolbar__secondary fe-toolbar__collapse flex shrink-0 items-center gap-0.5">
@@ -193,7 +199,7 @@
                             @svg('heroicon-o-document-duplicate', 'h-3.5 w-3.5')
                         </button>
                         @endif
-                        @if ($abilities['move'] || $abilities['copy'])
+                        @if (($abilities['move'] || $abilities['copy']) && ! $showTrash)
                         <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.paste') }}" :disabled="!$wire.clipboardReady" @click="$wire.pasteClipboard()">
                             @svg('heroicon-o-clipboard-document', 'h-3.5 w-3.5')
                         </button>
@@ -244,7 +250,7 @@
                                 @svg('heroicon-o-document-duplicate', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.toolbar.copy') }}
                             </button>
                             @endif
-                            @if ($abilities['move'] || $abilities['copy'])
+                            @if (($abilities['move'] || $abilities['copy']) && ! $showTrash)
                             <button type="button" class="fe-view-item" :disabled="!$wire.clipboardReady" @click="$wire.pasteClipboard(); open=false">
                                 @svg('heroicon-o-clipboard-document', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.toolbar.paste') }}
                             </button>
@@ -283,6 +289,10 @@
                                   ? translations.toolbar.selected_count.replace(':count', sel.folders.length + sel.files.length)
                                   : (sel.folders.length + sel.files.length) + ' selected'"></span>
 
+                        {{-- The listing's controls, and the trash is not the
+                             listing: it has its own order, its own layout and
+                             nothing to filter. --}}
+                        @unless ($showTrash)
                         <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false">
                             <button type="button" class="fe-tool-btn" title="{{ __('filament-file-explorer::file-explorer.toolbar.sort_by') }}" @click="open = !open">
                                 @svg('heroicon-o-arrows-up-down', 'h-3.5 w-3.5')
@@ -423,6 +433,7 @@
                             <input wire:model.live.debounce.250ms="search" class="fe-input fe-search h-8 pe-3 ps-8 text-xs" type="search" title="{{ __('filament-file-explorer::file-explorer.toolbar.search') }}" placeholder="{{ __('filament-file-explorer::file-explorer.toolbar.search_placeholder') }}">
                         </div>
                         @endif
+                        @endunless
                     </div>
                 </div>
 

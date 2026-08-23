@@ -304,3 +304,97 @@ it('does not reintroduce a duplicate name when restoring', function (): void {
         // The file followed its new name on disk.
         ->and(is_file($first->getPath()))->toBeTrue();
 });
+
+it('stops offering what acts on the folder it is not showing', function (): void {
+    $root = feTrRoot();
+    feTrFolder($root, 'Docs');
+
+    $component = feTrComponent();
+
+    // Scoped to the toolbar's own markup. The whole translation file is embedded
+    // in the root x-data, so asserting on a label against the full page finds
+    // every string whether it is rendered as a control or not.
+    $toolbar = fn (string $html): string => (string) Str::between($html, 'class="fe-toolbar', 'class="fe-browser');
+
+    $folderView = $toolbar($component->html());
+
+    expect($folderView)
+        ->toContain('wire:click="createNewFolder"')
+        ->toContain('x-ref="fileInput"')
+        ->toContain('x-ref="folderInput"')
+        ->toContain('pasteClipboard')
+        ->toContain('setSort')
+        ->toContain('setViewMode')
+        ->toContain('fe-search');
+
+    $trashView = $toolbar($component->call('toggleTrash')->assertSet('showTrash', true)->html());
+
+    // A new folder and an upload landed in the folder behind the trash — which is
+    // to say somewhere invisible — and read as a failure. The sort, the filters
+    // and the view switcher belong to a listing the trash is not.
+    expect($trashView)
+        ->not->toContain('wire:click="createNewFolder"')
+        ->not->toContain('x-ref="fileInput"')
+        ->not->toContain('x-ref="folderInput"')
+        ->not->toContain('pasteClipboard')
+        ->not->toContain('setSort')
+        ->not->toContain('setViewMode')
+        ->not->toContain('fe-search');
+
+    // What the trash needs stays: the way back out. Its own actions live in the
+    // view rather than the toolbar, and the tests above cover them.
+    expect($trashView)->toContain('wire:click="toggleTrash"');
+});
+
+it('refuses to start a new folder it could not show the input for', function (): void {
+    // Not a security guard — showTrash is the client's own property. It stops a
+    // wedge: the inline name input renders in the items container, which the
+    // trash view does not render, so the component would sit in "creating" with
+    // nothing on screen to type into or cancel.
+    feTrComponent()
+        ->call('toggleTrash')
+        ->call('createNewFolder')
+        ->assertSet('isCreatingNewFolder', false);
+});
+
+it('leaves the trash when the user navigates somewhere', function (): void {
+    $root = feTrRoot();
+    $docs = feTrFolder($root, 'Docs');
+
+    $component = feTrComponent()->call('toggleTrash')->assertSet('showTrash', true);
+
+    // The sidebar tree stays clickable while the trash is up, and this used to
+    // change the folder underneath while the screen went on showing the trash —
+    // a click that appeared to do nothing.
+    $component->call('navigateToFolder', $docs->id)
+        ->assertSet('showTrash', false)
+        ->assertSet('currentFolder.id', $docs->id);
+});
+
+it('leaves the trash on the way back up and through the breadcrumb', function (): void {
+    $root = feTrRoot();
+    $docs = feTrFolder($root, 'Docs');
+
+    feTrComponent()
+        ->call('navigateToFolder', $docs->id)
+        ->call('toggleTrash')
+        ->call('navigateToParent')
+        ->assertSet('showTrash', false);
+
+    feTrComponent()
+        ->call('navigateToFolder', $docs->id)
+        ->call('toggleTrash')
+        ->call('navigateToBreadcrumb', 0)
+        ->assertSet('showTrash', false);
+});
+
+it('leaves the trash when the history is walked', function (): void {
+    $root = feTrRoot();
+    $docs = feTrFolder($root, 'Docs');
+
+    feTrComponent()
+        ->call('navigateToFolder', $docs->id)
+        ->call('toggleTrash')
+        ->call('goBack')
+        ->assertSet('showTrash', false);
+});

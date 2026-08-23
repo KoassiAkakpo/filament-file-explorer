@@ -186,7 +186,7 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         FilamentAsset::register([
             Css::make('filament-file-explorer', __DIR__.'/../resources/css/file-explorer.css'),
             Js::make('filament-file-explorer', __DIR__.'/../resources/js/file-explorer.js'),
-        ], 'Koassi/filament-file-explorer');
+        ], 'koassi/filament-file-explorer');
     }
 
     protected function registerRoutes(): void

@@ -138,6 +138,15 @@ Escape is handled once, on the component root (`@keydown.escape.window`), and `t
 
 The trash view lists one entry per trashed *thing*: trashed folders whose parent is not itself trashed, and trashed files still sitting in a live folder. A file trashed on its own before its folder went stays in the trash when that folder is restored — `trashed_with_folder` is what distinguishes the two. Restoring re-resolves the file name, since a new upload may have taken it in the meantime.
 
+The trash is a **mode, not a folder**, and two things follow from that:
+
+- **The toolbar stops offering what acts on the folder being browsed.** A new folder and an upload landed in the folder behind the trash — invisible, and indistinguishable from a failure — and the sort, the filters, the view switcher and the search belong to a listing the trash is not. All of them are behind `@unless ($showTrash)`. The selection-gated controls need no guard: the trash rows carry no `data-fe-type` / `data-id`, so no selection can form and their own `x-show` keeps them hidden.
+- **A navigation leaves the trash.** `navigateToFolder()`, `navigateToParent()`, `navigateToBreadcrumb()`, `openFolderFromHistory()` and `switchRoot()` each clear `showTrash`. The sidebar tree stays clickable while the trash is up, and without this a click on a folder changed the folder underneath while the screen went on showing the trash — a click that appeared to do nothing. It is also what makes the mode escapable the obvious way.
+
+`createNewFolder()` returns early while the trash is showing, and that is **not** a security guard: `showTrash` is a public property, so it is the client's own state and a check on it proves nothing. What it prevents is a wedge — the inline name input renders inside the items container, which the trash view does not render, so the component would sit in "creating" with nothing on screen to type into or cancel. The rest of the actions need no such check: their entry points are all inside the items container, which the trash view replaces.
+
+Asserting about the toolbar means **scoping to its own markup** (`Str::between($html, 'class="fe-toolbar', 'class="fe-browser')`). The whole translation file is embedded in the root `x-data`, so a label assertion against the full page finds every string whether it is rendered as a control or not — which is how the first version of that test failed for the wrong reason.
+
 Restore and purge take the same ability that trashing took (`delete` for files, `deleteFolder` for folders) rather than a new one. That was originally forced: `abilities()` returns a fixed array, and reading a key an existing authorizer never answered denied the action for every host app silently. [Support/Abilities.php](src/Support/Abilities.php) lifted that constraint, but these two keep the ability they had — changing them now would widen access for authorizers written since.
 
 With the trash **off**, `deleteFolderRecursive()` must `forceDelete()`: the model soft-deletes now, so `delete()` would leave rows nothing ever shows again and nothing ever purges.

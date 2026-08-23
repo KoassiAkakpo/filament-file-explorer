@@ -137,12 +137,22 @@ it('ships the assets it edits', function (): void {
     // drift from the source — and nothing failed when it did.
     expect(is_dir(__DIR__.'/../../resources/dist'))->toBeFalse();
 
+    // Read from composer.json rather than written out: the id decides where
+    // `filament:assets` publishes, so the two drifting apart means a host app
+    // publishing to one path and the page asking for another. It has drifted
+    // once already.
+    $package = (string) json_decode(
+        (string) file_get_contents(__DIR__.'/../../composer.json'),
+        true,
+    )['name'];
+
     $registered = [
-        ...FilamentAsset::getStyles(['Koassi/filament-file-explorer']),
-        ...FilamentAsset::getScripts(['Koassi/filament-file-explorer'], withCore: false),
+        ...FilamentAsset::getStyles([$package]),
+        ...FilamentAsset::getScripts([$package], withCore: false),
     ];
 
-    expect($registered)->not->toBeEmpty();
+    expect($package)->toBe('koassi/filament-file-explorer')
+        ->and($registered)->not->toBeEmpty();
 
     foreach ($registered as $asset) {
         expect($asset->getPath())->toBeReadableFile()

@@ -452,6 +452,7 @@ class FileExplorer extends Component
         $folder = FolderModel::query()->findOrFail($folderId);
         $this->assertUnderRoot($folder);
 
+        $this->showTrash = false;
         $this->search = '';
         $this->forgetSelection();
         $this->dispatch('reset-folder');
@@ -2146,6 +2147,7 @@ class FileExplorer extends Component
 
         // Nothing selected, held or navigated in the old root means anything
         // here.
+        $this->showTrash = false;
         $this->forgetSelection();
         $this->search = '';
         $this->navHistory = [(int) $folder->id];
@@ -2514,6 +2516,15 @@ class FileExplorer extends Component
 
     public function createNewFolder(): void
     {
+        // Not a guard in the security sense — $showTrash is a public property, so
+        // it is the client's own state and a check on it proves nothing. What it
+        // prevents is a wedge: the inline name input renders inside the items
+        // container, which the trash view does not render, so the component would
+        // sit in "creating" with nothing on screen to type into or cancel.
+        if ($this->showTrash) {
+            return;
+        }
+
         abort_unless($this->ability('mkdir'), 403);
         $this->assertUnderRoot($this->currentFolder);
 
@@ -2604,6 +2615,7 @@ class FileExplorer extends Component
             return;
         }
 
+        $this->showTrash = false;
         $this->search = '';
         $this->forgetSelection();
 
@@ -2626,6 +2638,13 @@ class FileExplorer extends Component
         $folder = FolderModel::query()->findOrFail($folderId);
         $this->assertUnderRoot($folder);
 
+        // A navigation says "show me this folder", and the trash is not a
+        // folder — it is a view over the whole scope. Leaving it here is also
+        // what makes it escapable the obvious way: the sidebar tree stays
+        // clickable while the trash is up, and clicking a folder in it used to
+        // change the folder underneath while the screen went on showing the
+        // trash. The same line is in the four other places a navigation starts.
+        $this->showTrash = false;
         $this->search = '';
         $this->forgetSelection();
         $this->dispatch('reset-folder');
@@ -2640,6 +2659,7 @@ class FileExplorer extends Component
 
     public function navigateToBreadcrumb($breadcrumbIndex): void
     {
+        $this->showTrash = false;
         $this->search = '';
         $this->forgetSelection();
 
