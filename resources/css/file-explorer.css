@@ -23,6 +23,11 @@
      .fe-head below. Comfortably clears the 2rem tool button, and the 2.25rem
      it becomes on a coarse pointer. */
   --fe-header-h: 2.75rem;
+
+  /* How tall the finder may get before its contents start scrolling inside it
+     instead of pushing the page down. Override it in a host theme: a page with
+     a deep header wants less, a full-screen one wants more. */
+  --fe-max-h: 70vh;
 }
 .dark {
   --fe-accent: 10, 132, 255;
@@ -206,6 +211,26 @@
   color: var(--fe-accent-text) !important;
   border-radius: 6px;
 }
+/* Where the finder stops growing.
+   The items container has always carried overflow-y, and it was inert: nothing
+   bounded the height, so the container grew with its content, the row grew with
+   it and the *page* scrolled — a thousand files meant a thousand files of page.
+   A max-height here is what makes that overflow mean something, and the
+   min-height below it keeps an empty explorer from collapsing.
+
+   Every flex item between this and the scrolling child carries min-h-0.
+   Without it a flex item's min-height is auto, which is to say "at least my
+   content", and each one in the chain would grow past the bound rather than let
+   the one at the end scroll. */
+.fe-body {
+  max-height: var(--fe-max-h);
+}
+/* The picker puts the whole finder in a modal, which already spends height on a
+   heading and scrolls on its own. */
+.fe-in-modal {
+  --fe-max-h: 60vh;
+}
+
 /* The browsing area is what absorbs a column taller than its content.
    The inspector is a sibling of the whole main column, so opening it can make
    the flex row taller than the 560px floor — and with nothing growing in the
@@ -217,7 +242,9 @@
   flex: 1 1 auto;
   flex-direction: column;
   background: #fff;
-  min-height: 500px;
+  /* 0, not 500px: a floor here is a floor the scrolling child cannot get under,
+     and the row's own min-height already gives an empty explorer its presence. */
+  min-height: 0;
 }
 .fe-browser--drop {
   background: rgba(var(--fe-accent), 0.06);
@@ -830,6 +857,14 @@ body.fe-is-dragging * {
    The container scrolls horizontally rather than wrapping, and each pane scrolls
    on its own — a deep path is meant to run off the right edge, which is how the
    view says "there is more behind you". */
+/* Qualified so it beats the overflow-y utility the container also carries.
+   Both are single classes, so before this it came down to which stylesheet the
+   panel happened to load second — invisible until a bounded height made the
+   container able to overflow at all. Vertical scrolling belongs to each pane,
+   which is what the Finder does. */
+[data-fe-items].fe-columns {
+  overflow-y: hidden;
+}
 .fe-columns {
   display: flex;
   flex-wrap: nowrap;

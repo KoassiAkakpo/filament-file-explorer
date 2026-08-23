@@ -42,10 +42,10 @@
             @keydown.escape.window="closeContext(); $wire.cancelRename(); $wire.cancelNewFolder(); $wire.closeInfo(); $wire.cancelDelete(); $wire.closePreview(); $wire.closeShare()"
         >
             <div class="fe-finder w-full overflow-hidden rounded-xl border border-zinc-200/90 bg-zinc-50/80 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40" dir="ltr" lang="{{ $locale }}" translate="no">
-                <div class="flex min-h-[560px]">
+                <div class="fe-body flex min-h-[560px]">
                     {{-- Sidebar --}}
                     <aside
-                        class="fe-sidebar hidden shrink-0 flex-col border-e border-zinc-200/80 bg-zinc-50/90 dark:border-zinc-700 dark:bg-zinc-900/50 sm:flex"
+                        class="fe-sidebar hidden min-h-0 shrink-0 flex-col border-e border-zinc-200/80 bg-zinc-50/90 dark:border-zinc-700 dark:bg-zinc-900/50 sm:flex"
                         x-bind:class="$store.feUi.sidebarOpen ? 'fe-sidebar--open' : 'fe-sidebar--closed'"
                     >
                         <div class="fe-head gap-2 border-b border-zinc-200/80 px-2.5 dark:border-zinc-700" x-show="$store.feUi.sidebarOpen" x-cloak>
@@ -105,7 +105,7 @@
                         @endif
                     </aside>
 
-                    <div class="flex min-w-0 flex-1 flex-col">
+                    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
                 {{-- Toolbar --}}
                 <div class="fe-toolbar border-b border-zinc-200/80 px-2.5 dark:border-zinc-700/80" dir="ltr">
                     <div class="fe-toolbar__primary flex shrink-0 items-center gap-0.5">
@@ -453,7 +453,7 @@
                             @endif
                         </div>
 
-                        <div class="min-h-[500px] p-2">
+                        <div class="min-h-0 flex-1 overflow-y-auto p-2">
                             @if ($trashRows === [])
                                 <p class="p-8 text-center text-sm text-zinc-500">{{ __('filament-file-explorer::file-explorer.trash.empty_state') }}</p>
                             @else
@@ -534,7 +534,7 @@
                         x-on:click="handleContainerClick($event)"
                         x-on:contextmenu.prevent="openEmptyContext($event)"
                         @class([
-                            'relative min-h-[500px] flex-1 select-none overflow-y-auto p-2 pb-8',
+                            'relative min-h-0 flex-1 select-none overflow-y-auto p-2 pb-8',
                             'flex flex-wrap content-start gap-x-0 gap-y-1' => in_array($viewMode, ['grid', 'icons'], true),
                             'space-y-0.5' => $viewMode === 'details',
                             'fe-columns' => $viewMode === 'columns' && $panes !== [],
@@ -942,7 +942,7 @@
 
                     {{-- Get Info inspector --}}
                     @if ($showInfoModal && $infoItem)
-                        <aside class="fe-inspector flex w-[300px] shrink-0 flex-col"
+                        <aside class="fe-inspector flex min-h-0 w-[300px] shrink-0 flex-col"
                                dir="ltr"
                                lang="{{ $locale }}"
                                translate="no"

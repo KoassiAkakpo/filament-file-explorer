@@ -16,10 +16,15 @@
                 {{ __('filament-file-explorer::file-explorer.explorer') }}
             </x-slot>
 
-            @livewire('filament-file-explorer::file-explorer', [
-                'scopeKey' => $getScopeKey(),
-                'rootFolderId' => $getRootFolderId(),
-            ], key('picker-'.$getId()))
+            {{-- The modal has a heading and its own scroll, so the finder inside
+                 it gets less room than one on a page of its own. Overriding the
+                 token rather than the height keeps one owner for the rule. --}}
+            <div class="fe-in-modal">
+                @livewire('filament-file-explorer::file-explorer', [
+                    'scopeKey' => $getScopeKey(),
+                    'rootFolderId' => $getRootFolderId(),
+                ], key('picker-'.$getId()))
+            </div>
         </x-filament::modal>
     </div>
 </x-dynamic-component>

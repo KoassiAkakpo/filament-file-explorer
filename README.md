@@ -565,6 +565,22 @@ Four things worth knowing about the shape:
 - **`FolderCopied` fires once** for the folder that was asked for, never per descendant — but each file the copy created does fire `FileCopied`, because every new file row is a new object to index or scan.
 - **An upload whose thumbnail failed still fires.** `CouldNotLoadImage` is thrown after the row and the original are written, so the file is there; the event would otherwise be missing exactly where an upload went half-wrong.
 
+## How tall the finder gets
+
+The explorer scrolls its contents **inside itself**: the items area, the sidebar tree, the inspector and each column pane each scroll on their own, so a folder holding a thousand files does not turn into a thousand files of page.
+
+The ceiling is one custom property:
+
+```css
+:root {
+  --fe-max-h: 70vh;    /* the whole finder stops growing here */
+}
+```
+
+Override it in your own theme — a page with a deep header wants less, a full-screen one wants more. There is a 560px floor underneath, so an empty explorer keeps its presence; on a viewport too short for both, the floor wins and the page scrolls, which is the graceful way round.
+
+The picker's modal sets `60vh` for itself, since a modal already spends height on a heading and scrolls on its own.
+
 ## The accent colour
 
 The selection, the drop targets, the marquee and the active sidebar row are all built from one accent, declared once in the package stylesheet. It defaults to the macOS system blue, because the layout is the Finder's and so is the selection.
