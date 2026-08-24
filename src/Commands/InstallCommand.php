@@ -56,6 +56,9 @@ class InstallCommand extends Command
         $this->line('That is all the standalone page needs — after step 3 a "'.__('filament-file-explorer::file-explorer.explorer').'"');
         $this->line('entry appears in the panel navigation and the root folder is created on first visit.');
         $this->newLine();
+        $this->line('Optional — fill it with something to look at:');
+        $this->line('  php artisan file-explorer:demo');
+        $this->newLine();
         $this->line('Optional — explorer scoped to a record instead of the panel:');
         $this->line('  a. Model: use HasFileExplorer; + folder_id column');
         $this->line('     php artisan filament-file-explorer:make-folder-migration {table}');

@@ -608,6 +608,31 @@ It is deliberately **not** Filament's `--primary-*`. Those belong to the panel; 
 
 There is no build step: `php artisan filament:assets` publishes the package's JS and CSS straight from its sources. Re-run it after upgrading, as you would for any Filament plugin — and keep the `@source` line from the installation steps so your theme still sees the Tailwind classes the views use.
 
+## Demo content
+
+An empty explorer shows almost nothing about itself: the kind filter has no kinds to offer, the size sort has nothing to order, the thumbnails have no images and the trash is a blank panel. One command fills a scope with a library worth looking at.
+
+```bash
+php artisan file-explorer:demo
+```
+
+It fills the root the **standalone resolver** hands out — the library the panel's explorer page actually opens — and prints which resolver answered. Options:
+
+| Option | |
+|---|---|
+| `--files=70` `--folders=14` `--depth=3` | how much, and how deep (capped by `folders.max_depth`) |
+| `--seed=` | reuse the seed a previous run printed and get the same library back |
+| `--fresh` | empty the root first, instead of adding to what is there |
+| `--user=ID` | act as that user: per-user scopes resolve, and "Added by" is filled in |
+| `--root=ID --scope=KEY` | fill a folder outright — a record-scoped page's root, say |
+| `--force` | skip the production confirmation |
+
+The files are real. A demo built from `UploadedFile::fake()` would report sizes over empty files, which leaves the quota bar and the storage widget at zero and gives the thumbnail conversion nothing to convert — so every kind is generated as genuine bytes whose sniffed mime type is the one the kind filter matches on. The command writes them through `addMedia()`, the same call an upload makes, and passes the same quota gate: it stops and says so rather than filling a scope past its cap.
+
+`--root` requires `--scope`, and that is not pedantry — tags are a scope's own vocabulary, and a folder cannot name the scope it is browsed in. For the standalone page it is your configured `scope_key`; for a record-scoped page it is `{model-kebab}.{id}`, e.g. `--scope=project.4`.
+
+> If your panel configures the plugin fluently — `->scopeKey('docs')` rather than the config key — the console cannot see that: there is no panel in a command, so `StandaloneSettings` falls back to config. Pass `--root` and `--scope` explicitly in that case. The command prints the scope and root it used, so a mismatch is visible rather than mysterious.
+
 ## Testing
 
 ```bash

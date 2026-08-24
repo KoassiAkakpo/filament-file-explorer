@@ -8,6 +8,7 @@ use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Support\Facades\Route;
+use Koassi\FilamentFileExplorer\Commands\DemoCommand;
 use Koassi\FilamentFileExplorer\Commands\InstallCommand;
 use Koassi\FilamentFileExplorer\Commands\MakeAuthorizerCommand;
 use Koassi\FilamentFileExplorer\Commands\MakeFolderMigrationCommand;
@@ -56,6 +57,7 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
                 MakeAuthorizerCommand::class,
                 MakeFolderMigrationCommand::class,
                 PurgeTrashCommand::class,
+                DemoCommand::class,
             ]);
     }
 

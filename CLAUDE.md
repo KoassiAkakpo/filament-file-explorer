@@ -261,6 +261,21 @@ It reuses `Quota::state()` for the bar rather than recomputing the thresholds �
 
 `FileExplorerManager::ensureRoot()` is the only idempotent path. The folders table has `unique(['parent_id', 'slug'])`, but MySQL does not dedupe rows with `parent_id IS NULL`, so concurrent first hits could each create a root. A `Cache::lock` closes that window and falls through to the unlocked path if the cache store cannot lock. Use `ensureRoot()` rather than `createRoot()` for anything resolver-driven.
 
+## Demo content
+
+`file-explorer:demo` ([src/Commands/DemoCommand.php](src/Commands/DemoCommand.php) + [Commands/Concerns/GeneratesDemoFiles.php](src/Commands/Concerns/GeneratesDemoFiles.php)) fills a scope with folders and files. It exists because every feature the explorer has needs *content* to show itself, and hand-building that through the UI gives a different library every time.
+
+Four decisions carry the weight:
+
+- **The bytes are real, and honest about what they are.** The kind filter and the type sort both match on `mime_type`, which Media Library sniffs from the file — so a `.mp4` full of noise sniffs as `application/octet-stream` and the Video filter finds nothing, which reads as a bug the package does not have. Every recipe in the trait was checked against `finfo`. That is also why the office files are **OpenDocument and not OOXML**: finfo recognises ODF from its `mimetype` entry (first, stored uncompressed), while a hand-built `.docx` sniffs as `application/zip` and lands under Archive. WebM is absent for the same reason — an EBML header alone does not sniff. And the sizes are real because `UploadedFile::fake()->create()` writes an empty file, which is exactly the trap the test suite already documents: it would leave the quota bar and the storage widget at zero, the two things a demo is for.
+- **It goes through `addMedia()` on the folder** — the same call `updatedFiles()` makes, with the same custom properties, the same `FileNames` clash handling and the same `CouldNotLoadImage` catch. A second write path would drift from the first, and a demo is exactly where nobody would notice.
+- **It passes the same quota gate.** `Quota::reserve()` per file, and it stops and reports rather than filling the scope past its cap — otherwise the first thing anyone tries after seeing the demo, uploading a file, is refused.
+- **The seed is the whole story.** `mt_srand()` once, and every choice below draws from it, which is what makes a screenshot or a bug report reproducible. That is why folder slugs are suffixed the way the component's own "new folder" suffixes them (numeric, on collision) rather than with `Str::random`: a random slug would dodge the `unique(parent_id, slug)` index on a second run just as well, and would silently break the promise.
+
+`--root` deliberately **requires** `--scope`: tags are per scope, and a folder cannot name the scope it is browsed in — a record-scoped key is built from the model and the record. Guessing would tag into a vocabulary the explorer never offers. And the command prints which resolver answered, because the panel's fluent settings are invisible from the console (no panel, so `StandaloneSettings` falls back to config) — a host that called `->scopeKey()` instead of setting the config key would otherwise have its demo land in a root the panel never opens, with nothing on screen to say so.
+
+Note when running it by hand under Testbench: publishing Media Library's migration into `vendor/orchestra/testbench-core/laravel/database/migrations/` breaks the **whole** suite, which creates that table inline in `defineDatabaseMigrations()`. Delete it again afterwards.
+
 ## Generators and stubs
 
 `stubs/*.stub` stay inside the package and are read by `MakePageCommand` / `MakeAuthorizerCommand` / `MakeFolderMigrationCommand` via [Commands/Concerns/CopiesPackageStubs.php](src/Commands/Concerns/CopiesPackageStubs.php), which prefers `base_path('stubs/filament-file-explorer/…')` when the host app has published them. `/stubs/filament-file-explorer/` is gitignored (local QA output) while `stubs/` itself is tracked — don't "clean up" either. Changing an abstract page class means checking the matching stub still compiles against it.
