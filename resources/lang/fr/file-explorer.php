@@ -116,6 +116,7 @@ return [
         'clear' => 'Effacer le choix',
         'remove' => 'Retirer :name',
         'none' => 'Aucun fichier choisi',
+        'invalid' => 'Ce fichier ne peut pas être choisi ici.',
     ],
 
     'tags' => [

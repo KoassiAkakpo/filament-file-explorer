@@ -389,6 +389,15 @@ FileExplorerPicker::make('attachments')->multiple()     // state: list<int>
 
 The Choose button sits in the explorer's toolbar beside the selection count — where the selection already is — and is enabled only once a file is selected. Folders are never chosen: a folder is where you look, not what you pick. Whatever the field holds is drawn under the button, in the order it was chosen, each entry removable.
 
+Restrict what may be chosen with `->kinds()`, using the package's own kind vocabulary — the same closed list the toolbar's filter menu offers:
+
+```php
+FileExplorerPicker::make('logo')->kinds('image')
+FileExplorerPicker::make('attachment')->kinds(['image', 'pdf'])
+```
+
+`image`, `pdf`, `document`, `spreadsheet`, `presentation`, `archive`, `audio`, `video`. Kinds rather than mime types or extensions because that list already has one SQL predicate behind it: the explorer shows only those kinds, its filter menu offers only those kinds, a pick of anything else is refused, and a state carrying a wrong-kind id fails validation — all four decided by the same query, so they cannot disagree. Folders are never hidden by it: a folder has no kind, and hiding them would filter you into a room with no doors. A kind that does not exist throws rather than being dropped, because a typo that silently narrows nothing is a restriction that quietly does not restrict.
+
 Because the state is media ids, a single field fits an `unsignedBigInteger` column and a multiple one a JSON column; whichever shape your model already holds, the field coerces it on hydration and back on save, so `->multiple()` can be added or removed without stranding the old shape.
 
 > **The field's value is not the explorer's selection**, and reopening the modal shows nothing selected on purpose. The selection is narrowed to what is on screen — that is what stops a slow round trip naming items of a folder you have left — so a chosen file whose folder is not being browsed would be dropped on the next sync. The value belongs to the field; the selection is what is on screen now.

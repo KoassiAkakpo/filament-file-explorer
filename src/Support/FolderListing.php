@@ -49,6 +49,14 @@ final class FolderListing
 
     private ?string $kind;
 
+    /** @var list<string> */
+    private array $kinds;
+
+    /**
+     * @param  list<string>  $kinds  the kinds a listing may show at all, beside
+     *                               the single $kind the filter menu picks from
+     *                               them. Empty means every kind.
+     */
     public function __construct(
         private readonly int $rootFolderId,
         private readonly int $currentFolderId,
@@ -57,10 +65,19 @@ final class FolderListing
         string $sortDir = 'asc',
         ?string $kind = null,
         private readonly ?int $tagId = null,
+        array $kinds = [],
     ) {
+        $this->kinds = FileKinds::normaliseMany($kinds);
+
         // Normalised here, so an unrecognised value narrows nothing rather than
-        // emptying a folder with no explanation.
+        // emptying a folder with no explanation — and a filter for a kind the
+        // restriction excludes is one of those: it would leave the folder empty
+        // with a menu entry to blame that the menu never offered.
         $this->kind = FileKinds::normalise($kind);
+
+        if ($this->kind !== null && $this->kinds !== [] && ! in_array($this->kind, $this->kinds, true)) {
+            $this->kind = null;
+        }
 
         $this->search = trim($search);
         $this->sortBy = in_array($sortBy, self::SORTS, true) ? $sortBy : 'name';
@@ -161,7 +178,10 @@ final class FolderListing
             ->where('model_type', FolderModel::morphClass());
 
         // Before the window and before the counts, so "5 of 12" describes what
-        // the filter left rather than what was there.
+        // the filter left rather than what was there. The restriction first: a
+        // picker limited to images and PDFs is not showing anything else, filter
+        // or no filter.
+        $query = FileKinds::applyAny($query, $this->kinds);
         $query = FileKinds::apply($query, $this->kind);
 
         $query = app(Annotations::class)->applyTag(

@@ -379,7 +379,7 @@
                                 <button type="button" class="fe-view-item {{ $kind === null ? 'fe-view-item--active' : '' }}" wire:click="setKind(null)" @click="open=false">
                                     @svg('heroicon-o-squares-2x2', 'h-3.5 w-3.5') {{ __('filament-file-explorer::file-explorer.kind.all') }}
                                 </button>
-                                @foreach (\Koassi\FilamentFileExplorer\Support\FileKinds::all() as $availableKind)
+                                @foreach ($this->kindOptions() as $availableKind)
                                     <button type="button" class="fe-view-item {{ $kind === $availableKind ? 'fe-view-item--active' : '' }}" wire:click="setKind('{{ $availableKind }}')" @click="open=false">
                                         @svg(\Koassi\FilamentFileExplorer\Support\FileKinds::icon($availableKind), 'h-3.5 w-3.5')
                                         {{ __('filament-file-explorer::file-explorer.kind.'.$availableKind) }}

@@ -114,6 +114,64 @@ final class FileKinds
         return $query->whereIn('mime_type', self::MIMES[$kind] ?? []);
     }
 
+    /**
+     * Narrows to *any* of several kinds — the restriction a picker imposes,
+     * beside the single kind the filter menu applies.
+     *
+     * Here rather than in the picker, and expressed in SQL rather than as a PHP
+     * matcher, for the reason the whole class exists: one list and one predicate,
+     * so what the menu offers, what a listing shows and what a pick accepts can
+     * never answer differently. The callers that check an id in PHP run this
+     * against the same query instead of testing a mime type themselves.
+     *
+     * @param  Builder<Media>  $query
+     * @param  list<string>  $kinds
+     * @return Builder<Media>
+     */
+    public static function applyAny(Builder $query, array $kinds): Builder
+    {
+        $kinds = self::normaliseMany($kinds);
+
+        // Empty narrows nothing, as a null kind does: a restriction nobody set
+        // must not empty a folder.
+        if ($kinds === []) {
+            return $query;
+        }
+
+        if (count($kinds) === 1) {
+            return self::apply($query, $kinds[0]);
+        }
+
+        return $query->where(function (Builder $group) use ($kinds): void {
+            foreach ($kinds as $kind) {
+                if (isset(self::PREFIXES[$kind])) {
+                    $group->orWhere('mime_type', 'like', self::PREFIXES[$kind].'%');
+
+                    continue;
+                }
+
+                $group->orWhereIn('mime_type', self::MIMES[$kind] ?? []);
+            }
+        });
+    }
+
+    /**
+     * The known kinds among these, deduplicated and in the menu's own order so
+     * a restriction reads the same wherever it is drawn.
+     *
+     * @param  list<string>  $kinds
+     * @return list<string>
+     */
+    public static function normaliseMany(array $kinds): array
+    {
+        $known = array_filter(array_map(
+            fn ($kind): ?string => self::normalise(is_string($kind) ? $kind : null),
+            $kinds,
+        ));
+
+        return array_values(array_filter(self::all(), fn (string $kind): bool => in_array($kind, $known, true)));
+    }
+
     public static function icon(string $kind): string
     {
         return match ($kind) {

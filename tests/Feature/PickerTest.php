@@ -12,6 +12,7 @@ use Koassi\FilamentFileExplorer\Forms\Components\FileExplorerPicker;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer as FileExplorerComponent;
 use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
+use Koassi\FilamentFileExplorer\Support\FileKinds;
 use Koassi\FilamentFileExplorer\Support\FolderModel;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Koassi\FilamentFileExplorer\Tests\Fixtures\PickerForm;
@@ -24,6 +25,7 @@ beforeEach(function (): void {
     PickerForm::$rootFolderId = null;
     PickerForm::$scopeKey = null;
     PickerForm::$multiple = false;
+    PickerForm::$kinds = [];
 });
 
 function fePickerRootId(): int
@@ -31,7 +33,7 @@ function fePickerRootId(): int
     return app(FileExplorerRootResolver::class)->rootFolderId();
 }
 
-function fePickerMedia(string $name, ?int $folderId = null): Media
+function fePickerMedia(string $name, ?int $folderId = null, string $mime = 'application/pdf'): Media
 {
     return Media::query()->create([
         'model_type' => FolderModel::morphClass(),
@@ -39,7 +41,7 @@ function fePickerMedia(string $name, ?int $folderId = null): Media
         'collection_name' => UploadRules::collection(),
         'name' => $name,
         'file_name' => $name,
-        'mime_type' => 'application/pdf',
+        'mime_type' => $mime,
         'disk' => 'public',
         'size' => 8,
         'manipulations' => [],
@@ -49,13 +51,14 @@ function fePickerMedia(string $name, ?int $folderId = null): Media
     ]);
 }
 
-function fePickerExplorer(string $token = 'data.files', bool $multiple = false): Testable
+function fePickerExplorer(string $token = 'data.files', bool $multiple = false, array $kinds = []): Testable
 {
     return Livewire::test(FileExplorerComponent::class, [
         'scopeKey' => 'library',
         'rootFolderId' => fePickerRootId(),
         'pickerToken' => $token,
         'pickMultiple' => $multiple,
+        'pickKinds' => $kinds,
     ]);
 }
 
@@ -423,4 +426,126 @@ it('empties to a shape the form can save', function (): void {
     // null rather than [] — whichever the column expects, it is not a surprise.
     expect(FileExplorerPicker::make('files')->multiple()->normaliseState(['', 0, null]))->toBe([])
         ->and(FileExplorerPicker::make('files')->normaliseState([0]))->toBeNull();
+});
+
+/* ------------------------------------------------------- restricting the kind */
+
+it('shows only the kinds it accepts', function (): void {
+    $image = fePickerMedia('logo.png', mime: 'image/png');
+    $pdf = fePickerMedia('lease.pdf');
+    $sheet = fePickerMedia('budget.csv', mime: 'text/csv');
+    $clip = fePickerMedia('demo.mp4', mime: 'video/mp4');
+
+    $listing = fePickerExplorer(kinds: ['image', 'pdf'])->instance()->listing();
+
+    // You cannot pick what you cannot see, which is why the restriction narrows
+    // the listing and not only the pick — and it runs before the window and the
+    // counts, so "2 of 2" describes what is left.
+    expect($listing['files']->pluck('id')->all())->toBe([(int) $pdf->id, (int) $image->id])
+        ->and($listing['total'])->toBe(2);
+
+    expect([(int) $sheet->id, (int) $clip->id])->not->toContain(...$listing['files']->pluck('id')->all());
+});
+
+it('leaves the folders alone when it narrows the kinds', function (): void {
+    app(FileExplorerManager::class)->createChild(
+        FolderModel::query()->findOrFail(fePickerRootId()),
+        'Contracts',
+    );
+    fePickerMedia('demo.mp4', mime: 'video/mp4');
+
+    // Folders have no kind, and hiding them would filter the user into a room
+    // with no doors: the one thing still needed is a way to look elsewhere.
+    expect(fePickerExplorer(kinds: ['image'])->instance()->listing()['folders']->count())->toBe(1);
+});
+
+it('offers only the accepted kinds in the filter menu', function (): void {
+    $menu = fePickerExplorer(kinds: ['image', 'pdf'])->instance()->kindOptions();
+
+    // An entry that can only ever come back empty is worse than no entry: it
+    // reads as a folder holding nothing rather than as a kind not taken here.
+    expect($menu)->toBe(['image', 'pdf'])
+        ->and(fePickerExplorer()->instance()->kindOptions())->toBe(FileKinds::all());
+});
+
+it('ignores a filter for a kind it does not accept', function (): void {
+    $image = fePickerMedia('logo.png', mime: 'image/png');
+
+    $component = fePickerExplorer(kinds: ['image'])->call('setKind', 'video');
+
+    // Not an empty folder with a filter to blame that the menu never offered.
+    expect($component->get('kind'))->toBeNull()
+        ->and($component->instance()->listing()['files']->pluck('id')->all())->toBe([(int) $image->id]);
+});
+
+it('still filters within the kinds it accepts', function (): void {
+    $image = fePickerMedia('logo.png', mime: 'image/png');
+    fePickerMedia('lease.pdf');
+
+    $component = fePickerExplorer(kinds: ['image', 'pdf'])->call('setKind', 'image');
+
+    expect($component->instance()->listing()['files']->pluck('id')->all())->toBe([(int) $image->id]);
+});
+
+it('refuses to pick a file of a kind it does not accept', function (): void {
+    $image = fePickerMedia('logo.png', mime: 'image/png');
+    $clip = fePickerMedia('demo.mp4', mime: 'video/mp4');
+
+    // selectFile() is public API and not narrowed, so a kind the field refuses
+    // can still be selected — and must not survive the pick. Same predicate as
+    // the listing, run in SQL, so the two cannot disagree.
+    fePickerExplorer(multiple: true, kinds: ['image'])
+        ->call('selectFile', $image->id)
+        ->call('selectFile', $clip->id, true)
+        ->call('pickSelected')
+        ->assertDispatched('fe-picked', files: [(int) $image->id]);
+});
+
+it('says nothing when everything selected is of the wrong kind', function (): void {
+    $clip = fePickerMedia('demo.mp4', mime: 'video/mp4');
+
+    fePickerExplorer(kinds: ['image'])
+        ->call('selectFile', $clip->id)
+        ->call('pickSelected')
+        ->assertNotDispatched('fe-picked');
+});
+
+it('cannot have its restriction lifted from the browser', function (): void {
+    // A public Livewire property is the client's own state, and a limit the
+    // client can empty is not a limit — hence #[Locked].
+    expect(fn () => fePickerExplorer(kinds: ['image'])->set('pickKinds', []))
+        ->toThrow('Cannot update locked property: [pickKinds]');
+});
+
+it('refuses a kind that does not exist, when the field is written', function (): void {
+    // Thrown rather than dropped: a typo that silently narrows nothing is a
+    // restriction that quietly does not restrict.
+    expect(fn () => FileExplorerPicker::make('files')->kinds('imgae'))
+        ->toThrow(InvalidArgumentException::class, 'Unknown file kind(s) imgae');
+
+    expect(FileExplorerPicker::make('files')->kinds('image')->getKinds())->toBe(['image'])
+        ->and(FileExplorerPicker::make('files')->kinds(['pdf', 'image'])->getKinds())->toBe(['image', 'pdf']);
+});
+
+it('will not save an id of a kind it does not accept', function (): void {
+    $image = fePickerMedia('logo.png', mime: 'image/png');
+    $clip = fePickerMedia('demo.mp4', mime: 'video/mp4');
+
+    $field = FileExplorerPicker::make('files')->multiple()->kinds(['image']);
+
+    // The state is written from the browser, so the explorer's guard is only the
+    // happy path: nothing stops a crafted request setting the state path to any
+    // id at all. This is the half that decides what gets saved.
+    expect($field->idsOutsideScope([(int) $image->id, (int) $clip->id]))->toBe([(int) $clip->id])
+        ->and($field->idsOutsideScope([(int) $image->id]))->toBe([])
+        ->and($field->idsOutsideScope(null))->toBe([]);
+});
+
+it('draws nothing for a held id of the wrong kind', function (): void {
+    $clip = fePickerMedia('demo.mp4', mime: 'video/mp4');
+
+    PickerForm::$kinds = ['image'];
+
+    expect(Livewire::test(PickerForm::class)->set('data.files', (int) $clip->id)->assertOk()->html())
+        ->not->toContain('demo.mp4');
 });

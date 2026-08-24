@@ -37,6 +37,9 @@ class PickerForm extends Component implements HasForms
 
     public static bool $multiple = false;
 
+    /** @var list<string> */
+    public static array $kinds = [];
+
     public function mount(): void
     {
         $this->form->fill();
@@ -56,6 +59,10 @@ class PickerForm extends Component implements HasForms
 
         if (self::$multiple) {
             $picker->multiple();
+        }
+
+        if (self::$kinds !== []) {
+            $picker->kinds(self::$kinds);
         }
 
         return $schema->components([$picker])->statePath('data');

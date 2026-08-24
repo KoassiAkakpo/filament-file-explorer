@@ -116,6 +116,7 @@ return [
         'clear' => 'Clear the choice',
         'remove' => 'Remove :name',
         'none' => 'Nothing chosen yet',
+        'invalid' => 'That file cannot be chosen here.',
     ],
 
     'tags' => [

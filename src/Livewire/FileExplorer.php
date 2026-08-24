@@ -51,6 +51,7 @@ use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -160,6 +161,18 @@ class FileExplorer extends Component
     public bool $pickMultiple = false;
 
     /**
+     * The kinds a picker will accept, or empty for any.
+     *
+     * Locked, because it is a restriction: a public Livewire property is the
+     * client's own state, and a limit the client can empty is not a limit. The
+     * field sets it at mount and nothing changes it after.
+     *
+     * @var list<string>
+     */
+    #[Locked]
+    public array $pickKinds = [];
+
+    /**
      * The colour the next tag is added with, or null for no opinion.
      *
      * Null is deliberately not "grey": grey is a choice that recolours the word
@@ -230,6 +243,11 @@ class FileExplorer extends Component
     {
         $this->scopeKey = (string) ($scopeKey ?? $this->scopeKey);
         $this->rootFolderId = (int) ($rootFolderId ?? $this->rootFolderId);
+
+        // Normalised once, here, so a field naming a kind that does not exist
+        // restricts nothing rather than everything — and so the value the Locked
+        // attribute then holds to is the clean one.
+        $this->pickKinds = FileKinds::normaliseMany($this->pickKinds);
 
         $authorizer = app(FileExplorerAuthorizer::class);
 
@@ -1574,8 +1592,10 @@ class FileExplorer extends Component
 
         $scope = app(MediaScope::class);
 
-        $allowed = Media::query()
-            ->whereIn('id', $ids)
+        // The restriction runs in SQL, against FileKinds' own predicate, rather
+        // than as a mime test written out here: one owner, so what the listing
+        // shows and what a pick accepts can never disagree.
+        $allowed = FileKinds::applyAny(Media::query()->whereIn('id', $ids), $this->pickKinds)
             ->get()
             ->filter(fn (Media $media): bool => $scope->folderUnderRoot($media, $this->rootFolderId) !== null)
             ->pluck('id')
@@ -2396,6 +2416,7 @@ class FileExplorer extends Component
             $this->sortDir,
             $this->kind,
             $this->activeTagId(),
+            $this->pickKinds,
         ))->window($this->perPage > 0 ? $this->perPage : $this->pageSize());
     }
 
@@ -2450,7 +2471,7 @@ class FileExplorer extends Component
                 // the filter excludes would contradict the one beside it. A tag
                 // filter never reaches here: it answers from the subtree, and
                 // the guard above drops the panes entirely for it.
-                : (new FolderListing($this->rootFolderId, (int) $folder->id, '', $this->sortBy, $this->sortDir, $this->kind, $this->activeTagId()))->window($limit);
+                : (new FolderListing($this->rootFolderId, (int) $folder->id, '', $this->sortBy, $this->sortDir, $this->kind, $this->activeTagId(), $this->pickKinds))->window($limit);
 
             $panes[] = [
                 'folder' => $folder,
@@ -2537,11 +2558,32 @@ class FileExplorer extends Component
      * again — the menu entry is a toggle, so there is always a way back without
      * hunting for a separate "show all".
      */
+    /**
+     * The kinds the filter menu may offer.
+     *
+     * A picker's restriction narrows the menu as well as the listing: an entry
+     * that can only ever come back empty is worse than no entry, because it
+     * reads as a folder holding nothing rather than as a kind this field does
+     * not take.
+     *
+     * @return list<string>
+     */
+    public function kindOptions(): array
+    {
+        return $this->pickKinds === [] ? FileKinds::all() : $this->pickKinds;
+    }
+
     public function setKind(?string $kind): void
     {
         abort_unless($this->ability('browse'), 403);
 
         $kind = FileKinds::normalise($kind);
+
+        // A kind the restriction excludes is not one this explorer filters by,
+        // so it does nothing rather than emptying the folder.
+        if ($kind !== null && $this->pickKinds !== [] && ! in_array($kind, $this->pickKinds, true)) {
+            return;
+        }
 
         $this->kind = $this->kind === $kind ? null : $kind;
 

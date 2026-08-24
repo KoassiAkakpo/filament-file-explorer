@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Koassi\FilamentFileExplorer\Forms\Components;
 
+use Closure;
 use Filament\Forms\Components\Field;
+use InvalidArgumentException;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
+use Koassi\FilamentFileExplorer\Support\FileKinds;
 use Koassi\FilamentFileExplorer\Support\MediaScope;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -37,6 +40,9 @@ class FileExplorerPicker extends Field
 
     protected bool $multiple = false;
 
+    /** @var list<string> */
+    protected array $kinds = [];
+
     /**
      * @var array{scopeKey: string, rootFolderId: int}|null
      */
@@ -60,6 +66,18 @@ class FileExplorerPicker extends Field
         });
 
         $this->dehydrateStateUsing(fn (mixed $state): mixed => $this->normaliseState($state));
+
+        // The state is written from the browser, so the explorer's guard is only
+        // the happy path: nothing stops a crafted request setting the state path
+        // to any id at all. Validated here as well, which is the half that
+        // decides what gets saved.
+        $this->rule(static function (FileExplorerPicker $component): Closure {
+            return static function (string $attribute, mixed $value, Closure $fail) use ($component): void {
+                if ($component->idsOutsideScope($value) !== []) {
+                    $fail(__('filament-file-explorer::file-explorer.picker.invalid'));
+                }
+            };
+        });
     }
 
     /**
@@ -77,6 +95,24 @@ class FileExplorerPicker extends Field
         }
 
         return $ids === [] ? null : $ids[0];
+    }
+
+    /**
+     * The ids in $state this field may not hold: not this scope's, or not one of
+     * the kinds it accepts.
+     *
+     * @return list<int>
+     */
+    public function idsOutsideScope(mixed $state): array
+    {
+        $normalised = $this->normaliseState($state);
+        $ids = is_array($normalised) ? $normalised : ($normalised === null ? [] : [$normalised]);
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return array_values(array_diff($ids, array_column($this->resolveFiles($ids), 'id')));
     }
 
     /**
@@ -98,11 +134,31 @@ class FileExplorerPicker extends Field
             return [];
         }
 
+        return $this->resolveFiles($ids);
+    }
+
+    /**
+     * The ids that really are this field's, with their names, in the order given.
+     *
+     * One resolver for drawing and for validating, so the list a user reads back
+     * and the list a save accepts are decided by the same query. Containment
+     * through MediaScope and the kinds through FileKinds' own predicate: an id
+     * the state carries from somewhere else draws nothing rather than leaking a
+     * file name the viewer may not be allowed to see.
+     *
+     * @param  list<int>  $ids
+     * @return list<array{id: int, name: string}>
+     */
+    protected function resolveFiles(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
         $scope = app(MediaScope::class);
         $root = $this->getRootFolderId();
 
-        $byId = Media::query()
-            ->whereIn('id', $ids)
+        $byId = FileKinds::applyAny(Media::query()->whereIn('id', $ids), $this->kinds)
             ->get()
             ->filter(fn (Media $media): bool => $scope->folderUnderRoot($media, $root) !== null)
             ->keyBy(fn (Media $media): int => (int) $media->id);
@@ -136,6 +192,50 @@ class FileExplorerPicker extends Field
         $this->multiple = $condition;
 
         return $this;
+    }
+
+    /**
+     * Restricts the field to files of these kinds — `'image'`, `'pdf'`, and the
+     * rest of `FileKinds::all()`.
+     *
+     * The package's own vocabulary rather than mime types or extensions, because
+     * it is a closed list with a SQL predicate already behind it: the explorer
+     * shows only these, its filter menu offers only these, and a pick of
+     * anything else is refused by the same predicate. A mime list here would be
+     * a fourth place to keep the same set of strings.
+     *
+     * @param  string|list<string>  $kinds
+     */
+    public function kinds(string|array $kinds): static
+    {
+        $wanted = array_values(array_unique(array_map(
+            fn ($kind): string => is_string($kind) ? $kind : '',
+            is_array($kinds) ? $kinds : [$kinds],
+        )));
+
+        $unknown = array_values(array_diff($wanted, FileKinds::all()));
+
+        // Thrown rather than dropped, and thrown the moment the form renders. A
+        // typo silently narrowing nothing is a restriction that quietly does not
+        // restrict, which is the one failure mode a limit must not have.
+        if ($unknown !== []) {
+            throw new InvalidArgumentException(
+                'Unknown file kind(s) '.implode(', ', $unknown).' — expected any of '
+                .implode(', ', FileKinds::all()).'.'
+            );
+        }
+
+        $this->kinds = FileKinds::normaliseMany($wanted);
+
+        return $this;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getKinds(): array
+    {
+        return $this->kinds;
     }
 
     public function getRootFolderId(): int

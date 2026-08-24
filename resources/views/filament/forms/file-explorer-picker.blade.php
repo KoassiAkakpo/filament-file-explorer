@@ -50,6 +50,7 @@
                     'rootFolderId' => $getRootFolderId(),
                     'pickerToken' => $statePath,
                     'pickMultiple' => $isMultiple(),
+                    'pickKinds' => $getKinds(),
                 ], key('picker-'.$getId()))
             </div>
         </x-filament::modal>
