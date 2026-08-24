@@ -189,6 +189,12 @@ Decisions that carry weight:
 
 Applied in `FolderListing` before the window and before the counts, like the kind filter, so `shown`/`total` describe the filtered set. Unlike the kind filter it narrows **folders too** — a folder can be tagged, and hiding folders would hide exactly what the user tagged.
 
+And unlike the kind filter it **widens the containment**: a tag filter answers from `subtreeFolderIds()` — everything under the folder being browsed — rather than from its direct children. A tag is a property of the item, not of the folder it happens to sit in, so narrowing to one level made a tag findable only from the one folder that already showed the item, which is the folder where a filter was least needed. The subtree of *where you stand* rather than the whole scope, so navigating while filtered still means something. Three things follow, and all three are load-bearing:
+
+- **The folder being browsed is excluded** from its own folder listing (`id != currentFolderId`), because it is in its own subtree — exactly as the search excludes the root from `scopeFolderIds()`.
+- **`filteringByTag()` is the same condition `applyTag()` uses**, annotations-enabled check included. With the feature off a leftover tag id narrows nothing, and a listing that widened anyway would answer a filter nobody applied with every file in the tree.
+- **`columnPanes()` returns `[]` while a tag filter is on**, for the reason it already did while searching: panes are a path and a subtree answer is not one, so the same deep item would appear in every pane, each contradicting the one beside it. The view falls back to the flat listing on its own — `$panes !== []` already guards it.
+
 `tagIndex()` prefetches both kinds in two queries because the rendered rows ask per item; a window is a hundred rows.
 
 ## Security model

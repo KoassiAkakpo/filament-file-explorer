@@ -16,6 +16,7 @@ use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\Annotations;
 use Koassi\FilamentFileExplorer\Support\FolderListing;
 use Koassi\FilamentFileExplorer\Support\FolderModel;
+use Koassi\FilamentFileExplorer\Support\FolderTree;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Livewire\Features\SupportTesting\Testable;
@@ -71,11 +72,11 @@ function feAnMedia(string $name, ?int $folderId = null, string $collection = '')
     ]);
 }
 
-function feAnListing(int $tagId = 0, string $search = ''): array
+function feAnListing(int $tagId = 0, string $search = '', ?int $currentFolderId = null): array
 {
     return (new FolderListing(
         feAnRootId(),
-        feAnRootId(),
+        $currentFolderId ?? feAnRootId(),
         $search,
         'name',
         'asc',
@@ -632,4 +633,148 @@ it('shows no swatches to someone who cannot annotate', function (): void {
 
     expect(feAnComponent()->call('showInfo', 'file', $file->id)->assertOk()->html())
         ->not->toContain('fe-swatches');
+});
+
+/* ------------------------------------------------- how far a tag filter looks */
+
+it('finds a tagged item anywhere under the folder being browsed', function (): void {
+    $level1 = feAnFolder('Contracts');
+    $level2 = feAnFolder('Signed', $level1);
+    $deepFile = feAnMedia('lease.pdf', $level2);
+    $deepFolder = feAnFolder('Archived', $level2);
+    feAnMedia('untagged.pdf', $level2);
+
+    $tag = feAn()->attach('library', Annotations::FILE, (int) $deepFile->id, 'Urgent')[0];
+    feAn()->attach('library', Annotations::FOLDER, $deepFolder, 'Urgent');
+
+    // A tag is a property of the item, not of the folder it happens to sit in,
+    // so filtering on one from the root has to answer from the whole subtree.
+    // Narrowing the folder's own children instead made a tag findable only from
+    // the one folder that already showed the item.
+    $listing = feAnListing((int) $tag['id']);
+
+    expect($listing['files']->pluck('id')->all())->toBe([(int) $deepFile->id])
+        ->and($listing['folders']->pluck('id')->all())->toBe([$deepFolder])
+        ->and($listing['total'])->toBe(2);
+});
+
+it('answers from the folder being browsed, not from the whole scope', function (): void {
+    $here = feAnFolder('Contracts');
+    $deep = feAnFolder('Signed', $here);
+    $elsewhere = feAnFolder('Invoices');
+
+    $mine = feAnMedia('lease.pdf', $deep);
+    $theirs = feAnMedia('bill.pdf', $elsewhere);
+
+    $tag = feAn()->attach('library', Annotations::FILE, (int) $mine->id, 'Urgent')[0];
+    feAn()->attach('library', Annotations::FILE, (int) $theirs->id, 'Urgent');
+
+    // The subtree of where you stand, which is what makes the current folder
+    // still mean something — a filter answering from the whole scope wherever
+    // you are would make navigating while filtered pointless.
+    expect(feAnListing((int) $tag['id'], '', $here)['files']->pluck('id')->all())
+        ->toBe([(int) $mine->id]);
+
+    // And from the root, both.
+    expect(feAnListing((int) $tag['id'])['files']->count())->toBe(2);
+});
+
+it('never lists the folder being browsed inside itself', function (): void {
+    $here = feAnFolder('Contracts');
+    $child = feAnFolder('Signed', $here);
+
+    $tags = feAn()->attach('library', Annotations::FOLDER, $here, 'Urgent');
+    feAn()->attach('library', Annotations::FOLDER, $child, 'Urgent');
+
+    // The folder is in its own subtree, exactly as the root is in the scope —
+    // which is why the search excludes the root and this excludes the folder.
+    expect(feAnListing((int) $tags[0]['id'], '', $here)['folders']->pluck('id')->all())
+        ->toBe([$child]);
+});
+
+it('leaves the plain listing on the folder\'s own children', function (): void {
+    $level1 = feAnFolder('Contracts');
+    feAnFolder('Signed', $level1);
+    feAnMedia('deep.pdf', $level1);
+    feAnMedia('shallow.pdf');
+
+    // Only a filter widens the listing. Without one it is the folder, and a
+    // folder that showed its whole subtree would not be a folder.
+    $listing = feAnListing();
+
+    expect($listing['files']->pluck('name')->all())->toBe(['shallow.pdf'])
+        ->and($listing['folders']->pluck('name')->all())->toBe(['Contracts']);
+});
+
+it('counts the whole filtered subtree, not the part in this folder', function (): void {
+    $level1 = feAnFolder('Contracts');
+    $level2 = feAnFolder('Signed', $level1);
+
+    $tag = feAn()->attach('library', Annotations::FILE, (int) feAnMedia('a.pdf', $level1)->id, 'Urgent')[0];
+    feAn()->attach('library', Annotations::FILE, (int) feAnMedia('b.pdf', $level2)->id, 'Urgent');
+    feAn()->attach('library', Annotations::FILE, (int) feAnMedia('c.pdf')->id, 'Urgent');
+
+    // Applied before the window and before the counts, like the kind filter, so
+    // "3 of 3" describes the filtered set rather than what one folder held.
+    $listing = feAnListing((int) $tag['id']);
+
+    expect($listing['total'])->toBe(3)
+        ->and($listing['shown'])->toBe(3)
+        ->and($listing['hasMore'])->toBeFalse();
+});
+
+it('keeps trashed items out of a filtered subtree', function (): void {
+    config()->set('filament-file-explorer.trash.enabled', true);
+
+    $level1 = feAnFolder('Contracts');
+    $live = feAnMedia('live.pdf', $level1);
+    $trashedFile = feAnMedia('gone.pdf', $level1, Trash::collection());
+    $trashedFolder = feAnFolder('Old', $level1);
+
+    $tag = feAn()->attach('library', Annotations::FILE, (int) $live->id, 'Urgent')[0];
+    feAn()->attach('library', Annotations::FILE, (int) $trashedFile->id, 'Urgent');
+    feAn()->attach('library', Annotations::FOLDER, $trashedFolder, 'Urgent');
+
+    app(Trash::class)->trashFolder(FolderModel::query()->findOrFail($trashedFolder));
+
+    // Trashing changed the set of ids under the folder, and FolderTree memoises
+    // it — the same flush resetListing() does after every mutation.
+    app(FolderTree::class)->flush();
+
+    // Widening the containment must not widen what a listing may show: the
+    // soft delete takes trashed folders out of every Folder::query(), and the
+    // collection filter takes trashed files out of the media query.
+    $listing = feAnListing((int) $tag['id']);
+
+    expect($listing['files']->pluck('id')->all())->toBe([(int) $live->id])
+        ->and($listing['folders']->pluck('name')->all())->toBe([]);
+});
+
+it('does not widen the listing for a tag id when annotations are off', function (): void {
+    $level1 = feAnFolder('Contracts');
+    feAnMedia('deep.pdf', $level1);
+    $tag = feAn()->attach('library', Annotations::FILE, (int) feAnMedia('shallow.pdf')->id, 'Urgent')[0];
+
+    config()->set('filament-file-explorer.annotations.enabled', false);
+    app()->forgetScopedInstances();
+
+    // With the feature off a leftover tag id narrows nothing — so a listing that
+    // widened to the subtree anyway would answer a filter nobody applied with
+    // every file in the tree.
+    expect(feAnListing((int) $tag['id'])['files']->pluck('name')->all())->toBe(['shallow.pdf']);
+});
+
+it('draws no column panes while a tag filter is on', function (): void {
+    $level1 = feAnFolder('Contracts');
+    $file = feAnMedia('lease.pdf', $level1);
+    $tag = feAn()->attach('library', Annotations::FILE, (int) $file->id, 'Urgent')[0];
+
+    $component = feAnComponent()->call('setViewMode', 'columns');
+
+    expect($component->instance()->columnPanes())->not->toBe([]);
+
+    // Panes are a path, and a filter answering from the subtree is not one: the
+    // same deep item would appear in every pane, each contradicting the next.
+    // The view falls back to the flat listing, as it already does for a search.
+    expect($component->call('setTagFilter', (int) $tag['id'])->instance()->columnPanes())->toBe([]);
 });

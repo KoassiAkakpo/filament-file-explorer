@@ -129,17 +129,26 @@ final class FolderListing
             $this->tagId,
         );
 
-        if ($this->search === '') {
-            return $query->where('parent_id', $this->currentFolderId);
+        if ($this->search !== '') {
+            return $this->applySearch(
+                $query
+                    ->whereIn('id', $this->scopeFolderIds())
+                    ->where('id', '!=', $this->rootFolderId),
+                Annotations::FOLDER,
+                $this->folderTable().'.id',
+            );
         }
 
-        return $this->applySearch(
-            $query
-                ->whereIn('id', $this->scopeFolderIds())
-                ->where('id', '!=', $this->rootFolderId),
-            Annotations::FOLDER,
-            $this->folderTable().'.id',
-        );
+        if ($this->filteringByTag()) {
+            // Excluding the folder being browsed, which is in its own subtree:
+            // a listing containing the folder it lists would draw it inside
+            // itself, exactly as the search excludes the root.
+            return $query
+                ->whereIn('id', $this->subtreeFolderIds())
+                ->where('id', '!=', $this->currentFolderId);
+        }
+
+        return $query->where('parent_id', $this->currentFolderId);
     }
 
     /**
@@ -162,15 +171,19 @@ final class FolderListing
             $this->tagId,
         );
 
-        if ($this->search === '') {
-            return $query->where('model_id', $this->currentFolderId);
+        if ($this->search !== '') {
+            return $this->applySearch(
+                $query->whereIn('model_id', $this->scopeFolderIds()),
+                Annotations::FILE,
+                $this->mediaTable().'.id',
+            );
         }
 
-        return $this->applySearch(
-            $query->whereIn('model_id', $this->scopeFolderIds()),
-            Annotations::FILE,
-            $this->mediaTable().'.id',
-        );
+        if ($this->filteringByTag()) {
+            return $query->whereIn('model_id', $this->subtreeFolderIds());
+        }
+
+        return $query->where('model_id', $this->currentFolderId);
     }
 
     /**
@@ -266,5 +279,31 @@ final class FolderListing
     private function scopeFolderIds(): array
     {
         return app(FolderTree::class)->descendantFolderIdsIncludingRoot($this->rootFolderId);
+    }
+
+    /**
+     * Everything under the folder being browsed, itself included.
+     *
+     * What a tag filter answers from. Memoised per folder id by FolderTree, and
+     * flushed with it on every mutation.
+     *
+     * @return list<int>
+     */
+    private function subtreeFolderIds(): array
+    {
+        return app(FolderTree::class)->descendantFolderIdsIncludingRoot($this->currentFolderId);
+    }
+
+    /**
+     * Whether a tag is actually narrowing this listing.
+     *
+     * The same condition applyTag() uses, and it has to be: with annotations
+     * turned off a leftover tag id narrows nothing, and a listing that widened
+     * to the subtree anyway would answer a filter nobody applied with every
+     * file in the tree.
+     */
+    private function filteringByTag(): bool
+    {
+        return $this->tagId !== null && Annotations::enabled();
     }
 }

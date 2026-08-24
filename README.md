@@ -286,7 +286,7 @@ Tags belong to a scope. A tag nothing carries any more is deleted, which is why 
 
 Both are **searchable**. The search box matches names, descriptions and tag names in one query, so a note you wrote is a note you can find again.
 
-Tags are also a filter, beside the kind filter in the toolbar. It narrows folders as well as files — a folder can be tagged, and hiding folders would hide exactly what you tagged. Across the listing a tag shows as a coloured dot, from a closed palette of seven; the colour is stored as a name, so an unknown one draws a neutral dot rather than reaching the page.
+Tags are also a filter, beside the kind filter in the toolbar. It narrows folders as well as files — a folder can be tagged, and hiding folders would hide exactly what you tagged. And it looks **through the whole subtree** of the folder you are in, not just its direct children: a tag belongs to the item rather than to the folder it happens to sit in, so filtering on one from the root finds it wherever it is. The subtree of where you stand rather than the whole library, so moving into a folder while filtered still narrows what you see. Across the listing a tag shows as a coloured dot, from a closed palette of seven; the colour is stored as a name, so an unknown one draws a neutral dot rather than reaching the page.
 
 The colour is picked from the swatches under the tag input, and it belongs to the **word** rather than to the item: choosing one colours that tag everywhere it appears, since a colour that meant one thing here and another there would mean nothing. Leaving the swatches alone is not the same as choosing grey — grey is one of the seven, while no choice gives a new word the neutral dot and leaves an existing word's colour as it was.
 

@@ -2321,7 +2321,12 @@ class FileExplorer extends Component
      */
     public function columnPanes(): array
     {
-        if ($this->viewMode !== 'columns' || $this->search !== '' || $this->currentFolder === null) {
+        // No panes while a tag filter is on, for the reason there are none while
+        // searching: both answer from the subtree rather than from the folder,
+        // and that is not a path. Panes would show the same deep item at every
+        // level, each contradicting the one beside it. The view falls back to
+        // the flat listing, as it already does for a search.
+        if ($this->viewMode !== 'columns' || $this->search !== '' || $this->activeTagId() !== null || $this->currentFolder === null) {
             return [];
         }
 
@@ -2346,9 +2351,11 @@ class FileExplorer extends Component
             // whatever a "load more" has widened it to.
             $listing = $isLast
                 ? $this->listing()
-                // The filter is a lens on the whole view, so the panes behind
-                // the last one are narrowed too — a pane showing files the
-                // filter excludes would contradict the one beside it.
+                // The kind filter is a lens on the whole view, so the panes
+                // behind the last one are narrowed too — a pane showing files
+                // the filter excludes would contradict the one beside it. A tag
+                // filter never reaches here: it answers from the subtree, and
+                // the guard above drops the panes entirely for it.
                 : (new FolderListing($this->rootFolderId, (int) $folder->id, '', $this->sortBy, $this->sortDir, $this->kind, $this->activeTagId()))->window($limit);
 
             $panes[] = [
