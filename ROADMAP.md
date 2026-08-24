@@ -119,6 +119,12 @@ Off by default, because a dashboard is not the package's. And it shows the total
 
 Wiring it up did find one real bug in the plugin's own pattern — `register()` cannot use the `StandaloneSettings` reader, because the reader resolves the panel's plugin and during `register()` that is not yet this one.
 
+### ~~The picker picks~~ — done
+
+`FileExplorerPicker` was a browser in a modal that stored nothing: `isMultiple()` had no reader and nothing wrote the selection into the field's state. Added to a form it answered **404**, because the root defaulted to `0` and the `findOrFail` behind it treated a root the host never configured as a missing page.
+
+Settled: media ids, one when single and a list when `->multiple()`; a Choose button in the explorer's toolbar beside the count rather than in the modal's footer, so the action sits with the selection instead of mirroring it across two components; and the field's value deliberately kept distinct from the explorer's selection, since the selection is narrowed to what is on screen.
+
 ## Still after 1.0 — additive, and none of it blocking
 
 All three only add. None of them changes anything a host app has written against, which is why none of them had to happen first.
@@ -134,7 +140,6 @@ All three only add. None of them changes anything a host app has written against
 
 ## Known gaps to close along the way
 
-- **`FileExplorerPicker` browses but does not pick.** Nothing writes the explorer's selection back into the form field's state, and `isMultiple()` has no reader — so as a field it renders a working browser in a modal and stores nothing. Closing that means deciding what the field holds (media ids? one id? does closing the modal confirm, or does picking need its own button), which is a public-API decision rather than a fix. The 404 it used to answer with when added to a form is fixed: the root and scope now default to the standalone library, and a root that does not exist raises `MissingRootFolder` instead of a `findOrFail`.
 - With the trash **off**, a folder purged by another session while a user stands in it leaves Livewire unable to restore the model at all, and the component fails until the page is reloaded. Soft-deleted folders take the fallback correctly.
 - The breadcrumb calls `navigateToBreadcrumb()` straight from its handler rather than through the JS `enterFolder()`, so a debounced selection sync could in principle land behind it. `setSelection()` narrowing to the listing catches the consequence, so what is left is a redundant round trip rather than a wrong selection.
 - `pint` reports pre-existing style drift in `config/` and `resources/lang/` (strict types, import order). Worth clearing in one pass rather than file by file.

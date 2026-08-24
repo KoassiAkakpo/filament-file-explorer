@@ -380,7 +380,18 @@ FileExplorerPicker::make('files')                       // or a library you name
 
 Given neither, it browses the **standalone** library — the one the panel's own explorer page opens — and creates that root on first use, exactly as visiting the page would. Name a root and the scope key stays `'picker'` unless you set it too: the two describe the same library, since abilities are decided per scope *and* root, so naming one never makes the field infer the other. A root that does not exist raises `MissingRootFolder` with the reason, rather than a 404 that looks like the form's fault.
 
-> **It browses; it does not yet pick.** Nothing writes the selection back into the field's state, so the field renders a working explorer and stores nothing. See [ROADMAP.md](ROADMAP.md) — closing it means settling what the field holds, which is a public-API decision.
+Choosing writes **media ids** into the field's state: one id when the field is single, a list when it is `->multiple()`.
+
+```php
+FileExplorerPicker::make('brochure')                    // state: ?int
+FileExplorerPicker::make('attachments')->multiple()     // state: list<int>
+```
+
+The Choose button sits in the explorer's toolbar beside the selection count — where the selection already is — and is enabled only once a file is selected. Folders are never chosen: a folder is where you look, not what you pick. Whatever the field holds is drawn under the button, in the order it was chosen, each entry removable.
+
+Because the state is media ids, a single field fits an `unsignedBigInteger` column and a multiple one a JSON column; whichever shape your model already holds, the field coerces it on hydration and back on save, so `->multiple()` can be added or removed without stranding the old shape.
+
+> **The field's value is not the explorer's selection**, and reopening the modal shows nothing selected on purpose. The selection is narrowed to what is on screen — that is what stops a slow round trip naming items of a folder you have left — so a chosen file whose folder is not being browsed would be dropped on the next sync. The value belongs to the field; the selection is what is on screen now.
 
 ## Trash
 

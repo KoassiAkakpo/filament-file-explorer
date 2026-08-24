@@ -289,6 +289,29 @@
                                   ? translations.toolbar.selected_count.replace(':count', sel.folders.length + sel.files.length)
                                   : (sel.folders.length + sel.files.length) + ' selected'"></span>
 
+                        {{-- Choosing lives beside the count, which is where the
+                             selection already is — a Choose button in the
+                             modal's footer would sit apart from the thing it
+                             acts on, and would have to mirror its state across
+                             two components to know whether to be enabled.
+
+                             flushSync() first: the mirror is debounced by 40ms,
+                             so clicking a file and then Choose in the same
+                             breath would otherwise hand the server a selection
+                             from before the click. Livewire keeps the two calls
+                             in order, so setSelection lands first. --}}
+                        @if ($this->isPicking())
+                            <button
+                                type="button"
+                                class="fe-pick-btn shrink-0"
+                                x-bind:disabled="sel.files.length === 0"
+                                x-on:click="sel.flushSync(); $wire.pickSelected()"
+                            >
+                                @svg('heroicon-m-check', 'h-3.5 w-3.5')
+                                <span>{{ __('filament-file-explorer::file-explorer.picker.choose') }}</span>
+                            </button>
+                        @endif
+
                         {{-- The listing's controls, and the trash is not the
                              listing: it has its own order, its own layout and
                              nothing to filter. --}}

@@ -1154,6 +1154,75 @@ body.fe-is-dragging * {
   outline-offset: 1px;
 }
 
+/* The picker field: the button opens the modal, this is what the field holds.
+   Drawn from the state, never from the explorer's selection — a chosen file may
+   sit in a folder the explorer is not showing. */
+.fe-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.fe-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.04);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.78rem;
+  color: #3f3f46;
+}
+.dark .fe-picker__item {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e4e4e7;
+}
+.fe-picker__name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fe-picker__remove {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  padding: 2px;
+  color: #a1a1aa;
+}
+.fe-picker__remove:hover {
+  background: rgba(24, 24, 27, 0.08);
+  color: #3f3f46;
+}
+.dark .fe-picker__remove:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f4f4f5;
+}
+/* Choosing sits in the toolbar beside the count, so it is styled like the
+   toolbar rather than like a page button — and with the accent, because it is
+   the one thing in a picker the user came to do. */
+.fe-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 8px;
+  background: var(--fe-accent-solid);
+  padding: 0.3rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fe-accent-on-solid);
+}
+.fe-pick-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.fe-pick-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .fe-annotate {
   display: flex;
   flex-direction: column;

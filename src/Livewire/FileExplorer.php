@@ -146,6 +146,20 @@ class FileExplorer extends Component
     public string $tagInput = '';
 
     /**
+     * Non-empty when the explorer was mounted as a form field's picker: the
+     * token identifies the field, and travels back out on `fe-picked`.
+     *
+     * The field's state and the explorer's selection are deliberately *not* the
+     * same thing. `setSelection()` narrows to the listing, so a chosen file
+     * whose folder is not on screen would be dropped on the next sync — which is
+     * why the modal does not reopen with the field's value selected. The value
+     * lives on the field; the selection is what is on screen now.
+     */
+    public string $pickerToken = '';
+
+    public bool $pickMultiple = false;
+
+    /**
      * The colour the next tag is added with, or null for no opinion.
      *
      * Null is deliberately not "grey": grey is a choice that recolours the word
@@ -1503,6 +1517,77 @@ class FileExplorer extends Component
      * Alpine store through setSelection — but it is public API a host app can
      * wire a button to, so the inspector has to follow it just the same.
      */
+    /* ----------------------------------------------------------- picking */
+
+    /**
+     * Hands the selection to whoever mounted the explorer as a picker.
+     *
+     * Files only: a folder is where you look, not what you choose. The ids come
+     * from `$selectedFiles`, which `setSelection()` has already narrowed to the
+     * listing — but `selectFile()` is public API and is deliberately *not*
+     * narrowed, so containment is proved again here rather than assumed. This is
+     * the one place an id leaves the explorer for the host's own state.
+     */
+    public function pickSelected(): void
+    {
+        // Reading, not mutating: choosing a file is not downloading it.
+        abort_unless($this->ability('browse'), 403);
+
+        if (! $this->isPicking()) {
+            return;
+        }
+
+        $ids = $this->pickableFileIds();
+
+        if ($ids === []) {
+            return;
+        }
+
+        // Single by default, and the *first* of the selection rather than a
+        // refusal: a user who lassoed three files and pressed Choose meant to
+        // choose, and an error message would be the field's way of blaming them
+        // for its own arity.
+        $this->dispatch(
+            'fe-picked',
+            token: $this->pickerToken,
+            files: $this->pickMultiple ? $ids : [$ids[0]],
+        );
+    }
+
+    public function isPicking(): bool
+    {
+        return $this->pickerToken !== '';
+    }
+
+    /**
+     * The selected files that are really this scope's, in the order selected.
+     *
+     * @return list<int>
+     */
+    protected function pickableFileIds(): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $this->selectedFiles)));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $scope = app(MediaScope::class);
+
+        $allowed = Media::query()
+            ->whereIn('id', $ids)
+            ->get()
+            ->filter(fn (Media $media): bool => $scope->folderUnderRoot($media, $this->rootFolderId) !== null)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        // Intersected rather than returned as queried, so the order is the one
+        // the user built rather than the one the database happened to answer in
+        // — which is what decides the single case.
+        return array_values(array_intersect($ids, $allowed));
+    }
+
     public function selectFolder(int $folderId, bool $multi = false): void
     {
         $this->applyFolderSelection($folderId, $multi);

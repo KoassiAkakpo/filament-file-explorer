@@ -110,6 +110,14 @@ return [
         'unavailable' => 'Rien à signaler pour ce périmètre.',
     ],
 
+    'picker' => [
+        'choose' => 'Choisir',
+        'chosen' => 'Fichiers choisis',
+        'clear' => 'Effacer le choix',
+        'remove' => 'Retirer :name',
+        'none' => 'Aucun fichier choisi',
+    ],
+
     'tags' => [
         'title' => 'Étiquettes',
         'all' => 'Toutes les étiquettes',

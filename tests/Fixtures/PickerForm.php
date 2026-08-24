@@ -35,6 +35,8 @@ class PickerForm extends Component implements HasForms
 
     public static ?string $scopeKey = null;
 
+    public static bool $multiple = false;
+
     public function mount(): void
     {
         $this->form->fill();
@@ -50,6 +52,10 @@ class PickerForm extends Component implements HasForms
 
         if (self::$scopeKey !== null) {
             $picker->scopeKey(self::$scopeKey);
+        }
+
+        if (self::$multiple) {
+            $picker->multiple();
         }
 
         return $schema->components([$picker])->statePath('data');

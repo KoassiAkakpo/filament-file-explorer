@@ -110,6 +110,14 @@ return [
         'unavailable' => 'Nothing to report for this scope.',
     ],
 
+    'picker' => [
+        'choose' => 'Choose',
+        'chosen' => 'Chosen files',
+        'clear' => 'Clear the choice',
+        'remove' => 'Remove :name',
+        'none' => 'Nothing chosen yet',
+    ],
+
     'tags' => [
         'title' => 'Tags',
         'all' => 'All tags',

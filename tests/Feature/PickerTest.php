@@ -3,18 +3,61 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Koassi\FilamentFileExplorer\Authorizers\AllowAllAuthorizer;
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
+use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Exceptions\MissingRootFolder;
 use Koassi\FilamentFileExplorer\Forms\Components\FileExplorerPicker;
+use Koassi\FilamentFileExplorer\Livewire\FileExplorer as FileExplorerComponent;
+use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
 use Koassi\FilamentFileExplorer\Support\FolderModel;
+use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Koassi\FilamentFileExplorer\Tests\Fixtures\PickerForm;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 beforeEach(function (): void {
     Storage::fake('public');
     PickerForm::$rootFolderId = null;
     PickerForm::$scopeKey = null;
+    PickerForm::$multiple = false;
 });
+
+function fePickerRootId(): int
+{
+    return app(FileExplorerRootResolver::class)->rootFolderId();
+}
+
+function fePickerMedia(string $name, ?int $folderId = null): Media
+{
+    return Media::query()->create([
+        'model_type' => FolderModel::morphClass(),
+        'model_id' => $folderId ?? fePickerRootId(),
+        'collection_name' => UploadRules::collection(),
+        'name' => $name,
+        'file_name' => $name,
+        'mime_type' => 'application/pdf',
+        'disk' => 'public',
+        'size' => 8,
+        'manipulations' => [],
+        'custom_properties' => [],
+        'generated_conversions' => [],
+        'responsive_images' => [],
+    ]);
+}
+
+function fePickerExplorer(string $token = 'data.files', bool $multiple = false): Testable
+{
+    return Livewire::test(FileExplorerComponent::class, [
+        'scopeKey' => 'library',
+        'rootFolderId' => fePickerRootId(),
+        'pickerToken' => $token,
+        'pickMultiple' => $multiple,
+    ]);
+}
 
 /**
  * The explorer mounts while the field renders, so Blade wraps whatever it throws
@@ -153,10 +196,231 @@ it('leaves the modal its own state to keep', function (): void {
     // mistake it guards: the rule is about the directives, not the prose.
     $markup = (string) preg_replace('/\{\{--.*?--\}\}/s', '', $template);
 
-    // Asserted on the template rather than the render, because the explorer
-    // inside the modal legitimately uses x-show for its own menus — so the only
-    // place this can be checked is where the mistake would be written.
-    expect($markup)->not->toContain('x-show')
-        ->and($markup)->not->toContain(':visible')
-        ->and($markup)->not->toContain('x-data');
+    // Scoped to the modal's own tag, and that is the whole rule: the field is
+    // free to keep Alpine state of its own — the pick listener needs a scope —
+    // as long as none of it lands on the element that already has state.
+    preg_match('/<x-filament::modal\b[^>]*>/', $markup, $tag);
+
+    expect($tag)->not->toBeEmpty()
+        ->and($tag[0])->not->toContain('x-show')
+        ->and($tag[0])->not->toContain(':visible')
+        ->and($tag[0])->not->toContain('x-data');
+
+    // And the state it does keep is the pick listener, not the modal's.
+    expect($markup)->not->toContain('open = true')
+        ->and($markup)->not->toContain('open: false');
+});
+
+/* --------------------------------------------------------------- the picking */
+
+it('hands the chosen file back to the field that asked', function (): void {
+    $file = fePickerMedia('lease.pdf');
+
+    fePickerExplorer()
+        ->call('setSelection', [], [$file->id])
+        ->call('pickSelected')
+        // The token is the field's state path, so a page holding two pickers
+        // has each one hear only its own.
+        ->assertDispatched('fe-picked', token: 'data.files', files: [(int) $file->id]);
+});
+
+it('chooses one file when the field is single, whatever is selected', function (): void {
+    $first = fePickerMedia('a.pdf');
+    $second = fePickerMedia('b.pdf');
+
+    // The first of the selection rather than a refusal: someone who lassoed
+    // three files and pressed Choose meant to choose, and an error would be the
+    // field blaming them for its own arity.
+    fePickerExplorer()
+        ->call('setSelection', [], [$second->id, $first->id])
+        ->call('pickSelected')
+        ->assertDispatched('fe-picked', files: [(int) $second->id]);
+});
+
+it('chooses them all when the field is multiple', function (): void {
+    $first = fePickerMedia('a.pdf');
+    $second = fePickerMedia('b.pdf');
+
+    fePickerExplorer(multiple: true)
+        ->call('setSelection', [], [$first->id, $second->id])
+        ->call('pickSelected')
+        ->assertDispatched('fe-picked', files: [(int) $first->id, (int) $second->id]);
+});
+
+it('chooses files and never the folders beside them', function (): void {
+    $file = fePickerMedia('lease.pdf');
+    $folder = app(FileExplorerManager::class)->createChild(
+        FolderModel::query()->findOrFail(fePickerRootId()),
+        'Contracts',
+    );
+
+    // A folder is where you look, not what you choose.
+    fePickerExplorer(multiple: true)
+        ->call('setSelection', [(int) $folder->id], [$file->id])
+        ->call('pickSelected')
+        ->assertDispatched('fe-picked', files: [(int) $file->id]);
+});
+
+it('says nothing when nothing is selected', function (): void {
+    fePickerExplorer()->call('pickSelected')->assertNotDispatched('fe-picked');
+});
+
+it('says nothing at all when it is not a picker', function (): void {
+    $file = fePickerMedia('lease.pdf');
+
+    Livewire::test(FileExplorerComponent::class, [
+        'scopeKey' => 'library',
+        'rootFolderId' => fePickerRootId(),
+    ])
+        ->call('setSelection', [], [$file->id])
+        ->call('pickSelected')
+        ->assertNotDispatched('fe-picked');
+});
+
+it('proves containment again before an id leaves the explorer', function (): void {
+    $outside = app(FileExplorerManager::class)->createRoot('Elsewhere', 'elsewhere');
+    $stranger = fePickerMedia('theirs.pdf', (int) $outside->id);
+    $mine = fePickerMedia('mine.pdf');
+
+    // selectFile() is public API and deliberately not narrowed, so this is the
+    // one place an id leaves for the host's own state — containment is proved
+    // here rather than assumed from the selection.
+    fePickerExplorer(multiple: true)
+        ->call('selectFile', $mine->id)
+        ->call('selectFile', $stranger->id, true)
+        ->call('pickSelected')
+        ->assertDispatched('fe-picked', files: [(int) $mine->id]);
+});
+
+it('refuses to pick for someone who cannot browse', function (): void {
+    $file = fePickerMedia('lease.pdf');
+
+    app()->instance(FileExplorerAuthorizer::class, new class extends AllowAllAuthorizer
+    {
+        public function abilities(string $scopeKey, int $rootFolderId): array
+        {
+            return array_merge(array_fill_keys(Abilities::ORIGINAL, true), ['browse' => false]);
+        }
+    });
+    app()->forgetScopedInstances();
+
+    fePickerExplorer()->call('setSelection', [], [$file->id])->call('pickSelected')->assertForbidden();
+});
+
+it('offers the choose button only when it is a picker', function (): void {
+    $label = __('filament-file-explorer::file-explorer.picker.choose');
+
+    $toolbar = fn (Testable $c): string => (string) Str::between($c->html(), 'class="fe-toolbar', 'class="fe-browser');
+
+    expect($toolbar(fePickerExplorer()))->toContain($label)
+        ->and($toolbar(Livewire::test(FileExplorerComponent::class, [
+            'scopeKey' => 'library',
+            'rootFolderId' => fePickerRootId(),
+        ])))->not->toContain($label);
+});
+
+it('flushes the debounced selection before it asks the server', function (): void {
+    $html = fePickerExplorer()->html();
+
+    // The mirror is debounced by 40ms, so clicking a file and Choose in the same
+    // breath would otherwise hand the server the selection from before the
+    // click. Livewire keeps the two calls in order.
+    expect($html)->toContain('sel.flushSync(); $wire.pickSelected()');
+});
+
+/* ------------------------------------------------------------- field state */
+
+it('holds one id when single and a list when multiple', function (): void {
+    $first = fePickerMedia('a.pdf');
+    $second = fePickerMedia('b.pdf');
+
+    $single = FileExplorerPicker::make('files');
+    $many = FileExplorerPicker::make('files')->multiple();
+
+    expect($single->normaliseState([$first->id, $second->id]))->toBe((int) $first->id)
+        ->and($single->normaliseState(null))->toBeNull()
+        ->and($many->normaliseState($first->id))->toBe([(int) $first->id])
+        ->and($many->normaliseState(null))->toBe([]);
+});
+
+it('draws what it holds, in the order it was chosen', function (): void {
+    $first = fePickerMedia('a.pdf');
+    $second = fePickerMedia('b.pdf');
+
+    PickerForm::$multiple = true;
+
+    $html = Livewire::test(PickerForm::class)
+        ->set('data.files', [(int) $second->id, (int) $first->id])
+        ->assertOk()
+        ->html();
+
+    // Drawn from the state and not from the explorer's selection: the two are
+    // different things, and a chosen file may live in a folder the explorer is
+    // not showing.
+    expect($html)->toContain('fe-picker__list')
+        ->and(strpos($html, 'b.pdf'))->toBeLessThan((int) strpos($html, 'a.pdf'));
+});
+
+it('draws nothing for an id that is not this scope\'s', function (): void {
+    $outside = app(FileExplorerManager::class)->createRoot('Elsewhere', 'elsewhere');
+    $stranger = fePickerMedia('theirs.pdf', (int) $outside->id);
+
+    $html = Livewire::test(PickerForm::class)
+        ->set('data.files', (int) $stranger->id)
+        ->assertOk()
+        ->html();
+
+    // A name is information. An id the state carries from somewhere else draws
+    // nothing rather than leaking one the viewer may not be allowed to see.
+    expect($html)->not->toContain('theirs.pdf');
+});
+
+it('listens for its own token and closes its own modal', function (): void {
+    $html = Livewire::test(PickerForm::class)->assertOk()->html();
+
+    expect($html)->toContain('$event.detail.token !== \'data.files\'')
+        ->and($html)->toContain('$dispatch(\'close-modal\', { id: \'file-explorer-picker-form.files\' })');
+});
+
+it('lands in the form state, single and multiple', function (): void {
+    $first = fePickerMedia('a.pdf');
+    $second = fePickerMedia('b.pdf');
+
+    // The whole round trip, minus the browser hop: the explorer names the
+    // files, the field's listener writes them at its own state path. Asserting
+    // the two halves meet is the only way to know the field is a field.
+    $picked = fePickerExplorer(multiple: true)
+        ->call('setSelection', [], [$first->id, $second->id])
+        ->call('pickSelected')
+        ->assertDispatched('fe-picked');
+
+    PickerForm::$multiple = true;
+
+    $form = Livewire::test(PickerForm::class)
+        ->set('data.files', [(int) $first->id, (int) $second->id])
+        ->assertOk();
+
+    expect($form->get('data.files'))->toBe([(int) $first->id, (int) $second->id])
+        ->and($form->html())->toContain('a.pdf')
+        ->and($form->html())->toContain('b.pdf');
+
+    PickerForm::$multiple = false;
+
+    $single = Livewire::test(PickerForm::class)->set('data.files', (int) $second->id)->assertOk();
+
+    expect($single->get('data.files'))->toBe((int) $second->id)
+        ->and($single->html())->toContain('b.pdf')
+        ->and($single->html())->not->toContain('a.pdf');
+
+    expect($picked)->not->toBeNull();
+});
+
+it('empties to a shape the form can save', function (): void {
+    PickerForm::$multiple = true;
+
+    // Dehydrated through the same normalisation, so a form saving an empty
+    // multiple picker writes [] rather than null, and an empty single one writes
+    // null rather than [] — whichever the column expects, it is not a surprise.
+    expect(FileExplorerPicker::make('files')->multiple()->normaliseState(['', 0, null]))->toBe([])
+        ->and(FileExplorerPicker::make('files')->normaliseState([0]))->toBeNull();
 });
