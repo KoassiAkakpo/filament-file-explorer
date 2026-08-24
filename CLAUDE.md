@@ -65,6 +65,17 @@ The explorer never loads a folder's contents into memory to sort them. [Support/
 
 `resetListing()` is the single hook meaning "the listing may have changed" — every mutation and every navigation calls it — and it also flushes `FolderTree`. That flush matters: creating or deleting a folder changes the set of ids under the root, so a request that mutates and then re-renders would otherwise draw a stale sidebar and search the old scope.
 
+## The picker
+
+`Forms\Components\FileExplorerPicker` mounts the Livewire component inside a Filament modal. Two things about it:
+
+- **Its root and scope key default to the standalone library, resolved as a pair.** They used to default to `0` and `'picker'` — which is to say to nothing — so `FileExplorerPicker::make('files')` mounted the explorer on folder #0 and the `findOrFail` in `mount()` answered **404** on whichever page held the form. A default that cannot work is a trap, not a default. The pair is resolved together because abilities are decided per (scope, root) and `ScopeRoots` ties media URLs to the same couple: naming one half must not make the field infer the other, or the picker ends up authorised against a root it is not browsing. It uses the *creating* resolver path, unlike `StandaloneAccess` — that one is read-only because `canAccess()` runs on every navigation render, and a form field does not.
+- **A root that does not exist raises `Exceptions\MissingRootFolder`, never a 404.** The root is an argument the host's own code passed, not a route parameter, so a missing one is a misconfiguration — and "No query results for model [Folder] 0" named neither the field nor the fix. Thrown during the field's render, so Blade wraps it in a `ViewException`; the message is what has to carry the diagnosis.
+
+**Known gap:** nothing writes the explorer's selection back into the form field's state and `isMultiple()` has no reader, so the field browses and stores nothing. Recorded in ROADMAP.md — closing it is a public-API decision, not a fix.
+
+Its test fixture (`tests/Fixtures/PickerForm.php`) is the one that renders the field in a real Filament schema. Before it existed, every test around the picker built the explorer directly with a root the field itself was failing to resolve, which is exactly how the 404 shipped.
+
 ## One page, several explorers
 
 The `FileExplorerPicker` puts an explorer in a modal, so a page can hold two of them. Nothing in the views or the JS may therefore be addressed globally:

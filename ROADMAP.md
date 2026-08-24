@@ -134,6 +134,7 @@ All three only add. None of them changes anything a host app has written against
 
 ## Known gaps to close along the way
 
+- **`FileExplorerPicker` browses but does not pick.** Nothing writes the explorer's selection back into the form field's state, and `isMultiple()` has no reader — so as a field it renders a working browser in a modal and stores nothing. Closing that means deciding what the field holds (media ids? one id? does closing the modal confirm, or does picking need its own button), which is a public-API decision rather than a fix. The 404 it used to answer with when added to a form is fixed: the root and scope now default to the standalone library, and a root that does not exist raises `MissingRootFolder` instead of a `findOrFail`.
 - With the trash **off**, a folder purged by another session while a user stands in it leaves Livewire unable to restore the model at all, and the component fails until the page is reloaded. Soft-deleted folders take the fallback correctly.
 - The breadcrumb calls `navigateToBreadcrumb()` straight from its handler rather than through the JS `enterFolder()`, so a debounced selection sync could in principle land behind it. `setSelection()` narrowing to the listing catches the consequence, so what is left is a redundant round trip rather than a wrong selection.
 - `pint` reports pre-existing style drift in `config/` and `resources/lang/` (strict types, import order). Worth clearing in one pass rather than file by file.

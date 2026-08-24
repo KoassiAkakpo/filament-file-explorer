@@ -365,6 +365,23 @@ The polling is driven from Alpine rather than `wire:poll`, so it stands down whi
 
 Mutations also announce themselves to the other explorers on the same page, which is what keeps a `FileExplorerPicker` in a modal in step with the page behind it.
 
+## The picker
+
+`FileExplorerPicker` puts an explorer in a modal behind a button, as a form field:
+
+```php
+use Koassi\FilamentFileExplorer\Forms\Components\FileExplorerPicker;
+
+FileExplorerPicker::make('files')                       // browses the standalone library
+FileExplorerPicker::make('files')                       // or a library you name
+    ->rootFolderId($record->folder_id)
+    ->scopeKey('project.'.$record->id)
+```
+
+Given neither, it browses the **standalone** library — the one the panel's own explorer page opens — and creates that root on first use, exactly as visiting the page would. Name a root and the scope key stays `'picker'` unless you set it too: the two describe the same library, since abilities are decided per scope *and* root, so naming one never makes the field infer the other. A root that does not exist raises `MissingRootFolder` with the reason, rather than a 404 that looks like the form's fault.
+
+> **It browses; it does not yet pick.** Nothing writes the selection back into the field's state, so the field renders a working explorer and stores nothing. See [ROADMAP.md](ROADMAP.md) — closing it means settling what the field holds, which is a public-API decision.
+
 ## Trash
 
 Deleting moves things aside instead of destroying them. Folders are soft-deleted, files move to a separate media collection, and the toolbar's trash button lists what is in there with where it came from and when it went — each row restorable or deletable for good.

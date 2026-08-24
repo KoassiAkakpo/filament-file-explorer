@@ -30,6 +30,7 @@ use Koassi\FilamentFileExplorer\Events\FolderRenamed;
 use Koassi\FilamentFileExplorer\Events\FolderRestored;
 use Koassi\FilamentFileExplorer\Events\FolderTrashed;
 use Koassi\FilamentFileExplorer\Events\ShareRevoked;
+use Koassi\FilamentFileExplorer\Exceptions\MissingRootFolder;
 use Koassi\FilamentFileExplorer\Models\FileShare;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\Abilities;
@@ -235,7 +236,15 @@ class FileExplorer extends Component
         $folder = FolderModel::query()->with(['children', 'parent'])->find($currentId);
 
         if (! $folder || ! app(FolderTree::class)->isUnderRoot($folder, $this->rootFolderId)) {
-            $folder = FolderModel::query()->with(['children', 'parent'])->findOrFail($this->rootFolderId);
+            $folder = FolderModel::query()->with(['children', 'parent'])->find($this->rootFolderId);
+
+            // Not findOrFail: that answered a root the host never configured
+            // with a 404, which reads as the page being missing rather than the
+            // field being unset. See Exceptions\MissingRootFolder.
+            if (! $folder) {
+                throw MissingRootFolder::for($this->scopeKey, $this->rootFolderId);
+            }
+
             session([$sessionKey => $folder->id]);
         }
 
