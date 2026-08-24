@@ -513,3 +513,123 @@ it('does nothing at all when the feature is off', function (): void {
         ->and(feAn()->available('library'))->toBe([])
         ->and(feAnComponent()->instance()->canAnnotate())->toBeFalse();
 });
+
+it('adds a tag in the colour the inspector picked', function (): void {
+    $file = feAnMedia('brief.pdf');
+
+    feAnComponent()
+        ->call('showInfo', 'file', $file->id)
+        ->set('tagInput', 'Urgent')
+        ->set('tagColor', 'red')
+        ->call('addTag')
+        ->assertSet('tags', fn (array $tags): bool => $tags[0]['color'] === 'red');
+
+    expect(Tag::query()->where('slug', 'urgent')->value('color'))->toBe('red');
+});
+
+it('colours the word rather than the item', function (): void {
+    $first = feAnMedia('one.pdf');
+    $second = feAnMedia('two.pdf');
+
+    feAnComponent()->call('showInfo', 'file', $first->id)
+        ->set('tagInput', 'Client')->set('tagColor', 'blue')->call('addTag');
+
+    // A colour has to mean the same thing everywhere the tag appears, so
+    // choosing one recolours the existing word rather than colouring one item's
+    // copy of it — there is only one copy.
+    feAnComponent()->call('showInfo', 'file', $second->id)
+        ->set('tagInput', 'Client')->set('tagColor', 'green')->call('addTag')
+        ->assertSet('tags', fn (array $tags): bool => $tags[0]['color'] === 'green');
+
+    expect(feAn()->tags(Annotations::FILE, (int) $first->id)[0]['color'])->toBe('green')
+        ->and(Tag::query()->where('slug', 'client')->count())->toBe(1);
+});
+
+it('leaves a coloured word alone when no colour is picked', function (): void {
+    $first = feAnMedia('one.pdf');
+    $second = feAnMedia('two.pdf');
+
+    feAnComponent()->call('showInfo', 'file', $first->id)
+        ->set('tagInput', 'Urgent')->set('tagColor', 'red')->call('addTag');
+
+    // No colour is the absence of an opinion, not a request for grey: tagging a
+    // second file "Urgent" without touching the swatches must not strip the red
+    // off every other file carrying it.
+    feAnComponent()->call('showInfo', 'file', $second->id)
+        ->set('tagInput', 'Urgent')->call('addTag')
+        ->assertSet('tags', fn (array $tags): bool => $tags[0]['color'] === 'red');
+
+    expect(Tag::query()->where('slug', 'urgent')->value('color'))->toBe('red');
+});
+
+it('forgets the picked colour once the tag is added', function (): void {
+    $file = feAnMedia('brief.pdf');
+
+    feAnComponent()
+        ->call('showInfo', 'file', $file->id)
+        ->set('tagInput', 'Urgent')
+        ->set('tagColor', 'red')
+        ->call('addTag')
+        // Kept between adds, red would follow the next word too — and tagging a
+        // blue "Client" while red was still selected would turn it red for
+        // every item carrying it.
+        ->assertSet('tagColor', null)
+        ->assertSet('tagInput', '');
+});
+
+it('refuses a colour that is not one of the seven', function (): void {
+    $file = feAnMedia('brief.pdf');
+
+    feAnComponent()
+        ->call('showInfo', 'file', $file->id)
+        ->set('tagInput', 'Urgent')
+        // A public property is the client's own state, so the palette is
+        // enforced on arrival rather than trusted.
+        ->set('tagColor', 'rgb(255,0,0)')
+        ->assertSet('tagColor', null)
+        ->call('addTag')
+        ->assertSet('tags', fn (array $tags): bool => $tags[0]['color'] === null);
+});
+
+it('offers every palette colour in the inspector, and no colour beside them', function (): void {
+    $file = feAnMedia('brief.pdf');
+
+    $html = feAnComponent()->call('showInfo', 'file', $file->id)->assertOk()->html();
+
+    foreach (Annotations::COLORS as $colour) {
+        expect($html)->toContain('value="'.$colour.'"')
+            ->and($html)->toContain('fe-tag__dot--'.$colour);
+    }
+
+    // "No colour" draws a slashed circle rather than a grey dot: grey is one of
+    // the seven, and two indistinguishable options would be one too many.
+    expect($html)->toContain('fe-swatch__dot--none')
+        ->and($html)->toContain(__('filament-file-explorer::file-explorer.tags.color.none'));
+});
+
+it('keeps the swatch group to one explorer', function (): void {
+    $file = feAnMedia('brief.pdf');
+
+    $html = feAnComponent()->call('showInfo', 'file', $file->id)->assertOk()->html();
+
+    // A page can hold two explorers — the picker in a modal beside the page —
+    // and a shared radio group name would let each clear the other's choice.
+    expect($html)->toMatch('/name="fe-tag-color-[a-zA-Z0-9]+"/')
+        ->and($html)->not->toContain('name="fe-tag-color"');
+});
+
+it('shows no swatches to someone who cannot annotate', function (): void {
+    $file = feAnMedia('brief.pdf');
+
+    app()->instance(FileExplorerAuthorizer::class, new class extends AllowAllAuthorizer
+    {
+        public function abilities(string $scopeKey, int $rootFolderId): array
+        {
+            return array_merge(array_fill_keys(Abilities::ORIGINAL, true), ['rename' => false]);
+        }
+    });
+    app()->forgetScopedInstances();
+
+    expect(feAnComponent()->call('showInfo', 'file', $file->id)->assertOk()->html())
+        ->not->toContain('fe-swatches');
+});

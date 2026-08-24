@@ -288,6 +288,8 @@ Both are **searchable**. The search box matches names, descriptions and tag name
 
 Tags are also a filter, beside the kind filter in the toolbar. It narrows folders as well as files — a folder can be tagged, and hiding folders would hide exactly what you tagged. Across the listing a tag shows as a coloured dot, from a closed palette of seven; the colour is stored as a name, so an unknown one draws a neutral dot rather than reaching the page.
 
+The colour is picked from the swatches under the tag input, and it belongs to the **word** rather than to the item: choosing one colours that tag everywhere it appears, since a colour that meant one thing here and another there would mean nothing. Leaving the swatches alone is not the same as choosing grey — grey is one of the seven, while no choice gives a new word the neutral dot and leaves an existing word's colour as it was.
+
 ```php
 // config/filament-file-explorer.php
 'annotations' => [

@@ -1099,6 +1099,61 @@ body.fe-is-dragging * {
   height: 0.4rem;
   width: 0.4rem;
 }
+/* Picking the colour a new tag is added with.
+   Real radios, hidden rather than replaced, so the group keeps its keyboard
+   behaviour — arrow keys move through it, and the label is the hit target. The
+   selected ring is drawn with :has(:checked) because the model is deferred:
+   nothing renders between the click and the Enter that saves, so the state on
+   screen has to come from the browser's own. */
+.fe-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding-top: 0.1rem;
+}
+.fe-swatch {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+  border-radius: 9999px;
+  padding: 2px;
+}
+.fe-swatch input {
+  position: absolute;
+  height: 1px;
+  width: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.fe-swatch__dot {
+  height: 0.85rem;
+  width: 0.85rem;
+  border-radius: 9999px;
+}
+/* Not grey with a different name: an empty circle with a line through it is how
+   "no fill" reads everywhere else, and grey is one of the seven choices. */
+.fe-swatch__dot--none {
+  display: inline-block;
+  background:
+    linear-gradient(to top right, transparent 45%, #a1a1aa 45%, #a1a1aa 55%, transparent 55%);
+  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.25);
+}
+.dark .fe-swatch__dot--none {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+.fe-swatch:hover {
+  box-shadow: 0 0 0 1px rgba(24, 24, 27, 0.15);
+}
+.fe-swatch:has(input:checked) {
+  box-shadow: 0 0 0 2px var(--fe-accent-solid);
+}
+.fe-swatch:has(input:focus-visible) {
+  box-shadow: 0 0 0 2px var(--fe-accent-solid);
+  outline: 2px solid rgba(var(--fe-accent), 0.4);
+  outline-offset: 1px;
+}
+
 .fe-annotate {
   display: flex;
   flex-direction: column;

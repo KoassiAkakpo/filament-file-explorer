@@ -119,6 +119,17 @@ return [
         'remove' => 'Retirer :name',
         'active' => 'Étiqueté :tag',
         'clear' => 'Tout afficher',
+        'color' => [
+            'label' => 'Couleur',
+            'none' => 'Aucune couleur',
+            'grey' => 'Gris',
+            'red' => 'Rouge',
+            'orange' => 'Orange',
+            'yellow' => 'Jaune',
+            'green' => 'Vert',
+            'blue' => 'Bleu',
+            'purple' => 'Violet',
+        ],
         'filter' => 'Filtrer sur cette étiquette',
     ],
 

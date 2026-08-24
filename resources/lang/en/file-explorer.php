@@ -119,6 +119,17 @@ return [
         'remove' => 'Remove :name',
         'active' => 'Tagged :tag',
         'clear' => 'Show all',
+        'color' => [
+            'label' => 'Colour',
+            'none' => 'No colour',
+            'grey' => 'Grey',
+            'red' => 'Red',
+            'orange' => 'Orange',
+            'yellow' => 'Yellow',
+            'green' => 'Green',
+            'blue' => 'Blue',
+            'purple' => 'Purple',
+        ],
         'filter' => 'Filter by this tag',
     ],
 

@@ -145,6 +145,16 @@ class FileExplorer extends Component
     public string $tagInput = '';
 
     /**
+     * The colour the next tag is added with, or null for no opinion.
+     *
+     * Null is deliberately not "grey": grey is a choice that recolours the word
+     * everywhere it appears, while null leaves an existing word's colour alone
+     * and gives a new one the neutral dot. Deferred like $tagInput — it travels
+     * with the addTag request rather than costing a round trip per swatch.
+     */
+    public ?string $tagColor = null;
+
+    /**
      * The tag the listing is narrowed to, or null. Validated against the scope
      * on every read, so an id from another scope narrows nothing.
      */
@@ -1696,7 +1706,32 @@ class FileExplorer extends Component
         $this->infoItem = null;
         $this->description = '';
         $this->tags = [];
+        $this->resetTagInput();
+    }
+
+    /**
+     * Normalised the moment it arrives, because it is a public property and so
+     * the client's own state: anything that is not one of the palette's seven
+     * names becomes null — no opinion — rather than reaching the write or the
+     * rendered swatch.
+     */
+    public function updatedTagColor(): void
+    {
+        $this->tagColor = Annotations::colour($this->tagColor);
+    }
+
+    /**
+     * The tag composer, emptied.
+     *
+     * One method rather than the pair written out at each of the four sites that
+     * clear it: the name and the colour are one input between them, and the
+     * package has already learned once what happens when a clear is spelled out
+     * in several places — see forgetSelection().
+     */
+    protected function resetTagInput(): void
+    {
         $this->tagInput = '';
+        $this->tagColor = null;
     }
 
     /* ------------------------------------------------ tags and descriptions */
@@ -1836,7 +1871,7 @@ class FileExplorer extends Component
         if ($target === null || ! Annotations::enabled()) {
             $this->description = '';
             $this->tags = [];
-            $this->tagInput = '';
+            $this->resetTagInput();
 
             return;
         }
@@ -1845,7 +1880,7 @@ class FileExplorer extends Component
 
         $this->description = $annotations->description($target['type'], $target['id']);
         $this->tags = $annotations->tags($target['type'], $target['id']);
-        $this->tagInput = '';
+        $this->resetTagInput();
     }
 
     /**
@@ -1897,7 +1932,7 @@ class FileExplorer extends Component
         $name = trim($this->tagInput);
 
         if ($target === null || $name === '') {
-            $this->tagInput = '';
+            $this->resetTagInput();
 
             return;
         }
@@ -1906,9 +1941,12 @@ class FileExplorer extends Component
         $before = $this->tagNames();
 
         $this->tags = app(Annotations::class)
-            ->attach($this->scopeKey, $target['type'], $target['id'], $name);
+            ->attach($this->scopeKey, $target['type'], $target['id'], $name, $this->tagColor);
 
-        $this->tagInput = '';
+        // Reset, so the colour is an opinion expressed once about one word. Kept
+        // between adds it would recolour the *next* tag too — and tagging a blue
+        // "Client" while red was still selected would turn it red everywhere.
+        $this->resetTagInput();
 
         if ($this->tagNames() === $before) {
             return;

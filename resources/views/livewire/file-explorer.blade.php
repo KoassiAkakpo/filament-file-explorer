@@ -1045,6 +1045,52 @@
                                                     <option value="{{ $knownTag['name'] }}"></option>
                                                 @endforeach
                                             </datalist>
+
+                                            {{-- The colour belongs to the word,
+                                                 not to this item, so picking one
+                                                 colours the tag everywhere it
+                                                 appears. "No colour" is
+                                                 therefore not the same as grey:
+                                                 grey is a choice, none is the
+                                                 absence of one, and it leaves a
+                                                 word that already has a colour
+                                                 alone.
+
+                                                 Radios with a deferred
+                                                 wire:model, so the choice
+                                                 travels with the addTag request
+                                                 like the name does — and the
+                                                 group name carries the component
+                                                 id, or the two explorers of a
+                                                 page would share one radio
+                                                 group and each would clear the
+                                                 other's choice. --}}
+                                            <div class="fe-swatches" role="radiogroup" aria-label="{{ __('filament-file-explorer::file-explorer.tags.color.label') }}">
+                                                <label class="fe-swatch" title="{{ __('filament-file-explorer::file-explorer.tags.color.none') }}">
+                                                    <input
+                                                        type="radio"
+                                                        name="fe-tag-color-{{ $this->getId() }}"
+                                                        value=""
+                                                        wire:model="tagColor"
+                                                        @checked($tagColor === null)
+                                                        aria-label="{{ __('filament-file-explorer::file-explorer.tags.color.none') }}"
+                                                    >
+                                                    <span class="fe-swatch__dot fe-swatch__dot--none"></span>
+                                                </label>
+                                                @foreach (\Koassi\FilamentFileExplorer\Support\Annotations::COLORS as $swatch)
+                                                    <label class="fe-swatch" title="{{ __('filament-file-explorer::file-explorer.tags.color.'.$swatch) }}">
+                                                        <input
+                                                            type="radio"
+                                                            name="fe-tag-color-{{ $this->getId() }}"
+                                                            value="{{ $swatch }}"
+                                                            wire:model="tagColor"
+                                                            @checked($tagColor === $swatch)
+                                                            aria-label="{{ __('filament-file-explorer::file-explorer.tags.color.'.$swatch) }}"
+                                                        >
+                                                        <span class="fe-swatch__dot fe-tag__dot fe-tag__dot--{{ $swatch }}"></span>
+                                                    </label>
+                                                @endforeach
+                                            </div>
                                         @endif
 
                                         <div class="fe-annotate__label">{{ __('filament-file-explorer::file-explorer.description.label') }}</div>

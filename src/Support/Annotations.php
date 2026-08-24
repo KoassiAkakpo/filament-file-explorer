@@ -252,6 +252,12 @@ final class Annotations
     /**
      * Attaches a tag by name, creating the scope's word if it is new.
      *
+     * A colour given here is an opinion about the *word*, not about the item, so
+     * it lands on an existing tag as well as a new one — a colour has to mean
+     * the same thing everywhere the tag appears or it means nothing at all.
+     * Which is exactly why null is not "grey": it is the absence of an opinion,
+     * and leaves a word that already has a colour alone.
+     *
      * @return list<array{id: int, name: string, color: string|null}> the item's tags after the change
      */
     public function attach(string $scopeKey, string $itemType, int $itemId, string $name, ?string $color = null): array
@@ -269,10 +275,20 @@ final class Annotations
             return $this->tags($itemType, $itemId);
         }
 
+        $colour = self::colour($color);
+
         $tag = Tag::query()->firstOrCreate(
             ['scope_key' => $scopeKey, 'slug' => $slug],
-            ['name' => $name, 'color' => self::colour($color)],
+            ['name' => $name, 'color' => $colour],
         );
+
+        // Through recolour(), so the write has one owner — and only when the
+        // colour was actually asked for and actually differs, or every tagging
+        // would be an UPDATE as well as an insert.
+        if ($colour !== null && self::colour($tag->color) !== $colour) {
+            $this->recolour($scopeKey, (int) $tag->id, $colour);
+            $tag->color = $colour;
+        }
 
         DB::table(self::tagItemsTable())->upsert([
             [
