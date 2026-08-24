@@ -124,3 +124,39 @@ it('puts the explorer in the modal it renders', function (): void {
     expect($html)->toContain('fe-in-modal')
         ->and($html)->toContain(__('filament-file-explorer::file-explorer.browse_files'));
 });
+
+it('opens the modal through the contract the modal actually has', function (): void {
+    $html = Livewire::test(PickerForm::class)->assertOk()->html();
+
+    // Filament's modal keeps its own state and opens on a windowed `open-modal`
+    // carrying its id. The button used to flip an x-data flag of ours instead,
+    // and lose: an outer x-show on the modal root fought the x-show="isOpen"
+    // already there, so the click did nothing at all — no modal, no error.
+    expect($html)->toContain('$dispatch(\'open-modal\', { id: \'file-explorer-picker-form.files\' })')
+        ->toContain('fi-modal-trigger')
+        ->toContain('filamentModal(');
+});
+
+it('does not hide the modal window it just opened', function (): void {
+    // :visible="false" put fi-hidden on .fi-modal-window, so the window stayed
+    // hidden even once the overlay opened. It is not the prop for "closed" —
+    // the modal is closed until told otherwise.
+    expect(Livewire::test(PickerForm::class)->assertOk()->html())->not->toContain('fi-hidden');
+});
+
+it('leaves the modal its own state to keep', function (): void {
+    $template = (string) file_get_contents(
+        __DIR__.'/../../resources/views/filament/forms/file-explorer-picker.blade.php'
+    );
+
+    // Comments stripped first, or this trips on the note explaining the very
+    // mistake it guards: the rule is about the directives, not the prose.
+    $markup = (string) preg_replace('/\{\{--.*?--\}\}/s', '', $template);
+
+    // Asserted on the template rather than the render, because the explorer
+    // inside the modal legitimately uses x-show for its own menus — so the only
+    // place this can be checked is where the mistake would be written.
+    expect($markup)->not->toContain('x-show')
+        ->and($markup)->not->toContain(':visible')
+        ->and($markup)->not->toContain('x-data');
+});
