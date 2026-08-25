@@ -6,6 +6,7 @@ namespace Koassi\FilamentFileExplorer\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
+use Koassi\FilamentFileExplorer\Support\Thumbnails;
 
 class InstallCommand extends Command
 {
@@ -72,8 +73,33 @@ class InstallCommand extends Command
         $this->comment('  # or: php artisan vendor:publish --tag=filament-file-explorer-stubs');
 
         $this->hintPanelPlugin();
+        $this->warnMissingThumbnailTooling();
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Says which thumbnail kinds were asked for and will not appear.
+     *
+     * "Why are there no thumbnails on my PDFs" has four possible answers — the
+     * feature is off, the kind is not listed, the tooling is missing, or the
+     * conversion threw — and from the panel they look identical. The third is the
+     * one nothing else can tell you, so it is said here.
+     */
+    protected function warnMissingThumbnailTooling(): void
+    {
+        $missing = Thumbnails::unavailable();
+
+        if ($missing === [] || ! Thumbnails::enabled()) {
+            return;
+        }
+
+        $this->newLine();
+        $this->components->warn('Thumbnail kinds asked for in config that this host cannot produce:');
+
+        foreach ($missing as $kind => $reason) {
+            $this->line('  '.$kind.' — '.$reason);
+        }
     }
 
     protected function hintPanelPlugin(): void

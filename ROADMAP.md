@@ -1,6 +1,8 @@
 # Roadmap to v1.0.0
 
-Everything on this list is done. The four decisions that could not wait closed in v0.2.0, the features planned before 1.0 closed by v0.5.0, and three of the six items parked *after* 1.0 — tags and descriptions, touch support, the storage widget — landed before it too, and have moved up into the shipped list accordingly.
+Everything on this list is done. The four decisions that could not wait closed in v0.2.0, the features planned before 1.0 closed by v0.5.0, and **all six** of the items originally parked *after* 1.0 landed before it too — tags and descriptions, touch support, the storage widget, file versioning, chunked and direct-to-storage uploads, and PDF and video thumbnails. They have moved up into the shipped list accordingly, and the section that held them is gone.
+
+The last three are worth a word, because none of them turned out to be the additive feature it was filed as. Versioning closed the one place something was destroyed without passing through the trash. The upload work was mostly repair: a ceiling that promised 50 MB and delivered 2, and an upload button that did nothing at all on a host configured for S3. And the thumbnails were blocked not by Imagick or ffmpeg but by a `catch` that named one exception class — which cost uploads for images too.
 
 That is the point at which 1.0.0 is the honest number: nothing structural is pending, and the public API is what it is going to be.
 
@@ -143,9 +145,13 @@ Two things settled it. The slice transport is a **transport** — it ends by wri
 
 Direct-to-storage turned out to be repair rather than feature. `uploadMultiple` throws outright on a remote temporary disk, and the JS called it unconditionally — so on a host configured for S3 the upload button did nothing at all. Then `getRealPath()` answers with an S3 key, which `FileAdder` runs `is_file()` on, so storing a successfully-received upload failed. Both fixed; the staged local copy also keeps the mime type sniffed from bytes rather than read from a `Content-Type` the browser chose, which `UploadRules`, the kind filter and the type sort all depend on.
 
-## Still after 1.0 — additive, and none of it blocking
+### ~~PDF and video thumbnails, opt-in~~ — done
 
-- **PDF and video thumbnails, opt-in.** Deliberately absent today because they need Imagick or ffmpeg on the host and a failing generator costs more than the icon already drawn. Worth offering behind an explicit flag — never by default.
+`thumbnails.kinds` opens them, and the tooling has to be there as well: listing a kind is half the decision. `Support\Thumbnails` is the single owner, and it asks Media Library's `image_generators` registry rather than checking for Imagick itself — that registry is config, so a host with a generator of their own would otherwise be told their working setup is unavailable. It then extends the answer for the package's own two generators, in exactly the places their own `requirementsAreInstalled()` is silent: `Pdf` never asks whether Imagick has a Ghostscript delegate, `Video` never asks whether the ffmpeg binary exists, and those are the two ways a host ends up with a generator that reports itself ready and then throws.
+
+What actually unblocked this was `conversionCasualty()`. The old `catch (CouldNotLoadImage)` was right while images were the only kind converted, and a lost upload the moment something else threw — so **the exception class stopped being the discriminator**. A conversion runs after the row and the original are written, so the presence of the row is what says the write succeeded and only the thumbnail was lost. An empty probe rethrows, so nothing is swallowed blind. "A failing generator costs more than the icon already drawn" was the reason to keep these out; it is no longer true, and it was worth fixing for images too.
+
+One consequence found on the way: whether to draw a thumbnail was `str_starts_with($mime, 'image/')` written out in **four** places. `drawable()` replaces all four with "is an image *or* has a generated conversion", and both halves matter — an image with no conversion still draws, because the media route's fallback to the original is what keeps a library uploaded before thumbnails existed showing its pictures, and anything else draws only when a conversion exists, because an `<img>` pointed at a PDF renders nothing at all.
 
 ## Out of scope
 
@@ -156,6 +162,7 @@ Direct-to-storage turned out to be repair rather than feature. `uploadMultiple` 
 
 - With the trash **off**, a folder purged by another session while a user stands in it leaves Livewire unable to restore the model at all, and the component fails until the page is reloaded. Soft-deleted folders take the fallback correctly.
 - The breadcrumb calls `navigateToBreadcrumb()` straight from its handler rather than through the JS `enterFolder()`, so a debounced selection sync could in principle land behind it. `setSelection()` narrowing to the listing catches the consequence, so what is left is a redundant round trip rather than a wrong selection.
+- Media Library's own PDF and video generators are not covered by the suite: requiring `spatie/pdf-to-image` or `php-ffmpeg` as a dev dependency would make every machine running the tests need Ghostscript or an ffmpeg binary. Stub generators go into the registry the way a host's own would, so what the explorer does around a generator is covered; the generators themselves are Media Library's code and tested there.
 - A real S3 round trip is not covered by the suite: Livewire hardcodes `tmp-for-tests` as its temporary disk while tests run, so the component cannot be driven end to end against a remote one. What is covered is the staging seam and the mime-sniffing guarantee, against a disk built to have S3's shape.
 - Slicing requires a local temporary disk, because Flysystem has no append and `Storage::append()` joins with a newline. Storing each slice as its own object and concatenating at the end would work anywhere, at the cost of one more full read and write; not done, because the case that needs it is a remote temporary disk, and that is already receiving the browser's bytes directly.
 - A sliced upload does not resume across a page reload. The token and its partial survive for `ttl_minutes`, so the pieces are there — what is missing is the browser remembering where it was.

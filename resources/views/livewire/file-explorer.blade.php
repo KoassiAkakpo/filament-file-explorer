@@ -675,7 +675,7 @@
                                             $paneIcon = \Koassi\FilamentFileExplorer\Support\MimeIcon::forMedia($media);
                                             // Through the media route, never getUrl(): that is a raw disk URL,
                                             // readable by anyone holding the link and checked by nothing.
-                                            $paneThumb = str_starts_with((string) $media->mime_type, 'image/')
+                                            $paneThumb = \Koassi\FilamentFileExplorer\Support\Thumbnails::drawable($media)
                                                 ? $this->mediaThumbnailUrl((int) $media->id)
                                                 : null;
                                         @endphp
@@ -823,7 +823,7 @@
                                     $mimeIcon = \Koassi\FilamentFileExplorer\Support\MimeIcon::forMedia($media);
                                     // Through the media route, never getUrl(): that is a raw
                                     // disk URL and would skip both guards.
-                                    $listPreview = str_starts_with((string) $media->mime_type, 'image/')
+                                    $listPreview = \Koassi\FilamentFileExplorer\Support\Thumbnails::drawable($media)
                                         ? $this->mediaThumbnailUrl($media->id)
                                         : null;
                                     $sizeLabel = number_format(((int) $media->size) / 1024, 1) . ' KB';

@@ -13,7 +13,10 @@
 @php
     $isRenaming = $renamingType === 'file' && (int) $renamingId === (int) $media->id;
     $label = \Koassi\FilamentFileExplorer\Support\MediaLabel::display($media);
-    $isImage = str_starts_with((string) $media->mime_type, 'image/');
+    // Not "is this an image": whether there is a thumbnail to draw. A PDF with a
+    // generated conversion has one; a PDF without one would put a broken image
+    // where the icon belongs, since an <img> pointed at a PDF renders nothing.
+    $isImage = \Koassi\FilamentFileExplorer\Support\Thumbnails::drawable($media);
     // $thumbUrl comes from the component and goes through the media route.
     // $media->getUrl('thumbnail') would be a raw disk URL, readable by anyone
     // holding the link and checked by nothing.

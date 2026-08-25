@@ -227,7 +227,10 @@ Images are rendered from a `thumbnail` conversion instead of the original, so a 
     'enabled' => true,
     'width' => 320,
     'height' => 320,
-    'queued' => false,   // a host with no worker would never get one
+    'queued' => false,       // a host with no worker would never get one
+    'kinds' => ['image'],    // 'pdf' and 'video' are opt-in — see below
+    'pdf_page' => 1,
+    'video_second' => 1,
 ],
 ```
 
@@ -236,6 +239,28 @@ Thumbnails go out through the media route like everything else, so they are subj
 ```bash
 php artisan media-library:regenerate "Koassi\FilamentFileExplorer\Models\Folder" --only=thumbnail --only-missing
 ```
+
+### PDFs and videos
+
+Add them to `kinds`, and install what they need:
+
+| Kind | Needs |
+| --- | --- |
+| `pdf` | `imagick` with a PDF delegate (Ghostscript) · `composer require spatie/pdf-to-image` |
+| `video` | `composer require php-ffmpeg/php-ffmpeg` · an `ffmpeg` binary at `media-library.ffmpeg_path` |
+
+Listing a kind is half the decision and the tooling is the other half: a kind whose requirements are absent produces nothing. `php artisan filament-file-explorer:install` prints what is missing, and `Support\Thumbnails::unavailable()` answers it in code.
+
+They are off by default for a reason rather than out of caution. Both generators are Media Library's, and **both report their requirements as installed without checking the thing that actually fails** — the PDF one never asks whether Imagick has a Ghostscript delegate, the video one never asks whether the ffmpeg binary exists. They then throw from inside the conversion, which runs *after* the media row and the original are written. So a generator that is installed but not working used to take the whole upload down with it, and the icon the explorer already draws costs nothing.
+
+That is fixed either way: **a thumbnail that fails now costs the thumbnail and nothing else.** The upload lands, the event fires, the row is there, and the explorer draws the icon. The discriminator is not the exception class — it is whether the media row is there, since a conversion only ever runs after it has been written.
+
+Two things worth knowing before you turn them on:
+
+- **They are slow.** A PDF page render or an ffmpeg seek is seconds, not milliseconds, and with `queued => false` the upload request waits for it. Turn the queue on and make sure a worker is running. One setting covers both kinds, because it is the same decision either way.
+- **A file with no thumbnail draws its icon, not a broken image.** The explorer asks whether a conversion was actually generated rather than guessing from the mime type — so a PDF gets its picture where the generator worked and its icon where it did not, on the same page if need be.
+
+Your own generator works too: the explorer asks Media Library's `image_generators` registry rather than checking for Imagick itself, so a thumbnail service of your own registered there is taken at its word.
 
 ## Where files land
 

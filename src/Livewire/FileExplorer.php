@@ -50,6 +50,7 @@ use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\ScopeRoots;
 use Koassi\FilamentFileExplorer\Support\Sharing;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
+use Koassi\FilamentFileExplorer\Support\Thumbnails;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadLimits;
@@ -61,9 +62,10 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
-use Spatie\Image\Exceptions\CouldNotLoadImage;
 use Spatie\MediaLibrary\MediaCollections\Exceptions\FileIsTooBig;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 class FileExplorer extends Component
 {
@@ -826,11 +828,10 @@ class FileExplorer extends Component
                     'uploaded_by_id' => $actor?->getAuthIdentifier(),
                 ]))
                 ->toMediaCollection(UploadRules::collection());
-        } catch (CouldNotLoadImage $e) {
-            // As on upload: the copy exists, only its thumbnail does not.
-            report($e);
-
-            $copy = $this->mediaJustAdded($target, $fileName);
+        } catch (Throwable $e) {
+            // As on upload: when the row is there, the copy exists and only its
+            // thumbnail does not.
+            $copy = $this->conversionCasualty($e, $target, $fileName);
         }
 
         if ($copy instanceof Media) {
@@ -1769,8 +1770,10 @@ class FileExplorer extends Component
                 'extra' => $media->file_name,
                 'icon' => MimeIcon::forMedia($media),
                 // The inspector shows it at 80px: the thumbnail is enough, and
-                // the lightbox is what serves the original.
-                'preview' => str_starts_with((string) $media->mime_type, 'image/')
+                // the lightbox is what serves the original. Through Thumbnails
+                // like the three views, so a PDF that has a conversion shows it
+                // and one that has not shows its icon.
+                'preview' => Thumbnails::drawable($media)
                     ? $this->mediaThumbnailUrl($media->id)
                     : null,
                 'delete_note' => $deleteState['reason'],
@@ -2753,12 +2756,57 @@ class FileExplorer extends Component
      * instead — nothing changed for anyone else.
      */
     /**
+     * What a throwing conversion left behind — or the throw again, if it was not
+     * a conversion that threw.
+     *
+     * A conversion runs *after* the media row and the original are written, so
+     * the presence of the row is what says the write succeeded and only the
+     * thumbnail was lost. **That probe is the discriminator, not the exception
+     * class.** It used to be a `catch (CouldNotLoadImage)`, which was exactly
+     * right while images were the only kind converted: it is what spatie/image
+     * throws for a file that sniffs as a PNG and that GD then refuses to decode.
+     *
+     * It stops being right the moment a PDF or a video can be converted. Media
+     * Library's generators for those throw whatever Ghostscript, Imagick or
+     * ffmpeg throws — a missing binary, a delegate that is not compiled in, a
+     * timeout on a long video — and none of it is a `CouldNotLoadImage`. Named
+     * catches would have meant collecting that list from three projects and
+     * keeping it current, and every name missing from it loses an upload that in
+     * fact succeeded. Which is precisely the cost that kept these kinds off.
+     *
+     * Nothing is swallowed blind: an empty probe rethrows, so a genuine failure
+     * to store keeps its exception and its stack.
+     */
+    protected function conversionCasualty(Throwable $e, Folder $folder, string $fileName): ?Media
+    {
+        // An abort inside addMedia() would be pathological, but it is a control
+        // flow decision and not a conversion, so it goes on travelling.
+        if ($e instanceof HttpExceptionInterface) {
+            throw $e;
+        }
+
+        $stored = $this->mediaJustAdded($folder, $fileName);
+
+        if (! $stored instanceof Media) {
+            // Nothing landed. This was the write failing rather than the
+            // thumbnail, and reporting it as a lost thumbnail would lose the file
+            // and the reason for it at once.
+            throw $e;
+        }
+
+        report($e);
+
+        return $stored;
+    }
+
+    /**
      * The media row an add() just wrote, when the object never came back.
      *
-     * CouldNotLoadImage is thrown while generating the thumbnail, which runs
-     * after the row and the original are written — the file is there. A
-     * listener that never heard about it would leave a hole in an audit trail
-     * exactly where an upload went half-wrong.
+     * A conversion throws after the row and the original are written, so a row
+     * found here means the file is there. `conversionCasualty()` above is what
+     * reads that as "the thumbnail failed, the upload did not" — and a listener
+     * that never heard about the upload would leave a hole in an audit trail
+     * exactly where one went half-wrong.
      */
     protected function mediaJustAdded(Folder $folder, string $fileName): ?Media
     {
@@ -3271,15 +3319,6 @@ class FileExplorer extends Component
                             'uploaded_by_id' => $actor?->getAuthIdentifier(),
                         ])
                         ->toMediaCollection(UploadRules::collection());
-                } catch (CouldNotLoadImage $e) {
-                    // Only ever thrown while generating the thumbnail, which
-                    // runs after the row and the original are written — so the
-                    // upload has in fact succeeded. An image GD refuses to decode
-                    // must not lose it; the media route serves the original when
-                    // the conversion is missing.
-                    report($e);
-
-                    $stored = $this->mediaJustAdded($folder, $safe);
                 } catch (FileIsTooBig $e) {
                     // Media Library's own ceiling, which is 10 MB by default and
                     // is neither ours nor PHP's. Caught rather than left to
@@ -3293,6 +3332,8 @@ class FileExplorer extends Component
                     $refusedTooBig++;
 
                     continue;
+                } catch (Throwable $e) {
+                    $stored = $this->conversionCasualty($e, $folder, $safe);
                 }
 
                 // Set aside *after* the new row is written, which is the whole

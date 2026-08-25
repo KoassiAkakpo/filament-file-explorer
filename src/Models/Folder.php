@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
+use Koassi\FilamentFileExplorer\Support\Thumbnails;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Spatie\Image\Enums\Fit;
 use Spatie\MediaLibrary\HasMedia;
@@ -76,28 +77,34 @@ class Folder extends Model implements HasMedia
      * The thumbnail the explorer renders in place of the original.
      *
      * Config only, not a panel setting: conversions are registered on the model,
-     * which knows nothing about the panel it is being browsed from.
+     * which knows nothing about the panel it is being browsed from. Everything
+     * it reads goes through Support\Thumbnails, which is also what the views ask
+     * whether to draw one — the two questions have to agree.
      */
     public function registerMediaConversions(?Media $media = null): void
     {
-        if (! (bool) config('filament-file-explorer.thumbnails.enabled', true)) {
+        // Which kinds get one, from the *sniffed* mime type: Media Library picks
+        // its image generator from the extension, so a file merely named .png
+        // would be handed to GD. PDF and video are off unless the host asked for
+        // them and the tooling is there — see Thumbnails for why that is two
+        // conditions and not one.
+        if ($media !== null && ! Thumbnails::wanted($media)) {
             return;
         }
 
-        // Media Library picks its image generator from the file's extension, so
-        // anything merely *named* .png would be handed to GD and take the upload
-        // down with it. The stored mime type is sniffed from the bytes, which is
-        // the part worth trusting.
-        if ($media !== null && ! str_starts_with((string) $media->mime_type, 'image/')) {
+        if ($media === null && ! Thumbnails::enabled()) {
             return;
         }
 
         $conversion = $this->addMediaConversion('thumbnail')
-            ->fit(
-                Fit::Crop,
-                (int) config('filament-file-explorer.thumbnails.width', 320),
-                (int) config('filament-file-explorer.thumbnails.height', 320),
-            )
+            ->fit(Fit::Crop, Thumbnails::width(), Thumbnails::height())
+            // Both are ignored by the image generator and read by the other two,
+            // so they cost nothing to set unconditionally. The first page of a
+            // PDF is the one anybody would recognise it by; a second into a video
+            // rather than zero, because the first frame of a great many videos is
+            // black and a black square reads as a broken thumbnail.
+            ->pdfPageNumber(Thumbnails::pdfPage())
+            ->extractVideoFrameAtSecond(Thumbnails::videoSecond())
             ->performOnCollections(UploadRules::collection());
 
         // Not queued by default. Media Library queues conversions unless told
@@ -105,7 +112,12 @@ class Folder extends Model implements HasMedia
         // thumbnail at all — the explorer would keep serving originals, which is
         // the whole thing this fixes. One 320px crop is cheap enough to do in
         // the upload request.
-        if ((bool) config('filament-file-explorer.thumbnails.queued', false)) {
+        //
+        // A PDF or a video is not. Whoever turns those on is choosing between an
+        // upload that waits on Ghostscript or ffmpeg and a queue that has to be
+        // running; this setting is where they say which, and it is one setting
+        // rather than one per kind because that is the same decision either way.
+        if (Thumbnails::queued()) {
             $conversion->queued();
 
             return;

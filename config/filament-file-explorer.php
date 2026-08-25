@@ -224,6 +224,41 @@ return [
         'width' => 320,
         'height' => 320,
         'queued' => false,
+
+        /*
+         | Which kinds of file get one: 'image', 'pdf', 'video'.
+         |
+         | Images only by default, and the other two are opt-in for a reason
+         | rather than out of caution. Both generators are Media Library's, both
+         | report their requirements as installed without checking the thing that
+         | actually fails — Ghostscript for the PDF one, the ffmpeg *binary* for
+         | the video one — and both then throw during the conversion, which runs
+         | after the media row and the original are written. The explorer catches
+         | that now and keeps the upload, but a thumbnail that never appears is
+         | still worse than the icon it already draws.
+         |
+         | Listing a kind is half the decision; the tooling is the other half:
+         |
+         |   'pdf'   → imagick with a PDF delegate (Ghostscript)
+         |             + composer require spatie/pdf-to-image
+         |   'video' → composer require php-ffmpeg/php-ffmpeg
+         |             + an ffmpeg binary at media-library.ffmpeg_path
+         |
+         | A kind that is listed without its tooling produces nothing, quietly.
+         | `php artisan filament-file-explorer:install` prints what is missing,
+         | and Support\Thumbnails::unavailable() answers it in code.
+         |
+         | Note the cost: a PDF or a video conversion is seconds, not
+         | milliseconds. With 'queued' above left false the upload request waits
+         | for it. Turn the queue on and make sure a worker is running.
+         */
+        'kinds' => ['image'],
+
+        // Which page of a PDF, and how far into a video. Not the first frame by
+        // default: a great many videos open on black, and a black square is
+        // indistinguishable from a broken thumbnail.
+        'pdf_page' => 1,
+        'video_second' => 1,
     ],
 
     /*
