@@ -278,6 +278,66 @@ Either way the path is computed, never stored, so the change is retroactive: fil
 
 Keeping the files private needs no more than a disk that is not `public` — `MEDIA_DISK`, or `media-library.disk_name`. Nothing in the explorer calls `getUrl()`: downloads, previews, thumbnails and zips all go out through the media route, behind the ability and containment checks, so a private disk costs no functionality. Keep the driver `local` rather than remote and the route still answers with a `BinaryFileResponse`, which is what gives video seeking and resumable downloads.
 
+## Large uploads
+
+`upload.max_size_kb` defaults to 50 MB and, on a stock host, **none of it was reachable**. Five ceilings stack over an upload and the lowest wins:
+
+| Setting | Default | Caps |
+| --- | --- | --- |
+| `filament-file-explorer.upload.max_size_kb` | 50 MB | one file |
+| `media-library.max_file_size` | **10 MB** | one file |
+| `livewire.temporary_file_upload.rules` | **12 MB** | one request |
+| `upload_max_filesize` (php.ini) | **2 MB** | one request |
+| `post_max_size` (php.ini) | **8 MB** | the whole request body |
+
+So the honest default was 2 MB against a promise of 50 — and a file over it failed with whichever ceiling spoke first: a 422 from Livewire's own controller that the page turned into "upload failed", or nothing at all when the web server dropped the body before PHP saw it. Nothing on screen ever named a number.
+
+Two things change that, and they are alternatives rather than additions.
+
+### Slicing
+
+A file too big for one request is sent as several. The three request-shaped ceilings then stop deciding how big a file may be, because no request carries a whole file.
+
+```php
+// config/filament-file-explorer.php
+'upload' => [
+    'chunk' => [
+        'enabled' => true,
+        'size_kb' => 4096,        // an upper bound; sized down to fit post_max_size
+        'ttl_minutes' => 60,      // how long an interrupted upload's bytes are kept
+    ],
+],
+```
+
+What is left is `max_size_kb` and Media Library's — so **raise `media-library.max_file_size` too**, or it is the number that decides. Whatever the answer works out to, the browser now knows it: a file over the limit is refused before a byte leaves, and the message says the size.
+
+It engages only where it has something to cover — a file, or a batch, that will not fit in one request. Anything that already worked keeps taking exactly the path it took before. (A batch matters as much as a file: `post_max_size` caps the request *body*, so ten 1 MB files sent together used to break an 8 MB limit even though none of them was close to it.)
+
+Under the hood it is a **transport, not a second way to store a file**: the last slice leaves behind exactly the temporary file Livewire's own upload endpoint would have written, and the browser hands that to Livewire. Everything after is the ordinary path — same validation, same conflict policy, same quota, same versioning.
+
+The route is `['web', 'auth']`. The ability and the containment walk run once when the upload opens; the slices that follow carry a token that session was given, and the checks that decide are still the ones at the write.
+
+### Direct-to-storage
+
+The other answer: let the browser upload straight to S3, so the bytes never reach this application and `post_max_size` never applies. That is configured in **Livewire**, not here:
+
+```php
+// config/livewire.php
+'temporary_file_upload' => [
+    'disk' => 's3',
+    'rules' => ['file', 'max:512000'],   // 500 MB
+],
+```
+
+Two things in the explorer had to change for it to work at all, and both were outright breakage rather than missing features:
+
+- Livewire refuses `uploadMultiple` on a remote temporary disk — it presigns one URL per upload — and the explorer called it unconditionally. So on a host set up this way the upload button **did nothing**, with an exception that bypasses the view handler. Files now go one at a time when the disk is remote.
+- The bytes are then in S3, and `getRealPath()` on such an upload answers with an S3 *key*. Media Library does `is_file()` on it, so storing what had just been received successfully failed with `FileDoesNotExist`. The upload is now staged into a local file first — a stream, not a request body, so no PHP limit applies to it.
+
+Staging rather than `addMediaFromDisk()` for a reason worth knowing: that adder takes the mime type from the object's stored `Content-Type`, which for a presigned PUT is a header **the browser chose**. The kind filter, the type sort and the upload rules all read `mime_type`, and SVG is refused on purpose — the media route serves inline, and an SVG runs script in the panel's own origin. Staging keeps the type sniffed from bytes, as it always was.
+
+Slicing stands down entirely when the disk is remote: there is nothing to slice under, and it would only route the upload back through the server it was just taken off.
+
 ## Tags and descriptions
 
 Folders and files can carry a **description** and any number of **tags**, both written in the Get Info inspector — the panel that already follows the selection, and so the only place on screen that knows which single item you mean.

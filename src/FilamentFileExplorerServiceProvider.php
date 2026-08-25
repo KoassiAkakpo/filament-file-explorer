@@ -18,12 +18,14 @@ use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Http\Controllers\MediaController;
 use Koassi\FilamentFileExplorer\Http\Controllers\ShareController;
+use Koassi\FilamentFileExplorer\Http\Controllers\UploadChunkController;
 use Koassi\FilamentFileExplorer\Livewire\FileExplorer;
 use Koassi\FilamentFileExplorer\Resolvers\GlobalRootResolver;
 use Koassi\FilamentFileExplorer\Resolvers\PerTenantRootResolver;
 use Koassi\FilamentFileExplorer\Resolvers\PerUserRootResolver;
 use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\Annotations;
+use Koassi\FilamentFileExplorer\Support\ChunkedUploads;
 use Koassi\FilamentFileExplorer\Support\FileExplorerManager;
 use Koassi\FilamentFileExplorer\Support\FolderModel;
 use Koassi\FilamentFileExplorer\Support\FolderTree;
@@ -33,6 +35,7 @@ use Koassi\FilamentFileExplorer\Support\Sharing;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\Uploader;
+use Koassi\FilamentFileExplorer\Support\UploadLimits;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
 use Koassi\FilamentFileExplorer\Support\Versions;
 use Livewire\Livewire;
@@ -91,6 +94,10 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         // Scoped too: it memoises one file's history, which the inspector reads
         // on every render while its panel is open.
         $this->app->scoped(Versions::class);
+
+        // Stateless — its state is the session's, so a singleton would memoise
+        // nothing and share nothing.
+        $this->app->singleton(ChunkedUploads::class);
 
         // Stateless, so a singleton is enough: it reads and writes rows and
         // memoises nothing.
@@ -247,6 +254,8 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
                     ->name('zip-selection');
             });
 
+        $this->registerChunkRoutes();
+
         if (! Sharing::enabled()) {
             return;
         }
@@ -261,6 +270,42 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
             ->name($share['name'] ?? 'filament-file-explorer.share.')
             ->group(function (): void {
                 Route::get('{token}', [ShareController::class, 'show'])->name('show');
+            });
+    }
+
+    /**
+     * The sliced-upload transport.
+     *
+     * Registered whenever the setting is on rather than when the transport would
+     * currently engage: `chunkingEngages()` reads PHP's ini and Livewire's disk,
+     * and a route table cached on one host and served on another must not depend
+     * on either. The controller asks the same question per request, which is the
+     * check that decides.
+     */
+    protected function registerChunkRoutes(): void
+    {
+        if (! UploadLimits::chunkingEnabled()) {
+            return;
+        }
+
+        $config = config('filament-file-explorer.upload.chunk.routes');
+
+        Route::middleware($config['middleware'] ?? ['web', 'auth'])
+            ->prefix($config['prefix'] ?? 'file-explorer/upload')
+            ->name($config['name'] ?? 'filament-file-explorer.upload.')
+            ->group(function (): void {
+                Route::post('{scopeKey}/begin', [UploadChunkController::class, 'begin'])
+                    ->name('begin');
+
+                // The token first, so a scope key holding a slash could never be
+                // read as one — and because after `begin` the token is the only
+                // thing that decides anything.
+                Route::post('chunk/{token}/{index}', [UploadChunkController::class, 'chunk'])
+                    ->whereNumber('index')
+                    ->name('chunk');
+
+                Route::post('chunk/{token}/cancel', [UploadChunkController::class, 'cancel'])
+                    ->name('cancel');
             });
     }
 }

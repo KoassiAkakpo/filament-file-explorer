@@ -224,6 +224,54 @@ Two things in the component are load-bearing:
 - **`restoreVersion()` moves the selection onto the row it restored**, through `replaceSelection()`. The restored row is a *new* media id; leaving the selection on the one just set aside leaves the inspector describing a row that has left the listing, and `refreshInfo()` answers that with a **403** rather than a panel — `showInfo()`'s containment check aborts, and `refreshInfo()` only catches `ModelNotFoundException`.
 - **Containment goes through `MediaScope::folderUnderRootInCollection()`**, which names the collection rather than defaulting it. That is what keeps widening this class from widening `folderUnderRoot()` by accident: the media routes, the share links and every other action go on requiring the live collection, and the one caller that means to reach a version says so while still proving the other two conditions.
 
+## Large uploads
+
+`upload.max_size_kb` was a promise, not a ceiling. Five limits stack and the lowest wins: ours (50 MB), `media-library.max_file_size` (**10 MB**), `livewire.temporary_file_upload.rules` (**12 MB**, validated in Livewire's own controller before this component is reached), `upload_max_filesize` (**2 MB**) and `post_max_size` (**8 MB**, which caps the whole request body). So the real default was 2 MB, and going over it failed with whichever spoke first — a 422 the page rendered as "upload failed", or nothing at all when the web server dropped the body before PHP saw it.
+
+[Support/UploadLimits.php](src/Support/UploadLimits.php) is the single reader of all five, and the split it makes is the whole design: three of them cap a **request**, two cap a **file**. Slicing takes the first three out of the answer, because no request carries a whole file. `maxUploadBytes()` is the promise, `perRequestBytes()` is what one request can carry, and the gap between them is exactly what the slice transport exists to cover.
+
+Details in that class that are load-bearing:
+
+- **`sliceableDisk()` resolves the disk the way Livewire's own `isUsingS3()` does** — `config('livewire.temporary_file_upload.disk') ?: config('filesystems.default')` — and deliberately *not* through `FileUploadConfiguration::disk()`, which answers `tmp-for-tests` while a suite is running. A check that describes the harness instead of the host is a check that only ever fails in tests, and this one did.
+- **`chunkingEngages()` is three questions, not one**: the setting is on, the temporary disk is local, and a whole file does not already fit in one request. The last is what keeps the transport off the path of uploads that were already working.
+- **`bindingConstraint()` names the setting**, because a refusal that gives only a number leaves the host hunting through four config files.
+
+### The slice transport
+
+[Support/ChunkedUploads.php](src/Support/ChunkedUploads.php) plus [Http/Controllers/UploadChunkController.php](src/Http/Controllers/UploadChunkController.php). What matters about it is what it is **not**: a second way to store a file. It ends by writing exactly the temporary file Livewire's endpoint would have written — same directory, same hashed name, same `.json` sidecar — and returns the same signed reference; the browser then calls Livewire's own `_finishUpload` with it, so `updatedFiles()` runs unchanged. A route that stored the file itself would be the second write path this package keeps refusing to grow.
+
+- **Slices arrive in order, one at a time.** Parallel slices would need a received-set and a lock around it; in order, the state is one counter and a wrong index is a 409 rather than a corrupted file. The bottleneck of a browser upload is the uplink.
+- **Appending is a raw `fopen(…, 'ab')`, never `Storage::append()`** — that one joins with a newline and would put one byte between every slice, corrupting every binary file that went through it. That is also why slicing requires a **local** disk: Flysystem has no append, and the one case that would need it (a remote temporary disk) is already receiving the browser's bytes directly.
+- **Partials live in their own directory**, never Livewire's: `cleanupOldUploads()` deletes anything in there older than a day, and a partial is not a temporary upload until it is whole.
+- **The token is server-issued and the path is `sha1($token)`.** Nothing the client sends reaches a filename.
+- **State is the session**, keyed under one entry so pruning can see every open upload at once. Which also settles "whose upload is this" by construction — and a token that leaked into a log is worth nothing without the session that opened it.
+- **`begin` decides, `chunk` carries.** The ability, the containment walk and an early quota refusal happen once; the slices prove only that they hold a token this session was given. Same split in time as a share link, and for the same reason — but the authoritative checks are still the ones in `updatedFiles()`. This route refuses early so nobody spends ten minutes uploading a file that was never going to land.
+- **`append` caps at the size `begin` authorised**, not merely at what the installation accepts. The declared size is what the ceiling and the quota were checked against, so without that cap a client could declare a kilobyte, pass both, and then send a gigabyte — the early refusal would be the very thing that let it through.
+- **The route is registered on the *setting*, not on `chunkingEngages()`.** That method reads php.ini and Livewire's disk, and a route table cached on one host and served on another must not depend on either; the controller asks the live question per request.
+
+### Direct-to-storage
+
+Configured in Livewire (`temporary_file_upload.disk => 's3'`), not here. Two things in this package were outright broken there:
+
+- **`uploadMultiple` throws** (`S3DoesntSupportMultipleFileUploads`) — Livewire presigns one URL per upload — and the JS called it unconditionally, so the upload button did nothing at all, with an exception that bypasses the view handler. `UploadLimits::singleFileUploads()` is what the browser reads to send one file per request instead.
+- **`getRealPath()` answers with an S3 key**, and `FileAdder` does `is_file()` on it, so `addMedia()` threw `FileDoesNotExist` for an upload that had in fact arrived. [Support/Uploads.php](src/Support/Uploads.php) stages it into a local file first.
+
+`Uploads::readable()` returns the file untouched when it is already a local file — which is not an optimisation. The authoritative `UploadRules::isAllowedUpload()` check in `updatedFiles()` runs on whatever comes back, and for a local upload that has to be the **same object** the validator already saw, so the two answers are necessarily identical rather than merely probably so.
+
+Staging rather than `addMediaFromDisk()`, for two reasons: that adder has a terminal call of its own (`toMediaCollectionFromRemote()`), so taking it would fork the write path at both ends; and it reads the mime type from the object's stored `Content-Type`, which for a presigned PUT is a header **the browser chose**. `UploadRules` refuses SVG on purpose, and the kind filter and the type sort both read `mime_type` — a client-declared type would make all three advisory. Hence the second `isAllowedUpload()` call inside the loop: same single implementation, called where the answer can be trusted.
+
+The bytes cross the server once, as a stream rather than a request body, so no PHP limit applies — the hop those limits were about is still gone.
+
+`FileIsTooBig` is caught beside `CouldNotLoadImage` now. It is Media Library's own 10 MB ceiling, and reaching it means `UploadLimits` and the browser disagree with the config — an upload is not the place to answer that with a stack trace.
+
+### Testing this
+
+`tests/Feature/UploadLimitsTest.php` covers the five ceilings and which one wins; `tests/Feature/ChunkedUploadTest.php` drives the real route, and its "joins the slices into exactly the file that was sent" test is the one that catches a newline between slices — it needs content **larger than `MIN_CHUNK_BYTES`** (256 KB) to get more than one slice, since the floor is deliberate.
+
+`tests/Feature/RemoteUploadDiskTest.php` simulates a remote disk out of the local adapter: a `FilesystemAdapter` whose `path()` prefix is not a directory while its `readStream()` still works, which is exactly S3's shape. **A real S3 round trip is not covered** — Livewire hardcodes `tmp-for-tests` as the disk under a test suite, so the component cannot be driven end to end against a remote one. What is covered is the staging seam and the mime-sniffing guarantee.
+
+`tests/Js/uploads.test.mjs` covers which transport is chosen and the request sequence a browser would actually make. The harness gained a recording `fetch`, a `FormData`, and `uploadMultiple` / `upload` / `uploadFolderId` on the `$wire` stub; `answerWith()` replaces what the slice requests answer.
+
 ## Thumbnails
 
 `Folder::registerMediaConversions()` declares one conversion, `thumbnail`, driven from config alone — conversions are registered on the model, which knows nothing about the panel it is browsed from, so this is the one setting `StandaloneSettings` does not own.

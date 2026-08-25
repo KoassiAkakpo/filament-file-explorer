@@ -28,6 +28,9 @@ return [
     'upload_created_folders' => '{1} :count folder created|[2,*] :count folders created',
     'upload_replaced' => '{1} :count file replaced|[2,*] :count files replaced',
     'upload_skipped' => '{1} :count file already existed|[2,*] :count files already existed',
+    'upload_refused_format' => '{1} :count file was not the format it claimed|[2,*] :count files were not the format they claimed',
+    'upload_refused_size' => '{1} :count file was too large to store|[2,*] :count files were too large to store',
+    'upload_limit' => 'This site accepts files up to :limit.',
     'copied' => 'Copied',
     'cut' => 'Cut',
     'pasted' => 'Pasted',
@@ -233,6 +236,7 @@ return [
         'complete' => 'Upload complete',
         'failed' => 'Upload failed',
         'cancelled' => 'Upload cancelled',
+        'too_large' => 'That file is larger than the :limit this site accepts.',
     ],
 
     'js' => [

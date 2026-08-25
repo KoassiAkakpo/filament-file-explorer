@@ -115,10 +115,70 @@ return [
 
         /*
          | What happens when the target folder already holds a file with the
-         | same name: 'rename' keeps both by suffixing " (2)", 'replace' drops
-         | the existing one, 'skip' refuses the new one.
+         | same name: 'rename' keeps both by suffixing " (2)", 'replace' keeps
+         | the existing one as a version (see 'versions' below), 'skip' refuses
+         | the new one.
          */
         'on_conflict' => 'rename',
+
+        /*
+         | Sliced uploads.
+         |
+         | max_size_kb above is a promise, not a ceiling. Four other limits sit
+         | under it and the lowest wins: media-library.max_file_size (10 MB by
+         | default), livewire.temporary_file_upload.rules (12 MB), and PHP's own
+         | upload_max_filesize (2 MB) and post_max_size (8 MB) — the last of
+         | which caps the whole request body, so ten 1 MB files sent together hit
+         | it even though each one is small.
+         |
+         | Slicing is what takes the three request-shaped limits out of the
+         | answer: no request ever carries a whole file, so no per-request cap
+         | can decide how big a file may be. What remains is max_size_kb and
+         | Media Library's — raise that one too, in config/media-library.php, or
+         | it is the number that decides.
+         |
+         | It engages only when it has something to cover: a file (or a batch)
+         | that will not fit in one request. Anything that already worked keeps
+         | taking exactly the path it took before, which is the point — a
+         | transport that only runs where the old one failed cannot break an
+         | upload that was fine.
+         |
+         | It also stands down entirely when Livewire's temporary upload disk is
+         | S3 or GCS: the browser is already sending its bytes straight to
+         | storage, post_max_size never applied, and slicing would only route
+         | them back through this server. That configuration is what
+         | "direct-to-S3" means here, and it is set up in Livewire, not here:
+         |
+         |   // config/livewire.php
+         |   'temporary_file_upload' => ['disk' => 's3', 'rules' => ['file', 'max:512000']],
+         |
+         | Route middleware is ['web', 'auth'] and not negotiable in spirit: the
+         | ability and the containment walk run on `begin`, and every slice after
+         | it carries a token this session was given.
+         */
+        'chunk' => [
+            'enabled' => true,
+
+            // Upper bound on a slice. The real one is smaller when
+            // post_max_size is: the explorer sizes down to fit, keeping room
+            // for the multipart envelope, and never goes below 256 KB.
+            'size_kb' => 4096,
+
+            // How long an interrupted upload's bytes are kept before the next
+            // `begin` clears them out.
+            'ttl_minutes' => 60,
+
+            // Its own directory, never Livewire's: that one is emptied of
+            // anything older than a day, and a partial file is not a temporary
+            // upload until it is whole.
+            'directory' => 'file-explorer-chunks',
+
+            'routes' => [
+                'prefix' => 'file-explorer/upload',
+                'middleware' => ['web', 'auth'],
+                'name' => 'filament-file-explorer.upload.',
+            ],
+        ],
     ],
 
     /*

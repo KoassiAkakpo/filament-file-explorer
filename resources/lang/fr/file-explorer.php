@@ -28,6 +28,9 @@ return [
     'upload_created_folders' => '{1} :count dossier créé|[2,*] :count dossiers créés',
     'upload_replaced' => '{1} :count fichier remplacé|[2,*] :count fichiers remplacés',
     'upload_skipped' => '{1} :count fichier existait déjà|[2,*] :count fichiers existaient déjà',
+    'upload_refused_format' => "{1} :count fichier n'était pas du format annoncé|[2,*] :count fichiers n'étaient pas du format annoncé",
+    'upload_refused_size' => '{1} :count fichier était trop volumineux pour être stocké|[2,*] :count fichiers étaient trop volumineux pour être stockés',
+    'upload_limit' => 'Ce site accepte les fichiers jusqu’à :limit.',
     'copied' => 'Copié',
     'cut' => 'Couper',
     'pasted' => 'Collé',
@@ -233,6 +236,7 @@ return [
         'complete' => 'Téléversement terminé',
         'failed' => 'Échec du téléversement',
         'cancelled' => 'Téléversement annulé',
+        'too_large' => 'Ce fichier dépasse la taille de :limit acceptée par ce site.',
     ],
 
     'js' => [

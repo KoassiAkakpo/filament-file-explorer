@@ -676,6 +676,10 @@
                 refreshInterval: Number(config.refreshInterval || 0),
                 componentId: config.componentId || '',
                 translations: config.translations || {},
+                // What one request can carry, what a file may weigh, and where
+                // the slice transport lives. Absent keys mean "no opinion", so
+                // an older cached page keeps behaving exactly as it did.
+                uploadLimits: config.uploadLimits || {},
                 // This component's selection, not the page's. Children inherit
                 // it through the Alpine scope, which is how the views reach it
                 // as `sel` without addressing anything globally. Looked up
@@ -1330,61 +1334,263 @@
                     this.sel.clearMarquee();
                 },
                 uploadDroppedFiles(files) {
-                    if (!this.abilities.upload) return;
-                    if (!files || !files.length) return;
-                    const filtered = [...files].filter(file => this.isAllowedFile(file));
-                    if (!filtered.length) {
-                        Alpine.store('feUpload').error(this.translations?.validation?.invalid_format || 'Invalid file format');
-                        return;
-                    }
-                    this.onUploadStart();
-                    this.$wire.uploadMultiple(
-                        'files',
-                        filtered,
-                        () => { this.onUploadFinish(); },
-                        () => { this.onUploadError(); },
-                        (event) => { this.onUploadProgress(event.detail.progress); }
-                    );
+                    this.sendUploads(files);
                 },
                 pickAndUploadFiles(event) {
                     const input = event.target;
                     const files = input?.files;
                     if (!files || !files.length) return;
-                    this.uploadDroppedFiles(files);
+                    this.sendUploads(files);
                     input.value = '';
                 },
                 /**
                  * A folder upload keeps its structure: each file carries the path
                  * the browser saw, and the server recreates the folders from it.
                  */
-                async pickAndUploadFolder(event) {
+                pickAndUploadFolder(event) {
                     const input = event.target;
                     const picked = [...(input?.files || [])];
                     input.value = '';
 
                     if (!picked.length) return;
-                    if (!this.abilities.upload || !this.abilities.mkdir) return;
+                    if (!this.abilities.mkdir) return;
 
-                    const files = picked.filter((file) => this.isAllowedFile(file));
+                    this.sendUploads(picked, picked.map((file) => file.webkitRelativePath || file.name));
+                },
+                /**
+                 * The one door every upload goes through.
+                 *
+                 * Three transports live behind it and the choice is not a
+                 * preference: `uploadMultiple` is what Livewire does and what
+                 * always worked, one-at-a-time is the *only* thing Livewire
+                 * allows when its temporary disk is remote, and slicing is the
+                 * only thing that gets a file past `post_max_size`. Picking here
+                 * rather than at each call site is what stops the three from
+                 * drifting — this used to be two copies of one transport, and
+                 * the folder one had a redundant ability check the other did not.
+                 */
+                async sendUploads(files, paths = null) {
+                    if (!this.abilities.upload) return;
 
-                    if (!files.length) {
-                        Alpine.store('feUpload').error(this.translations?.validation?.invalid_format || 'Invalid file format');
+                    const store = Alpine.store('feUpload');
+                    const picked = [...(files || [])];
+
+                    if (!picked.length) return;
+
+                    const keep = [];
+                    const keptPaths = [];
+
+                    picked.forEach((file, index) => {
+                        if (!this.isAllowedFile(file)) return;
+                        keep.push(file);
+                        if (paths) keptPaths.push(paths[index]);
+                    });
+
+                    if (!keep.length) {
+                        store.error(this.translations?.validation?.invalid_format || 'Invalid file format');
 
                         return;
                     }
 
-                    // Committed before the upload starts, so the paths are on the
-                    // component when the files land — and in the same order.
-                    await this.$wire.set('uploadRelativePaths', files.map((file) => file.webkitRelativePath || file.name));
+                    // Refused here, before a byte leaves, and named. Sending it
+                    // anyway is what used to happen: whichever of the five
+                    // ceilings spoke first answered with a 422 the page turned
+                    // into "upload failed", or the web server dropped the body
+                    // and nothing answered at all.
+                    if (this.filesOverLimit(keep).length) {
+                        store.error(this.uploadTooLargeMessage());
+
+                        return;
+                    }
 
                     this.onUploadStart();
-                    this.$wire.uploadMultiple(
-                        'files',
-                        files,
-                        () => { this.onUploadFinish(); },
-                        () => { this.onUploadError(); },
-                        (event) => { this.onUploadProgress(event.detail.progress); }
-                    );
+
+                    try {
+                        if (this.needsSlicing(keep)) {
+                            await this.sendSliced(keep, paths ? keptPaths : null);
+                        } else if (this.uploadLimits.single) {
+                            await this.sendOneAtATime(keep, paths ? keptPaths : null);
+                        } else {
+                            await this.sendTogether(keep, paths ? keptPaths : null);
+                        }
+                    } catch (error) {
+                        this.onUploadError();
+                    }
+                },
+                /**
+                 * Files this installation cannot take whatever the transport —
+                 * our own cap, or Media Library's.
+                 */
+                filesOverLimit(files) {
+                    const max = Number(this.uploadLimits.max || 0);
+
+                    return max > 0 ? files.filter((file) => file.size > max) : [];
+                },
+                uploadTooLargeMessage() {
+                    const template = this.translations?.upload?.too_large || 'That file is larger than the :limit this site accepts.';
+
+                    return template.replace(':limit', this.uploadLimits.limit_label || '');
+                },
+                /**
+                 * Whether this batch has to be sliced.
+                 *
+                 * On the **total**, not on the largest file: `post_max_size` caps
+                 * the request body, so ten one-megabyte files sent together break
+                 * an eight-megabyte limit even though not one of them is close to
+                 * it. That batch failed before this existed, and the failure
+                 * looked like a problem with the files.
+                 */
+                needsSlicing(files) {
+                    if (!this.uploadLimits.chunked || !this.uploadLimits.begin_url) return false;
+
+                    const perRequest = Number(this.uploadLimits.per_request || 0);
+
+                    if (perRequest <= 0) return false;
+
+                    return files.reduce((total, file) => total + file.size, 0) > perRequest;
+                },
+                /**
+                 * What always happened, and still does for anything that fits.
+                 */
+                sendTogether(files, paths) {
+                    return this.withPaths(paths, () => new Promise((resolve, reject) => {
+                        this.$wire.uploadMultiple(
+                            'files',
+                            files,
+                            () => { this.onUploadFinish(); resolve(); },
+                            () => { reject(new Error('upload failed')); },
+                            (event) => { this.onUploadProgress(event.detail.progress); }
+                        );
+                    }));
+                },
+                /**
+                 * One file per request, because Livewire refuses anything else
+                 * when its temporary disk is remote: it presigns one URL per
+                 * upload, and `uploadMultiple` throws outright. The explorer
+                 * called it unconditionally, so on a host set up for
+                 * direct-to-storage the upload button did nothing at all.
+                 *
+                 * Awaited one at a time rather than fired together, because each
+                 * one lands in `updatedFiles()` on its own — and the relative
+                 * path of a folder upload is matched to the file by position, so
+                 * two in flight would cross.
+                 */
+                async sendOneAtATime(files, paths) {
+                    for (let index = 0; index < files.length; index++) {
+                        if (paths) await this.$wire.set('uploadRelativePaths', [paths[index]]);
+
+                        this.onUploadProgress(Math.round((index / files.length) * 100));
+
+                        await new Promise((resolve, reject) => {
+                            this.$wire.upload(
+                                'files',
+                                files[index],
+                                () => resolve(),
+                                () => reject(new Error('upload failed')),
+                                () => {}
+                            );
+                        });
+                    }
+
+                    this.onUploadFinish();
+                },
+                /**
+                 * Each file cut into requests small enough to get through, then
+                 * handed to Livewire as if its own endpoint had received it.
+                 *
+                 * The hand-off is the whole point: what comes back from the last
+                 * slice is the same signed reference `livewire/upload-file`
+                 * returns, so `_finishUpload` builds the same temporary file and
+                 * `updatedFiles()` runs with nothing changed — same validation,
+                 * same conflict policy, same quota, same versioning.
+                 */
+                async sendSliced(files, paths) {
+                    const total = files.reduce((sum, file) => sum + file.size, 0) || 1;
+                    const references = [];
+                    let sent = 0;
+
+                    for (const file of files) {
+                        const begun = await this.sliceBegin(file);
+                        const size = Math.max(1, Number(begun.chunk_bytes || 0));
+                        const chunks = Math.max(1, Math.ceil(file.size / size));
+                        let reference = null;
+
+                        for (let index = 0; index < chunks; index++) {
+                            const slice = file.slice(index * size, Math.min((index + 1) * size, file.size));
+                            const result = await this.sliceSend(begun.token, index, slice, file.name);
+
+                            sent += slice.size;
+                            this.onUploadProgress(Math.min(99, Math.round((sent / total) * 100)));
+
+                            if (result.complete) reference = result.path;
+                        }
+
+                        if (!reference) throw new Error('upload incomplete');
+
+                        references.push(reference);
+                    }
+
+                    await this.withPaths(paths, async () => {
+                        await this.$wire.call('_finishUpload', 'files', references, true);
+                    });
+
+                    this.onUploadFinish();
+                },
+                async sliceBegin(file) {
+                    const folder = await this.$wire.uploadFolderId();
+
+                    return await this.uploadJson(this.uploadLimits.begin_url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json',
+                            'X-CSRF-TOKEN': this.csrfToken(),
+                        },
+                        body: JSON.stringify({ folder, name: file.name, size: file.size }),
+                    });
+                },
+                async sliceSend(token, index, slice, name) {
+                    const body = new FormData();
+                    // Named for the file it is part of, so a server log or a
+                    // proxy shows something recognisable rather than "blob".
+                    body.append('chunk', slice, name);
+
+                    return await this.uploadJson(`${this.uploadLimits.chunk_url}/${token}/${index}`, {
+                        method: 'POST',
+                        headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrfToken() },
+                        body,
+                    });
+                },
+                async uploadJson(url, options) {
+                    const response = await fetch(url, { credentials: 'same-origin', ...options });
+
+                    if (!response.ok) {
+                        throw new Error(`upload request failed with ${response.status}`);
+                    }
+
+                    return await response.json();
+                },
+                /**
+                 * The token the `web` middleware wants. From the page's own meta
+                 * tag, with Livewire's copy behind it — a Filament panel renders
+                 * one, but a host embedding the explorer in its own layout may
+                 * not.
+                 */
+                csrfToken() {
+                    const meta = document.querySelector('meta[name="csrf-token"]');
+
+                    return meta?.getAttribute('content')
+                        || window.livewireScriptConfig?.csrf
+                        || '';
+                },
+                /**
+                 * Commits a folder upload's relative paths before the files land,
+                 * so they are on the component in the same order.
+                 */
+                async withPaths(paths, send) {
+                    if (paths) await this.$wire.set('uploadRelativePaths', paths);
+
+                    return await send();
                 },
                 /**
                  * Focuses an input this component is about to render.

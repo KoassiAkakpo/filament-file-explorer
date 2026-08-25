@@ -23,6 +23,13 @@
                 refreshInterval: {{ $this->refreshInterval() }},
                 componentId: @js($this->getId()),
                 translations: @js($i18n),
+                {{-- What one request can carry and what a file may weigh, so the
+                     browser can refuse a file before sending a byte of it and
+                     name the number rather than showing a shrug. Static for the
+                     life of the request, like the abilities and the strings
+                     beside it — nothing here changes, which is what keeps this
+                     attribute out of the way of Livewire's re-render. --}}
+                uploadLimits: @js($this->uploadLimits()),
             })"
             x-on:livewire-upload-start="onUploadStart()"
             x-on:livewire-upload-finish="onUploadFinish()"

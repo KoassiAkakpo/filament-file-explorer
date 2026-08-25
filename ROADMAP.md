@@ -133,11 +133,18 @@ Settled: a **lineage** rather than a name or an id, minted once and never rewrit
 
 Two consequences worth stating plainly. Versions **count against the quota**, exactly like trashed files: they sit on the disk until something purges them, and an allowance that stopped counting them would be a way over the cap. And the description and the tags now **follow the file onto the new row** — replacing quietly dropped both before, and keeping the old row alive would have stranded them somewhere unreachable instead, which is worse.
 
+### ~~Chunked and direct-to-S3 uploads~~ — done
+
+`upload.max_size_kb` defaulted to 50 MB and none of it was reachable. **Five** ceilings stacked and the lowest won: ours, Media Library's 10 MB, Livewire's 12 MB, and PHP's `upload_max_filesize` (2 MB) and `post_max_size` (8 MB). So the honest default was 2 MB against a promise of 50, and going over it failed with whichever spoke first — a 422 the page rendered as "upload failed", or nothing at all when the web server dropped the body before PHP saw it. Nothing on screen ever named a number.
+
+`Support\UploadLimits` is now the single reader of all five, and the split it makes is the design: three cap a *request*, two cap a *file*. Slicing removes the first three from the answer, because no request carries a whole file.
+
+Two things settled it. The slice transport is a **transport** — it ends by writing exactly the temporary file Livewire's own endpoint writes and hands the browser's reference to Livewire's own `_finishUpload`, so `updatedFiles()` runs unchanged rather than gaining a second write path. And it engages **only where it has something to cover**, so an upload that already worked keeps taking exactly the path it took before; the failure mode of a new transport is that it breaks the old one.
+
+Direct-to-storage turned out to be repair rather than feature. `uploadMultiple` throws outright on a remote temporary disk, and the JS called it unconditionally — so on a host configured for S3 the upload button did nothing at all. Then `getRealPath()` answers with an S3 key, which `FileAdder` runs `is_file()` on, so storing a successfully-received upload failed. Both fixed; the staged local copy also keeps the mime type sniffed from bytes rather than read from a `Content-Type` the browser chose, which `UploadRules`, the kind filter and the type sort all depend on.
+
 ## Still after 1.0 — additive, and none of it blocking
 
-Neither of these changes anything a host app has written against, which is why neither had to happen first.
-
-- **Chunked and direct-to-S3 uploads.** `upload.max_size_kb` defaults to 50 MB, but the real ceiling is the host's `post_max_size`. This is what unblocks video and large media.
 - **PDF and video thumbnails, opt-in.** Deliberately absent today because they need Imagick or ffmpeg on the host and a failing generator costs more than the icon already drawn. Worth offering behind an explicit flag — never by default.
 
 ## Out of scope
@@ -149,6 +156,9 @@ Neither of these changes anything a host app has written against, which is why n
 
 - With the trash **off**, a folder purged by another session while a user stands in it leaves Livewire unable to restore the model at all, and the component fails until the page is reloaded. Soft-deleted folders take the fallback correctly.
 - The breadcrumb calls `navigateToBreadcrumb()` straight from its handler rather than through the JS `enterFolder()`, so a debounced selection sync could in principle land behind it. `setSelection()` narrowing to the listing catches the consequence, so what is left is a redundant round trip rather than a wrong selection.
+- A real S3 round trip is not covered by the suite: Livewire hardcodes `tmp-for-tests` as its temporary disk while tests run, so the component cannot be driven end to end against a remote one. What is covered is the staging seam and the mime-sniffing guarantee, against a disk built to have S3's shape.
+- Slicing requires a local temporary disk, because Flysystem has no append and `Storage::append()` joins with a newline. Storing each slice as its own object and concatenating at the end would work anywhere, at the cost of one more full read and write; not done, because the case that needs it is a remote temporary disk, and that is already receiving the browser's bytes directly.
+- A sliced upload does not resume across a page reload. The token and its partial survive for `ttl_minutes`, so the pieces are there — what is missing is the browser remembering where it was.
 - A kept version cannot be downloaded or previewed, only restored. Reaching one through the media route would mean widening the containment check to accept a second collection, and that check is the sharpest edge in the package — a trashed file is not downloadable for the same reason. Restoring is lossless and reversible, so nothing is unreachable; it just takes two clicks rather than one.
 - A share link dies when the file it points at is replaced, because replacing writes a new media row. That was already true when replacing destroyed the old file; versions make the old row survive, so re-pointing the share at the new one is now at least *possible*. Not done, because a share is a link to a file at a moment and silently following the content forward is a decision, not a fix.
 - `pint` reports pre-existing style drift in `config/` and `resources/lang/` (strict types, import order). Worth clearing in one pass rather than file by file.

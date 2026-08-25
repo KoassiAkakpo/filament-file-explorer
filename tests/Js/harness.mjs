@@ -45,6 +45,10 @@ export function loadExplorer(options = {}) {
         // The stores really are shared between the two, which is what makes
         // the isolation worth asserting.
         Alpine: realm.Alpine,
+        /** Every HTTP request the slice transport made, in order. */
+        requests: realm.requests,
+        /** Replaces what those requests answer with. */
+        answerWith: realm.answerWith,
         /** Lets a scheduled long press elapse. Nothing fires without it. */
         runTimers: realm.runTimers,
         pending: () => realm.timers.length,
@@ -56,6 +60,33 @@ function createRealm() {
 
     const timers = [];
     let timerId = 0;
+
+    const requests = [];
+
+    // Answers every slice request as the controller would: the last one of a
+    // file carries the signed reference back. A test can replace it to make one
+    // fail.
+    let responder = (url) => {
+        if (url.includes('/begin')) {
+            return { token: 'T'.repeat(40), chunk_bytes: 4, chunks: 1 };
+        }
+
+        return { received: 1, chunks: 1, complete: true, path: 'signed:tmp-file' };
+    };
+
+    function realmFetch(url, options) {
+        requests.push({ url, method: options.method || 'GET', body: options.body });
+
+        const answer = responder(String(url), options, requests.length);
+
+        if (answer instanceof Error) return Promise.reject(answer);
+
+        if (answer && answer.status && answer.status >= 400) {
+            return Promise.resolve({ ok: false, status: answer.status, json: () => Promise.resolve({}) });
+        }
+
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(answer) });
+    }
 
     const stores = {};
     const Alpine = {
@@ -105,6 +136,20 @@ function createRealm() {
             elementFromPoint: () => null,
         },
         Alpine,
+        // The slice transport talks HTTP, so the realm has to. Recorded rather
+        // than mocked per test: what matters about a sliced upload is the
+        // sequence of requests it makes, and that only reads as a sequence if
+        // one place collects it.
+        fetch: (url, options = {}) => realmFetch(url, options),
+        FormData: class {
+            constructor() {
+                this.parts = [];
+            }
+
+            append(name, value, filename) {
+                this.parts.push([name, value, filename]);
+            }
+        },
         setInterval: () => 0,
         clearInterval: () => {},
         // Timers are queued, never fired on their own: the debounced selection
@@ -155,7 +200,17 @@ function createRealm() {
         }
     };
 
-    return { context, Alpine, spawned: 0, runTimers, timers };
+    return {
+        context,
+        Alpine,
+        spawned: 0,
+        runTimers,
+        timers,
+        requests,
+        answerWith(fn) {
+            responder = fn;
+        },
+    };
 }
 
 /**
@@ -196,7 +251,7 @@ function reactive(target) {
     return proxy;
 }
 
-function createExplorer(realm, { items = [], columns = 4, componentId = null, reuse = null, viewMode = 'grid' } = {}) {
+function createExplorer(realm, { items = [], columns = 4, componentId = null, reuse = null, viewMode = 'grid', uploadLimits = {}, abilities = null } = {}) {
     // Livewire gives every component on the page its own id, and the selection
     // is keyed by it — so the harness has to hand out distinct ones too, or two
     // explorers would look like one.
@@ -261,6 +316,38 @@ function createExplorer(realm, { items = [], columns = 4, componentId = null, re
             assertRawWire(this, wire);
             calls.push(['columnBack']);
         },
+        // The upload side. uploadMultiple is what Livewire offers and what the
+        // explorer always called; upload is the single-file one it has to use
+        // when the temporary disk is remote, because the other throws there.
+        uploadMultiple(name, files, finish, error, progress) {
+            assertRawWire(this, wire);
+            calls.push(['uploadMultiple', name, files.length]);
+            progress({ detail: { progress: 50 } });
+            finish();
+        },
+        upload(name, file, finish) {
+            assertRawWire(this, wire);
+            calls.push(['upload', name, file.name]);
+            finish();
+        },
+        uploadFolderId() {
+            assertRawWire(this, wire);
+            calls.push(['uploadFolderId']);
+
+            return Promise.resolve(7);
+        },
+        set(property, value) {
+            assertRawWire(this, wire);
+            calls.push(['set', property, value]);
+
+            return Promise.resolve();
+        },
+        call(method, ...args) {
+            assertRawWire(this, wire);
+            calls.push(['call', method, ...args]);
+
+            return Promise.resolve();
+        },
     };
 
     const component = realm.context.window.FileExplorerUi({
@@ -268,7 +355,11 @@ function createExplorer(realm, { items = [], columns = 4, componentId = null, re
         rootFolderId: 1,
         componentId: id,
         viewMode,
-        abilities: { browse: true, copy: true, move: true, rename: true, delete: true, deleteFolder: true },
+        uploadLimits,
+        abilities: abilities ?? {
+            browse: true, copy: true, move: true, rename: true, delete: true, deleteFolder: true,
+            upload: true, mkdir: true,
+        },
     });
 
     Object.assign(component, {

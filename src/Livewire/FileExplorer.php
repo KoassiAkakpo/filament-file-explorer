@@ -52,7 +52,9 @@ use Koassi\FilamentFileExplorer\Support\Sharing;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\Uploader;
+use Koassi\FilamentFileExplorer\Support\UploadLimits;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
+use Koassi\FilamentFileExplorer\Support\Uploads;
 use Koassi\FilamentFileExplorer\Support\Versions;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -60,6 +62,7 @@ use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
 use Spatie\Image\Exceptions\CouldNotLoadImage;
+use Spatie\MediaLibrary\MediaCollections\Exceptions\FileIsTooBig;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class FileExplorer extends Component
@@ -2852,6 +2855,36 @@ class FileExplorer extends Component
     }
 
     /**
+     * What the browser needs to know before it starts sending bytes.
+     *
+     * The URLs are built here rather than in the view because they carry the
+     * scope key, and a route name is not something a template should have to
+     * know twice. They are absent when the transport is not in use, which is how
+     * the JS decides — one answer, from the side that owns it, instead of the
+     * page guessing from a set of numbers.
+     *
+     * @return array<string, mixed>
+     */
+    public function uploadLimits(): array
+    {
+        $limits = UploadLimits::forBrowser();
+
+        $limits['begin_url'] = $limits['chunked']
+            ? route('filament-file-explorer.upload.begin', ['scopeKey' => $this->scopeKey])
+            : null;
+
+        // A base rather than a route per slice: the token and the index are only
+        // known once `begin` has answered, and a round trip to learn a URL whose
+        // shape we already know would be one per slice. Same shape as
+        // mediaUrlBase, which the view has always passed this way.
+        $limits['chunk_url'] = $limits['chunked']
+            ? url((string) config('filament-file-explorer.upload.chunk.routes.prefix', 'file-explorer/upload').'/chunk')
+            : null;
+
+        return $limits;
+    }
+
+    /**
      * Nested folder tree for the explorer sidebar — root is the primary folder.
      *
      * @return list<array{id:int,name:string,primary?:bool,children:list<array>}>
@@ -3105,6 +3138,13 @@ class FileExplorer extends Component
         $replaced = 0;
         $skipped = [];
 
+        // Refused for what they are rather than for their name: a format the
+        // bytes turned out not to match, and a file past Media Library's own
+        // ceiling. Reported once for the action, like the quota, rather than
+        // once per file.
+        $refusedFormat = [];
+        $refusedTooBig = 0;
+
         $paths = $this->uploadRelativePaths;
         $this->uploadRelativePaths = [];
         $this->uploadCreatedFolders = 0;
@@ -3152,115 +3192,159 @@ class FileExplorer extends Component
                 }
             }
 
-            // Whether the file being replaced is kept behind the new one. When
-            // it is, its bytes are not freed — they sit in the versions
-            // collection until a prune or a delete takes them — so the whole
-            // incoming size counts, not the difference.
-            $keepingVersion = $replacing !== null && Versions::enabled();
-
-            // Checked before anything is written, and after the conflict policy
-            // is known: a replacement that really destroys what it replaces frees
-            // what that took, so only the difference counts against the quota.
-            $incoming = (int) ($file->getSize() ?: 0) - ($keepingVersion ? 0 : (int) ($replacing->size ?? 0));
-
-            if (! app(Quota::class)->reserve($this->rootFolderId, $incoming)) {
-                $this->quotaRefused++;
-
-                continue;
-            }
-
-            if ($replacing !== null && ! $keepingVersion) {
-                $replacedId = (int) $replacing->id;
-                $replacedName = (string) $replacing->name;
-                $replacedFileName = (string) $replacing->file_name;
-                $replacedSize = (int) $replacing->size;
-
-                $replacing->delete();
-                $replaced++;
-
-                // With versioning off, replacing destroys the old file outright,
-                // trash or no trash: a listener has to hear that as a deletion
-                // of its own.
-                event(new FileDeleted(
-                    $this->scopeKey,
-                    $this->rootFolderId,
-                    $actor,
-                    $replacedId,
-                    $replacedName,
-                    $replacedFileName,
-                    (int) $folder->id,
-                    $replacedSize,
-                    purgedFromTrash: false,
-                ));
-            }
-
-            $stored = null;
+            // The bytes, wherever the browser put them: untouched when the
+            // temporary upload is a local file, staged into one when the browser
+            // PUT it straight to storage. One `finally` below owns the cleanup,
+            // which is why the rest of this is inside a try — the alternative is
+            // an unlink at each of the four ways out of this iteration, and this
+            // package has learned what happens to a side effect that has to be
+            // remembered at every branch.
+            [$readable, $staged] = Uploads::readable($file);
 
             try {
-                $stored = $folder
-                    ->addMedia($file)
-                    ->usingName($label)
-                    ->usingFileName($safe)
-                    ->withCustomProperties([
-                        'user_id' => $actor?->getAuthIdentifier(),
-                        'uploaded_by_type' => $actor ? $actor::class : null,
-                        'uploaded_by_id' => $actor?->getAuthIdentifier(),
-                    ])
-                    ->toMediaCollection(UploadRules::collection());
-            } catch (CouldNotLoadImage $e) {
-                // Only ever thrown while generating the thumbnail, which runs
-                // after the row and the original are written — so the upload has
-                // in fact succeeded. An image GD refuses to decode must not lose
-                // it; the media route serves the original when the conversion is
-                // missing.
-                report($e);
+                // The upload rule, run again — on bytes this time. For a local
+                // upload this is the same object the validator already saw and
+                // so necessarily the same answer, costing nothing. For a file
+                // the browser PUT straight to storage it is the only check that
+                // is not reading a `Content-Type` the client chose: the mime type
+                // decides what the kind filter matches, how the type sort orders,
+                // and whether a format the config refuses gets in.
+                if (! UploadRules::isAllowedUpload($readable)) {
+                    $refusedFormat[] = $original;
 
-                $stored = $this->mediaJustAdded($folder, $safe);
-            }
+                    continue;
+                }
 
-            // Set aside *after* the new row is written, which is the whole
-            // difference between this and the delete above: an upload that
-            // throws leaves the file that was there exactly where it was. The
-            // two rows share a file name for the length of this statement, and
-            // that costs nothing — each media row owns a directory of its own on
-            // the disk, and no other request can see between the two writes.
-            if ($keepingVersion && $stored instanceof Media && $replacing !== null) {
-                $versions = app(Versions::class);
-                $lineage = $versions->setAside($replacing);
+                // Whether the file being replaced is kept behind the new one.
+                // When it is, its bytes are not freed — they sit in the versions
+                // collection until a prune or a delete takes them — so the whole
+                // incoming size counts, not the difference.
+                $keepingVersion = $replacing !== null && Versions::enabled();
 
-                if ($lineage !== null) {
-                    $versions->register($stored, $lineage);
+                // Checked before anything is written, and after the conflict
+                // policy is known: a replacement that really destroys what it
+                // replaces frees what that took, so only the difference counts
+                // against the quota.
+                $incoming = (int) ($readable->getSize() ?: 0) - ($keepingVersion ? 0 : (int) ($replacing->size ?? 0));
 
-                    // The description and the tags follow the file, not the row.
-                    // Replacing writes a new media id, so without this the
-                    // `replace` policy dropped both — and with versions keeping
-                    // the old row alive it would have stranded them on a row
-                    // nothing on any screen can reach, which is worse.
-                    app(Annotations::class)->moveItem(
-                        Annotations::FILE,
-                        (int) $replacing->id,
-                        (int) $stored->id,
-                    );
+                if (! app(Quota::class)->reserve($this->rootFolderId, $incoming)) {
+                    $this->quotaRefused++;
 
-                    $versions->prune($lineage);
+                    continue;
+                }
+
+                if ($replacing !== null && ! $keepingVersion) {
+                    $replacedId = (int) $replacing->id;
+                    $replacedName = (string) $replacing->name;
+                    $replacedFileName = (string) $replacing->file_name;
+                    $replacedSize = (int) $replacing->size;
+
+                    $replacing->delete();
                     $replaced++;
 
-                    event(new FileVersioned(
+                    // With versioning off, replacing destroys the old file
+                    // outright, trash or no trash: a listener has to hear that
+                    // as a deletion of its own.
+                    event(new FileDeleted(
                         $this->scopeKey,
                         $this->rootFolderId,
                         $actor,
-                        $stored,
-                        (int) $replacing->id,
-                        $lineage,
+                        $replacedId,
+                        $replacedName,
+                        $replacedFileName,
+                        (int) $folder->id,
+                        $replacedSize,
+                        purgedFromTrash: false,
                     ));
                 }
-            }
 
-            if ($stored instanceof Media) {
-                event(new FileUploaded($this->scopeKey, $this->rootFolderId, $actor, $stored, $folder));
-            }
+                $stored = null;
 
-            $uploaded++;
+                try {
+                    $stored = $folder
+                        ->addMedia($readable)
+                        ->usingName($label)
+                        ->usingFileName($safe)
+                        ->withCustomProperties([
+                            'user_id' => $actor?->getAuthIdentifier(),
+                            'uploaded_by_type' => $actor ? $actor::class : null,
+                            'uploaded_by_id' => $actor?->getAuthIdentifier(),
+                        ])
+                        ->toMediaCollection(UploadRules::collection());
+                } catch (CouldNotLoadImage $e) {
+                    // Only ever thrown while generating the thumbnail, which
+                    // runs after the row and the original are written — so the
+                    // upload has in fact succeeded. An image GD refuses to decode
+                    // must not lose it; the media route serves the original when
+                    // the conversion is missing.
+                    report($e);
+
+                    $stored = $this->mediaJustAdded($folder, $safe);
+                } catch (FileIsTooBig $e) {
+                    // Media Library's own ceiling, which is 10 MB by default and
+                    // is neither ours nor PHP's. Caught rather than left to
+                    // become a 500: UploadLimits reports it and the browser
+                    // refuses past it, so reaching here means the two disagree —
+                    // a config changed mid-session, or someone went around the
+                    // page — and an upload is not the place to answer that with
+                    // a stack trace.
+                    report($e);
+
+                    $refusedTooBig++;
+
+                    continue;
+                }
+
+                // Set aside *after* the new row is written, which is the whole
+                // difference between this and the delete above: an upload that
+                // throws leaves the file that was there exactly where it was.
+                // The two rows share a file name for the length of this
+                // statement, and that costs nothing — each media row owns a
+                // directory of its own on the disk, and no other request can see
+                // between the two writes.
+                if ($keepingVersion && $stored instanceof Media && $replacing !== null) {
+                    $versions = app(Versions::class);
+                    $lineage = $versions->setAside($replacing);
+
+                    if ($lineage !== null) {
+                        $versions->register($stored, $lineage);
+
+                        // The description and the tags follow the file, not the
+                        // row. Replacing writes a new media id, so without this
+                        // the `replace` policy dropped both — and with versions
+                        // keeping the old row alive it would have stranded them
+                        // on a row nothing on any screen can reach, which is
+                        // worse.
+                        app(Annotations::class)->moveItem(
+                            Annotations::FILE,
+                            (int) $replacing->id,
+                            (int) $stored->id,
+                        );
+
+                        $versions->prune($lineage);
+                        $replaced++;
+
+                        event(new FileVersioned(
+                            $this->scopeKey,
+                            $this->rootFolderId,
+                            $actor,
+                            $stored,
+                            (int) $replacing->id,
+                            $lineage,
+                        ));
+                    }
+                }
+
+                if ($stored instanceof Media) {
+                    event(new FileUploaded($this->scopeKey, $this->rootFolderId, $actor, $stored, $folder));
+                }
+
+                $uploaded++;
+            } finally {
+                if ($staged !== null) {
+                    @unlink($staged);
+                }
+            }
         }
 
         $this->reset('files');
@@ -3293,6 +3377,24 @@ class FileExplorer extends Component
                 ->warning()
                 ->title(trans_choice('filament-file-explorer::file-explorer.upload_skipped', count($skipped)))
                 ->body(implode(', ', array_slice($skipped, 0, 5)))
+                ->send();
+        }
+
+        if ($refusedFormat !== []) {
+            Notification::make()
+                ->danger()
+                ->title(trans_choice('filament-file-explorer::file-explorer.upload_refused_format', count($refusedFormat)))
+                ->body(implode(', ', array_slice($refusedFormat, 0, 5)))
+                ->send();
+        }
+
+        if ($refusedTooBig > 0) {
+            Notification::make()
+                ->danger()
+                ->title(trans_choice('filament-file-explorer::file-explorer.upload_refused_size', $refusedTooBig))
+                ->body(__('filament-file-explorer::file-explorer.upload_limit', [
+                    'limit' => UploadLimits::forBrowser()['limit_label'] ?? '—',
+                ]))
                 ->send();
         }
 
@@ -3387,6 +3489,23 @@ class FileExplorer extends Component
         $this->uploadCreatedFolders++;
 
         return $folder;
+    }
+
+    /**
+     * Where an upload started now would land.
+     *
+     * Read by the browser before a sliced upload, because `begin` proves
+     * containment on a folder id and the id has to be the one this component
+     * would actually use — a drop onto a folder sets `uploadTargetFolderId`, and
+     * guessing "the root" instead would make the containment walk prove that the
+     * root sits under itself, which is always true and therefore worth nothing.
+     *
+     * Reading it does not consume it: `updatedFiles()` is still the only place
+     * that clears it.
+     */
+    public function uploadFolderId(): int
+    {
+        return (int) ($this->uploadTargetFolderId ?? $this->currentFolder?->id ?? $this->rootFolderId);
     }
 
     public function prepareUploadToFolder(int $folderId): void
