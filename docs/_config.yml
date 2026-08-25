@@ -1,0 +1,43 @@
+title: Filament File Explorer
+description: Finder-style file explorer for Filament v4/v5, powered by Spatie Media Library.
+url: https://koassiakakpo.github.io
+baseurl: /filament-file-explorer
+
+repository: KoassiAkakpo/filament-file-explorer
+github_url: https://github.com/KoassiAkakpo/filament-file-explorer
+packagist_url: https://packagist.org/packages/koassi/filament-file-explorer
+package: koassi/filament-file-explorer
+
+# Pretty permalinks, so a page is /files/trash/ rather than /files/trash.html.
+permalink: pretty
+
+markdown: kramdown
+highlighter: rouge
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  hard_wrap: false
+
+# Both are on by default under GitHub Pages; named so the site builds the same
+# way locally. relative_links is what lets a page link to ../files/trash.md and
+# have it work on GitHub *and* here.
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+
+relative_links:
+  enabled: true
+  collections: false
+
+# Every page takes the same shell; the sidebar comes from _data/nav.yml.
+defaults:
+  - scope:
+      path: ''
+    values:
+      layout: doc
+
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - vendor

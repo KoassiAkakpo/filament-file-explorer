@@ -1,0 +1,84 @@
+# The sidebar, and the only place it is defined.
+#
+# Order here is the order on screen and the order the prev/next links walk, so
+# there is nothing to keep in step: a page added to this file appears in both.
+# `url` is a site path, resolved through `relative_url` in the layout.
+
+- title: Introduction
+  pages:
+    - title: Overview
+      url: /
+    - title: Installation
+      url: /getting-started/installation/
+    - title: Upgrading
+      url: /getting-started/upgrading/
+
+- title: Setting it up
+  pages:
+    - title: The standalone page
+      url: /getting-started/standalone-page/
+    - title: Choosing the root folder
+      url: /getting-started/root-resolvers/
+    - title: Record-scoped pages
+      url: /getting-started/record-scoped-pages/
+
+- title: Browsing
+  pages:
+    - title: Views
+      url: /browsing/views/
+    - title: Large libraries
+      url: /browsing/large-libraries/
+    - title: The inspector
+      url: /browsing/inspector/
+    - title: Keyboard and touch
+      url: /browsing/keyboard-and-touch/
+    - title: Preview and deletion
+      url: /browsing/preview/
+    - title: Live updates
+      url: /browsing/live-updates/
+
+- title: Files
+  pages:
+    - title: Where files land
+      url: /files/where-files-land/
+    - title: Uploads
+      url: /files/uploads/
+    - title: Large uploads
+      url: /files/large-uploads/
+    - title: Thumbnails
+      url: /files/thumbnails/
+    - title: Trash
+      url: /files/trash/
+    - title: File versions
+      url: /files/versions/
+    - title: Quotas
+      url: /files/quotas/
+    - title: Share links
+      url: /files/share-links/
+
+- title: Organising
+  pages:
+    - title: Tags and descriptions
+      url: /organising/tags-and-descriptions/
+
+- title: Integrating
+  pages:
+    - title: Authorization
+      url: /integrating/authorization/
+    - title: The form field
+      url: /integrating/picker/
+    - title: Events
+      url: /integrating/events/
+    - title: Your own folder model
+      url: /integrating/folder-model/
+
+- title: Reference
+  pages:
+    - title: Configuration
+      url: /reference/configuration/
+    - title: Commands
+      url: /reference/commands/
+    - title: Theming
+      url: /reference/theming/
+    - title: Contributing
+      url: /reference/contributing/

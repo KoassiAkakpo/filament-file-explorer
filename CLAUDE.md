@@ -445,6 +445,19 @@ They are declared in `resources/css/file-explorer.css` and **not** as `min-h-0` 
 - Selection is drawn with the accent; **grey means the trail**, not the selection — `.fe-column__row.is-path` against `.fe-column__row.is-selected`, which is the distinction the Finder makes. The one solid fill is `.fe-label--selected`: the icon view's label pill is solid accent with white text, because that is the cue the Finder makes unmistakable, while the well behind the icon stays translucent since a thumbnail is under it.
 - The toolbar is `flex-wrap: nowrap` in a column that shrinks by 300px when the inspector opens, so **something in it has to give**: the selection count truncates and the search narrows (`min-w-0`, and `min-width: 0` on the input, which otherwise keeps an intrinsic width). Putting `shrink-0` back on `.fe-toolbar__end` makes the toolbar overflow its column, and since the search sits in a `position: relative` wrapper, what overflows paints *over* the inspector instead of under it.
 
+## Documentation
+
+[README.md](README.md) is deliberately short — install, the two modes, a feature table linking out, license. The reference lives in [docs/](docs/), a Jekyll site GitHub Pages builds from the `docs/` directory on `main`: no `package.json` and no build step, the same stance the package takes for its own assets.
+
+Two things about it are load-bearing:
+
+- **[docs/_data/nav.yml](docs/_data/nav.yml) is the only definition of the sidebar**, and the prev/next links in [docs/_layouts/doc.html](docs/_layouts/doc.html) walk the same flat list built from it. A page added to the tree and not to that file is unreachable; one in that file with no page 404s. Nothing else needs updating.
+- **The stylesheet is hand-written rather than a remote theme.** A `remote_theme` is a version to drift, and the accent here is `--fe-accent`'s own value so the docs look like the thing they document.
+
+Pages carry only `title:` and `description:` in their front matter; the H1 is in the markdown. Internal links are relative and end in `.md` — `jekyll-relative-links` rewrites them, which is what makes a page read correctly on GitHub *and* on the site. Anchors follow kramdown's rule (punctuation dropped, spaces to hyphens), so `` `file-explorer:demo` `` is `#file-explorerdemo` and not `#file-explorer-demo`.
+
+There is no link checker in CI. `docs/` has 29 pages and the cross-references are dense, so verify with a script over the tree — front matter present, every page in `nav.yml` and every `nav.yml` url a page, every relative link and anchor resolving — rather than by reading.
+
 ## Foreign agent configs
 
 `~/.codex/config.toml` and `~/.gemini/settings.json` exist on this machine. If you want their MCP servers, slash commands, subagents, skills, or instructions brought into Claude Code, reply `/import` to scan and list what's importable, then `/import --yes=<digest>` (the scan output names the digest) to apply the user-level items.
