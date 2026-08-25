@@ -34,6 +34,7 @@ use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
+use Koassi\FilamentFileExplorer\Support\Versions;
 use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -87,6 +88,10 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
         // next request will be drawing from a different folder.
         $this->app->scoped(Annotations::class);
 
+        // Scoped too: it memoises one file's history, which the inspector reads
+        // on every render while its panel is open.
+        $this->app->scoped(Versions::class);
+
         // Stateless, so a singleton is enough: it reads and writes rows and
         // memoises nothing.
         $this->app->singleton(MediaScope::class);
@@ -137,6 +142,39 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
 
         $this->registerRoutes();
         $this->forgetAnnotationsOfDeletedItems();
+        $this->forgetVersionsOfDeletedFiles();
+    }
+
+    /**
+     * A file's history dies with the file.
+     *
+     * A listener rather than a call at each delete site, for the same reason the
+     * annotations use one: the explorer's delete, the trash purge, the files
+     * table and the purge command are four doors, and one that forgot would
+     * leave versions on the disk that no screen in the panel accounts for and no
+     * quota could explain.
+     *
+     * Registered separately from the annotations listener rather than folded
+     * into it: that one deliberately ignores rows outside the live and trash
+     * collections, and a version sits in neither.
+     */
+    protected function forgetVersionsOfDeletedFiles(): void
+    {
+        Media::deleted(function (Media $media): void {
+            // Ours first, and not as an optimisation: a line is keyed by media
+            // id, so a row of some other model with a colliding id would
+            // otherwise take one of our files' history with it.
+            $ours = $media->model_type === FolderModel::morphClass()
+                && in_array($media->collection_name, [
+                    UploadRules::collection(),
+                    Trash::collection(),
+                    Versions::collection(),
+                ], true);
+
+            if ($ours) {
+                app(Versions::class)->forgetMedia((int) $media->id);
+            }
+        });
     }
 
     /**

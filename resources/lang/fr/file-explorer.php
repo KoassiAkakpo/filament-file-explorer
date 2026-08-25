@@ -142,6 +142,18 @@ return [
         'filter' => 'Filtrer sur cette étiquette',
     ],
 
+    'versions' => [
+        'title' => 'Versions précédentes',
+        'label' => 'Version :number',
+        'current' => 'Version actuelle',
+        'restore' => 'Restaurer cette version',
+        'restored' => 'Version restaurée',
+        'unavailable' => 'Cette version ne peut pas être restaurée : le fichier n’est plus dans ce dossier.',
+        'none' => 'Aucune version précédente',
+        'replaced_on' => 'Remplacée le :date',
+        'kept' => 'La dernière version est conservée.|Les :count dernières versions sont conservées.',
+    ],
+
     'description' => [
         'label' => 'Description',
         'placeholder' => 'Ajouter une description',

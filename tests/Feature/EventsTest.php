@@ -266,7 +266,13 @@ it('marks a purge as coming from the trash', function (): void {
 });
 
 it('reports the file a replacing upload destroyed', function (): void {
-    config(['filament-file-explorer.upload.on_conflict' => 'replace']);
+    config([
+        'filament-file-explorer.upload.on_conflict' => 'replace',
+        // Without this the replacement keeps the old file, and FileVersioned is
+        // what a listener hears instead — see FileVersionsTest. A deletion event
+        // is only honest when something really was deleted.
+        'filament-file-explorer.versions.enabled' => false,
+    ]);
 
     feEvComponent()->set('files', [UploadedFile::fake()->create('same.pdf', 12, 'application/pdf')]);
     $first = Media::query()->where('file_name', 'same.pdf')->firstOrFail();

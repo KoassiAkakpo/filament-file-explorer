@@ -149,6 +149,10 @@ it('counts only the difference when a file is replaced', function (): void {
     config([
         'filament-file-explorer.quota.bytes' => 30 * 1024,
         'filament-file-explorer.upload.on_conflict' => 'replace',
+        // Off, because the difference is only what counts when the file being
+        // replaced is really destroyed. Kept as a version it frees nothing, and
+        // the whole incoming size counts — asserted in FileVersionsTest.
+        'filament-file-explorer.versions.enabled' => false,
     ]);
 
     $root = feQuRoot();

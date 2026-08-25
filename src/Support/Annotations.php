@@ -373,6 +373,40 @@ final class Annotations
         $this->forget($itemType, $itemId);
     }
 
+    /**
+     * Carries an item's description and tags over to another row.
+     *
+     * One caller: replacing a file writes a *new* media row, so without this the
+     * `replace` policy silently dropped the description and the tags of the file
+     * it replaced — and once versions kept the old row alive, it dropped them
+     * onto a row nobody can reach instead, which is worse. A lineage is one file,
+     * and what was written about it goes on being true of it.
+     *
+     * The target is cleared first: the pivot is unique on (tag, type, id), so
+     * re-pointing onto a row that already carried the same tag would collide. In
+     * practice the target is a row created a moment ago and has nothing.
+     */
+    public function moveItem(string $itemType, int $fromId, int $toId): void
+    {
+        if (! self::isItemType($itemType) || $fromId === $toId) {
+            return;
+        }
+
+        $this->forgetItem($itemType, $toId);
+
+        DB::table(self::descriptionsTable())
+            ->where('item_type', $itemType)
+            ->where('item_id', $fromId)
+            ->update(['item_id' => $toId]);
+
+        DB::table(self::tagItemsTable())
+            ->where('item_type', $itemType)
+            ->where('item_id', $fromId)
+            ->update(['item_id' => $toId]);
+
+        $this->forget($itemType, $fromId)->forget($itemType, $toId);
+    }
+
     public function forget(string $itemType, int $itemId): self
     {
         unset($this->tagCache[$itemType.':'.$itemId]);

@@ -142,6 +142,18 @@ return [
         'filter' => 'Filter by this tag',
     ],
 
+    'versions' => [
+        'title' => 'Previous versions',
+        'label' => 'Version :number',
+        'current' => 'Current version',
+        'restore' => 'Restore this version',
+        'restored' => 'Version restored',
+        'unavailable' => 'That version cannot be restored: the file is no longer in this folder.',
+        'none' => 'No previous versions',
+        'replaced_on' => 'Replaced :date',
+        'kept' => 'The last version is kept.|The last :count versions are kept.',
+    ],
+
     'description' => [
         'label' => 'Description',
         'placeholder' => 'Add a description',

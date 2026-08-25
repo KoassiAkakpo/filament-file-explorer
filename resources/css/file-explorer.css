@@ -1642,6 +1642,87 @@ body.fe-is-dragging * {
   }
 }
 
+/* A file's history, in the inspector.
+
+   Styled like the annotation blocks above it rather than like the listing: it is
+   another panel of the same inspector, not a second set of rows to select. The
+   restore button carries the accent because it is the only thing here that acts,
+   and it takes it from the token like everything else — an accent written into a
+   utility class in the Blade would be a second definition of it. */
+.fe-versions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-top: 1px solid rgba(24, 24, 27, 0.08);
+  padding-top: 0.6rem;
+}
+.dark .fe-versions {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+.fe-versions__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fe-versions__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.04);
+  padding: 0.35rem 0.5rem;
+}
+.dark .fe-versions__item {
+  background: rgba(255, 255, 255, 0.06);
+}
+.fe-versions__meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+.fe-versions__name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #3f3f46;
+}
+.dark .fe-versions__name {
+  color: #e4e4e7;
+}
+.fe-versions__detail {
+  font-size: 10px;
+  line-height: 1.35;
+  color: #71717a;
+}
+.dark .fe-versions__detail {
+  color: #a1a1aa;
+}
+.fe-versions__restore {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  height: 1.5rem;
+  width: 1.5rem;
+  border-radius: 9999px;
+  color: var(--fe-accent-text);
+}
+.fe-versions__restore:hover {
+  background: rgba(var(--fe-accent), 0.14);
+}
+.fe-versions__restore:disabled {
+  opacity: 0.5;
+}
+.fe-versions__hint {
+  font-size: 10px;
+  line-height: 1.4;
+  color: #a1a1aa;
+}
+
 @keyframes fe-fade-in {
   from {
     opacity: 0;

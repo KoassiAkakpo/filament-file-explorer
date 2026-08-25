@@ -21,6 +21,8 @@ use Koassi\FilamentFileExplorer\Events\FileRestored;
 use Koassi\FilamentFileExplorer\Events\FileShared;
 use Koassi\FilamentFileExplorer\Events\FileTrashed;
 use Koassi\FilamentFileExplorer\Events\FileUploaded;
+use Koassi\FilamentFileExplorer\Events\FileVersioned;
+use Koassi\FilamentFileExplorer\Events\FileVersionRestored;
 use Koassi\FilamentFileExplorer\Events\FolderAnnotated;
 use Koassi\FilamentFileExplorer\Events\FolderCopied;
 use Koassi\FilamentFileExplorer\Events\FolderCreated;
@@ -51,6 +53,7 @@ use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
 use Koassi\FilamentFileExplorer\Support\Trash;
 use Koassi\FilamentFileExplorer\Support\Uploader;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
+use Koassi\FilamentFileExplorer\Support\Versions;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -128,6 +131,23 @@ class FileExplorer extends Component
 
     /** @var array{type:?string,id:?int,name:?string,size:?string,path:?string,mime:?string,permissions:?string,created:?string,updated:?string,extra:?string,preview:?string,icon?:string}|null */
     public ?array $infoItem = null;
+
+    /**
+     * The versions behind the file the inspector is describing, newest first.
+     *
+     * Read into the component rather than queried from the view, like the tags
+     * and the description beside it: a render must not decide what a panel is
+     * allowed to know.
+     *
+     * Locked: nothing on the server reads it, and the panel it draws makes a
+     * claim about a file's history — which is not a claim the client gets to
+     * author. Note $infoItem beside it is *not* locked; that is pre-existing and
+     * separate.
+     *
+     * @var list<array<string, mixed>>
+     */
+    #[Locked]
+    public array $versions = [];
 
     public bool $showInfoModal = false;
 
@@ -1696,7 +1716,7 @@ class FileExplorer extends Component
                     'updated' => '—',
                     'extra' => null,
                 ];
-                $this->loadAnnotation();
+                $this->loadInspectorState();
                 $this->showInfoModal = true;
 
                 return;
@@ -1722,7 +1742,7 @@ class FileExplorer extends Component
                 'extra' => trans_choice('filament-file-explorer::file-explorer.items_count', $items),
                 'delete_note' => $this->folderDeleteNote($folder),
             ];
-            $this->loadAnnotation();
+            $this->loadInspectorState();
             $this->showInfoModal = true;
 
             return;
@@ -1753,7 +1773,7 @@ class FileExplorer extends Component
                 'delete_note' => $deleteState['reason'],
                 'added_by' => app(Uploader::class)->label($media),
             ];
-            $this->loadAnnotation();
+            $this->loadInspectorState();
             $this->showInfoModal = true;
 
             return;
@@ -1780,7 +1800,7 @@ class FileExplorer extends Component
             'extra' => trans_choice('filament-file-explorer::file-explorer.items_count', $items),
             'delete_note' => $this->folderDeleteNote($folder),
         ];
-        $this->loadAnnotation();
+        $this->loadInspectorState();
         $this->showInfoModal = true;
     }
 
@@ -1820,6 +1840,7 @@ class FileExplorer extends Component
         $this->infoItem = null;
         $this->description = '';
         $this->tags = [];
+        $this->versions = [];
         $this->resetTagInput();
     }
 
@@ -1969,6 +1990,112 @@ class FileExplorer extends Component
         }
 
         return ['type' => $type, 'id' => $id];
+    }
+
+    /**
+     * Everything the inspector shows beside the row it describes.
+     *
+     * One call rather than one per panel at each of showInfo()'s four exits.
+     * This package has already paid for the other arrangement: nine places
+     * emptied the selection by hand and every one of them forgot refreshInfo(),
+     * which was the same bug nine times over. A second panel loaded at three of
+     * four branches would be the same shape of mistake.
+     */
+    protected function loadInspectorState(): void
+    {
+        $this->loadAnnotation();
+        $this->loadVersions();
+    }
+
+    /**
+     * The history of the file the panel is describing, or nothing at all.
+     *
+     * Nothing for a folder — a folder is not replaced, it is renamed — nothing
+     * for a multi-selection, and nothing when the ability is denied: the panel
+     * must not report that six versions exist to someone who may not read them.
+     */
+    protected function loadVersions(): void
+    {
+        $this->versions = [];
+
+        $id = $this->infoItem['id'] ?? null;
+
+        if (($this->infoItem['type'] ?? null) !== 'file' || ! is_int($id) || $id <= 0) {
+            return;
+        }
+
+        if (! Versions::enabled() || ! $this->ability('viewVersions')) {
+            return;
+        }
+
+        $this->versions = app(Versions::class)->history($id);
+    }
+
+    public function canRestoreVersion(): bool
+    {
+        return Versions::enabled() && $this->ability('restoreVersion');
+    }
+
+    /**
+     * Makes one of a file's earlier versions current again.
+     *
+     * The row that was current is not destroyed: it becomes the newest entry of
+     * the history, which is the same trade the replacement made in the first
+     * place. The selection moves to the restored row on purpose — it is a new
+     * media id, and leaving the selection on the one just set aside would leave
+     * the inspector describing a row that has left the listing, which
+     * refreshInfo() would then answer with a 403 rather than a panel.
+     */
+    public function restoreVersion(int $mediaId): void
+    {
+        abort_unless($this->ability('restoreVersion'), 403);
+
+        $versions = app(Versions::class);
+        $media = Media::query()->findOrFail($mediaId);
+
+        // Containment, with the collection named rather than defaulted. A
+        // version sits outside the explorer's collection deliberately, so
+        // assertMediaUnderRoot() refuses it — and the two other conditions it
+        // proves are exactly the ones that still have to hold here: the row is a
+        // folder's, and that folder is under this root.
+        abort_if(
+            app(MediaScope::class)->folderUnderRootInCollection($media, $this->rootFolderId, Versions::collection()) === null,
+            403,
+        );
+
+        // Read before the swap makes it the past.
+        $previousId = (int) ($versions->liveOf($mediaId)?->id ?? 0);
+        $restored = $versions->restore($media);
+
+        if ($restored === null) {
+            // The lineage has no live row to swap with: the file itself is in
+            // the trash, or gone. Restoring the file is the other screen's job,
+            // and doing it here would put back something the user deleted.
+            Notification::make()
+                ->warning()
+                ->title(__('filament-file-explorer::file-explorer.versions.unavailable'))
+                ->send();
+
+            return;
+        }
+
+        event(new FileVersionRestored(
+            $this->scopeKey,
+            $this->rootFolderId,
+            auth()->user(),
+            $restored,
+            $previousId,
+        ));
+
+        $this->currentFolder = $this->currentFolder->fresh(['children', 'parent']);
+        $this->afterMutation();
+        $this->replaceSelection([], [(int) $restored->id]);
+
+        Notification::make()
+            ->success()
+            ->title(__('filament-file-explorer::file-explorer.versions.restored'))
+            ->body(MediaLabel::display($restored))
+            ->send();
     }
 
     /**
@@ -2614,6 +2741,7 @@ class FileExplorer extends Component
         app(FolderTree::class)->flush();
         app(Quota::class)->flush();
         app(Annotations::class)->flush();
+        app(Versions::class)->flush();
     }
 
     /**
@@ -3024,10 +3152,16 @@ class FileExplorer extends Component
                 }
             }
 
+            // Whether the file being replaced is kept behind the new one. When
+            // it is, its bytes are not freed — they sit in the versions
+            // collection until a prune or a delete takes them — so the whole
+            // incoming size counts, not the difference.
+            $keepingVersion = $replacing !== null && Versions::enabled();
+
             // Checked before anything is written, and after the conflict policy
-            // is known: replacing a file frees what it took, so only the
-            // difference counts against the quota.
-            $incoming = (int) ($file->getSize() ?: 0) - (int) ($replacing->size ?? 0);
+            // is known: a replacement that really destroys what it replaces frees
+            // what that took, so only the difference counts against the quota.
+            $incoming = (int) ($file->getSize() ?: 0) - ($keepingVersion ? 0 : (int) ($replacing->size ?? 0));
 
             if (! app(Quota::class)->reserve($this->rootFolderId, $incoming)) {
                 $this->quotaRefused++;
@@ -3035,7 +3169,7 @@ class FileExplorer extends Component
                 continue;
             }
 
-            if ($replacing !== null) {
+            if ($replacing !== null && ! $keepingVersion) {
                 $replacedId = (int) $replacing->id;
                 $replacedName = (string) $replacing->name;
                 $replacedFileName = (string) $replacing->file_name;
@@ -3044,8 +3178,9 @@ class FileExplorer extends Component
                 $replacing->delete();
                 $replaced++;
 
-                // Replacing destroys the old file outright, trash or no trash:
-                // a listener has to hear that as a deletion of its own.
+                // With versioning off, replacing destroys the old file outright,
+                // trash or no trash: a listener has to hear that as a deletion
+                // of its own.
                 event(new FileDeleted(
                     $this->scopeKey,
                     $this->rootFolderId,
@@ -3081,6 +3216,44 @@ class FileExplorer extends Component
                 report($e);
 
                 $stored = $this->mediaJustAdded($folder, $safe);
+            }
+
+            // Set aside *after* the new row is written, which is the whole
+            // difference between this and the delete above: an upload that
+            // throws leaves the file that was there exactly where it was. The
+            // two rows share a file name for the length of this statement, and
+            // that costs nothing — each media row owns a directory of its own on
+            // the disk, and no other request can see between the two writes.
+            if ($keepingVersion && $stored instanceof Media && $replacing !== null) {
+                $versions = app(Versions::class);
+                $lineage = $versions->setAside($replacing);
+
+                if ($lineage !== null) {
+                    $versions->register($stored, $lineage);
+
+                    // The description and the tags follow the file, not the row.
+                    // Replacing writes a new media id, so without this the
+                    // `replace` policy dropped both — and with versions keeping
+                    // the old row alive it would have stranded them on a row
+                    // nothing on any screen can reach, which is worse.
+                    app(Annotations::class)->moveItem(
+                        Annotations::FILE,
+                        (int) $replacing->id,
+                        (int) $stored->id,
+                    );
+
+                    $versions->prune($lineage);
+                    $replaced++;
+
+                    event(new FileVersioned(
+                        $this->scopeKey,
+                        $this->rootFolderId,
+                        $actor,
+                        $stored,
+                        (int) $replacing->id,
+                        $lineage,
+                    ));
+                }
             }
 
             if ($stored instanceof Media) {

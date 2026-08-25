@@ -9,6 +9,7 @@ use Koassi\FilamentFileExplorer\Livewire\FileExplorer as FileExplorerComponent;
 use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\FileNames;
 use Koassi\FilamentFileExplorer\Support\UploadRules;
+use Koassi\FilamentFileExplorer\Support\Versions;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -74,6 +75,28 @@ it('numbers further collisions upwards', function (): void {
 
 it('replaces the existing file when configured to', function (): void {
     config(['filament-file-explorer.upload.on_conflict' => 'replace']);
+
+    $root = feUpRoot();
+
+    feUpload(feUpComponent());
+    $first = Media::query()->firstOrFail();
+
+    feUpload(feUpComponent());
+
+    // One file in the folder, whatever became of the one that was there —
+    // which is all this policy promises. Whether the old row is destroyed or
+    // kept as a version is the versions setting's business, and both are
+    // covered in FileVersionsTest.
+    expect(feUpFiles($root))->toBe([['report.pdf', 'report.pdf']])
+        ->and(Media::query()->find($first->id)?->collection_name)
+        ->toBe(Versions::collection());
+});
+
+it('destroys the file it replaces when versions are off', function (): void {
+    config([
+        'filament-file-explorer.upload.on_conflict' => 'replace',
+        'filament-file-explorer.versions.enabled' => false,
+    ]);
 
     $root = feUpRoot();
 

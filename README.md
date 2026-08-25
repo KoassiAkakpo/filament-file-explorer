@@ -424,6 +424,41 @@ Schedule::command('file-explorer:purge-trash --days=30')->daily();
 
 Upgrading an existing install adds a `deleted_at` column to the folders table, so run `php artisan migrate`.
 
+## File versions
+
+Uploading a file over one that is already there used to destroy what was there — the one place in the package where something was lost without passing through the trash. It is kept instead, and the Get Info inspector lists what is behind a file with a restore beside each version.
+
+```php
+// config/filament-file-explorer.php
+'upload' => [
+    'on_conflict' => 'replace',              // versioning only engages on this policy
+],
+
+'versions' => [
+    'enabled' => true,
+    'collection' => 'file-explorer-versions',
+    'keep' => 3,                             // the oldest past this is purged for good
+    'table' => 'file_explorer_file_versions',
+],
+```
+
+The default conflict policy is `rename`, which keeps both files under different names — so on a default install this does nothing at all. It is `replace` that this changes: from *destroys the old file* to *keeps the last three*.
+
+A few things follow from how it is built, and they are the useful ones to know:
+
+- **Versions count against the quota.** They sit on the disk until something purges them, exactly like trashed files. Which also means replacing a file no longer frees what it took: the whole incoming size counts, and an upload that does not fit is refused rather than putting the scope over its cap.
+- **A version is not a second way to download a file.** Its media row leaves the explorer's collection, so every listing, the flat files table and the media routes refuse it — the same mechanism, and the same reason, as a trashed file. Restoring is what brings an old version back.
+- **The history survives a rename and a move**, because what ties the rows together is a lineage minted once, not the folder or the file name.
+- **Restoring is reversible.** The row that was current becomes the newest entry of the history rather than being destroyed, so restoring the wrong version costs one more click and nothing else. The restored file keeps the name it goes by — restoring last week's content does not rename the file back to what it was called then.
+- **The description and the tags follow the file.** Replacing writes a new media row, and before this both were dropped on the floor.
+- **The whole history dies with the file.** Deleting it for good takes its versions with it; trashing it does not — a file has to come back with its history.
+
+Listeners hear `FileVersioned` when a replacement keeps the old file, and `FileVersionRestored` when one is made current again. `FileDeleted` is *not* fired for a replacement any more, and that is the point: nothing was deleted.
+
+Two new abilities, both inherited when your authorizer says nothing about them — `viewVersions` follows `getInfo`, and `restoreVersion` follows `upload`, since making a version current decides what the folder holds.
+
+Upgrading an existing install adds one table, so run `php artisan migrate`.
+
 ## Keyboard
 
 The listing is a `listbox`: it takes focus, and the items are options.
@@ -484,7 +519,7 @@ php artisan filament-file-explorer:make-authorizer
 FilamentFileExplorerPlugin::make()->authorizer(\App\Support\FileExplorerAuthorizer::class)
 ```
 
-`abilities()` returns eleven keys, and one you leave out counts as a denial. But the set can grow: nothing reads your array directly — `Support\Abilities` does, and an ability the explorer gains later that your implementation does not answer **inherits the one it is a variation of** rather than being read as a refusal. `share` follows `download`, so an authorizer written today keeps working and keeps meaning what you meant by it. Answer the new key yourself to have the last word:
+`abilities()` returns eleven keys, and one you leave out counts as a denial. But the set can grow: nothing reads your array directly — `Support\Abilities` does, and an ability the explorer gains later that your implementation does not answer **inherits the one it is a variation of** rather than being read as a refusal. `share` follows `download`, `annotate` follows `rename`, `viewVersions` follows `getInfo` and `restoreVersion` follows `upload` — so an authorizer written today keeps working and keeps meaning what you meant by it. Answer the new key yourself to have the last word:
 
 ```php
 public function abilities(string $scopeKey, int $rootFolderId): array
@@ -594,13 +629,15 @@ Event::listen(FileUploaded::class, ScanUpload::class);
 | `FolderAnnotated` | `folder`, `description`, `tags`, `previousDescription`, `previousTags` |
 | `FileShared` | `media`, `share` |
 | `ShareRevoked` | `share` |
+| `FileVersioned` | `media`, `versionedMediaId`, `lineage` |
+| `FileVersionRestored` | `media`, `replacedMediaId` |
 
 All of them carry `scopeKey`, `rootFolderId` and `actor` (nullable — a console command has none). The scope is on every event because it is the only way to tell two explorers apart: the same tree is reachable from a page and from a picker in a modal, and the per-user and per-tenant resolvers run the same code for every scope.
 
 Four things worth knowing about the shape:
 
 - **The deletions carry a snapshot, not a model.** By the time a listener runs the row is gone and the bytes are off the disk — which is also why `size` is on `FileDeleted`, as the last moment it can be known.
-- **`FileUploaded` fires per file**, so a multi-file upload fires several times, and an upload that replaces an existing file fires `FileDeleted` for what it destroyed.
+- **`FileUploaded` fires per file**, so a multi-file upload fires several times. An upload that replaces an existing file fires `FileVersioned` beside it, or `FileDeleted` when versioning is off — the difference being whether anything was actually destroyed.
 - **`FolderCopied` fires once** for the folder that was asked for, never per descendant — but each file the copy created does fire `FileCopied`, because every new file row is a new object to index or scan.
 - **An upload whose thumbnail failed still fires.** `CouldNotLoadImage` is thrown after the row and the original are written, so the file is there; the event would otherwise be missing exactly where an upload went half-wrong.
 

@@ -39,6 +39,28 @@ final class MediaScope
     }
 
     /**
+     * The same question about a row that is deliberately *not* in the explorer's
+     * collection: a kept version.
+     *
+     * The collection has to be named rather than defaulted, so widening this
+     * class cannot widen `folderUnderRoot()` by accident — the media routes, the
+     * share links and every action in the component go on requiring the live
+     * collection, and a trashed or versioned row stays unreachable through them.
+     * What changes here is only that the one caller that means to reach a version
+     * says so, and still proves the other two conditions.
+     */
+    public function folderUnderRootInCollection(Media $media, int $rootFolderId, string $collection): ?Folder
+    {
+        $folder = $this->explorerFolder($media, $collection);
+
+        if ($folder === null) {
+            return null;
+        }
+
+        return app(FolderTree::class)->isUnderRoot($folder, $rootFolderId) ? $folder : null;
+    }
+
+    /**
      * The same, for a scope that offers several roots. Still one root at a time
      * underneath: the folder has to sit under one of them.
      *

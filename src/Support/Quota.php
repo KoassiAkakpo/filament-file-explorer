@@ -14,8 +14,10 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * per-tenant resolver each scope gets its own allowance of the same size, which
  * is the only reading of a quota that means anything when the root is shared.
  *
- * Trashed files count. They still sit on the disk, and a trash that quietly
- * stopped counting would let anyone go over the cap by deleting and re-uploading.
+ * Trashed files count, and so do kept versions. They all still sit on the disk,
+ * and an allowance that quietly stopped counting one of them would be a way over
+ * the cap: delete and re-upload for the trash, upload over the same name for the
+ * versions.
  */
 final class Quota
 {
@@ -41,7 +43,7 @@ final class Quota
     {
         $used = $this->used[$rootFolderId] ??= (int) Media::query()
             ->where('model_type', FolderModel::morphClass())
-            ->whereIn('collection_name', [UploadRules::collection(), Trash::collection()])
+            ->whereIn('collection_name', self::collections())
             ->whereIn('model_id', app(FolderTree::class)->descendantFolderIdsIncludingRoot($rootFolderId))
             ->sum('size');
 
@@ -49,16 +51,34 @@ final class Quota
     }
 
     /**
-     * How many files the scope holds, trashed ones included — the same set
-     * usedBytes() sums, and counted here so that predicate stays in one class.
+     * How many files the scope holds, trashed ones and kept versions included —
+     * the same set usedBytes() sums, and counted here so that predicate stays in
+     * one class.
      */
     public function fileCount(int $rootFolderId): int
     {
         return $this->counted[$rootFolderId] ??= (int) Media::query()
             ->where('model_type', FolderModel::morphClass())
-            ->whereIn('collection_name', [UploadRules::collection(), Trash::collection()])
+            ->whereIn('collection_name', self::collections())
             ->whereIn('model_id', app(FolderTree::class)->descendantFolderIdsIncludingRoot($rootFolderId))
             ->count();
+    }
+
+    /**
+     * Every collection whose bytes are the scope's problem.
+     *
+     * One list for the sum and the count, so the two cannot come to describe
+     * different sets of files.
+     *
+     * @return list<string>
+     */
+    private static function collections(): array
+    {
+        return array_values(array_unique([
+            UploadRules::collection(),
+            Trash::collection(),
+            Versions::collection(),
+        ]));
     }
 
     public function fits(int $rootFolderId, int $bytes): bool

@@ -125,11 +125,18 @@ Wiring it up did find one real bug in the plugin's own pattern — `register()` 
 
 Settled: media ids, one when single and a list when `->multiple()`; a Choose button in the explorer's toolbar beside the count rather than in the modal's footer, so the action sits with the selection instead of mirroring it across two components; and the field's value deliberately kept distinct from the explorer's selection, since the selection is narrowed to what is on screen.
 
+### ~~File versioning~~ — done
+
+The `replace` conflict policy was the one place in the package where something was lost without passing through the trash: the new row was written and the old one deleted outright. It now makes the trade the trash already proved — move aside rather than destroy — and the Get Info inspector lists what is behind a file, newest first, with a restore beside each.
+
+Settled: a **lineage** rather than a name or an id, minted once and never rewritten, which is why rename, move, copy and the trash needed no changes at all. A table rather than `custom_properties`, for the reason the tags are tables — a JSON query is written differently on every driver. The old row is set aside **after** the new one is written, which is what makes a failed replacement leave the file that was there alone; the delete it replaced did the opposite. And `FileVersioned` fires instead of `FileDeleted`, because "a listener has to hear that as a deletion of its own" stopped being true.
+
+Two consequences worth stating plainly. Versions **count against the quota**, exactly like trashed files: they sit on the disk until something purges them, and an allowance that stopped counting them would be a way over the cap. And the description and the tags now **follow the file onto the new row** — replacing quietly dropped both before, and keeping the old row alive would have stranded them somewhere unreachable instead, which is worse.
+
 ## Still after 1.0 — additive, and none of it blocking
 
-All three only add. None of them changes anything a host app has written against, which is why none of them had to happen first.
+Neither of these changes anything a host app has written against, which is why neither had to happen first.
 
-- **File versioning.** The `replace` conflict policy destroys what was there. Keeping the last N versions would follow the pattern the trash already proved: move aside rather than destroy.
 - **Chunked and direct-to-S3 uploads.** `upload.max_size_kb` defaults to 50 MB, but the real ceiling is the host's `post_max_size`. This is what unblocks video and large media.
 - **PDF and video thumbnails, opt-in.** Deliberately absent today because they need Imagick or ffmpeg on the host and a failing generator costs more than the icon already drawn. Worth offering behind an explicit flag — never by default.
 
@@ -142,5 +149,7 @@ All three only add. None of them changes anything a host app has written against
 
 - With the trash **off**, a folder purged by another session while a user stands in it leaves Livewire unable to restore the model at all, and the component fails until the page is reloaded. Soft-deleted folders take the fallback correctly.
 - The breadcrumb calls `navigateToBreadcrumb()` straight from its handler rather than through the JS `enterFolder()`, so a debounced selection sync could in principle land behind it. `setSelection()` narrowing to the listing catches the consequence, so what is left is a redundant round trip rather than a wrong selection.
+- A kept version cannot be downloaded or previewed, only restored. Reaching one through the media route would mean widening the containment check to accept a second collection, and that check is the sharpest edge in the package — a trashed file is not downloadable for the same reason. Restoring is lossless and reversible, so nothing is unreachable; it just takes two clicks rather than one.
+- A share link dies when the file it points at is replaced, because replacing writes a new media row. That was already true when replacing destroyed the old file; versions make the old row survive, so re-pointing the share at the new one is now at least *possible*. Not done, because a share is a link to a file at a moment and silently following the content forward is a decision, not a fix.
 - `pint` reports pre-existing style drift in `config/` and `resources/lang/` (strict types, import order). Worth clearing in one pass rather than file by file.
 - `larastan` is a dev dependency with no `phpstan.neon`. Static analysis is not wired up, so nothing enforces the type annotations the code already carries.

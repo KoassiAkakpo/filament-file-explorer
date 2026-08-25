@@ -1139,6 +1139,52 @@
                                         @endif
                                     </div>
                                 @endif
+
+                                @if ($versions !== [])
+                                    {{-- The history lives here and nowhere else:
+                                         the inspector is already the panel that
+                                         follows the selection, and a version
+                                         list belongs to one file. It is drawn
+                                         only when there is one — a file nobody
+                                         has ever replaced has no history, and an
+                                         empty panel saying so on every file
+                                         would be noise. --}}
+                                    <div class="fe-versions">
+                                        <div class="fe-annotate__label">{{ __('filament-file-explorer::file-explorer.versions.title') }}</div>
+
+                                        <ul class="fe-versions__list">
+                                            @foreach ($versions as $version)
+                                                <li class="fe-versions__item" wire:key="fe-version-{{ $version['id'] }}">
+                                                    <div class="fe-versions__meta">
+                                                        <span class="fe-versions__name">{{ __('filament-file-explorer::file-explorer.versions.label', ['number' => $version['sequence']]) }}</span>
+                                                        <span class="fe-versions__detail">
+                                                            {{ $version['size_label'] }}
+                                                            @if ($version['replaced_at'])
+                                                                · {{ __('filament-file-explorer::file-explorer.versions.replaced_on', ['date' => $version['replaced_at']]) }}
+                                                            @endif
+                                                            @if ($version['added_by'])
+                                                                · {{ $version['added_by'] }}
+                                                            @endif
+                                                        </span>
+                                                    </div>
+
+                                                    @if ($this->canRestoreVersion())
+                                                        <button
+                                                            type="button"
+                                                            class="fe-versions__restore"
+                                                            title="{{ __('filament-file-explorer::file-explorer.versions.restore') }}"
+                                                            aria-label="{{ __('filament-file-explorer::file-explorer.versions.restore') }}"
+                                                            wire:click="restoreVersion({{ $version['id'] }})"
+                                                            wire:loading.attr="disabled"
+                                                        >@svg('heroicon-m-arrow-uturn-left', 'h-3.5 w-3.5')</button>
+                                                    @endif
+                                                </li>
+                                            @endforeach
+                                        </ul>
+
+                                        <p class="fe-versions__hint">{{ trans_choice('filament-file-explorer::file-explorer.versions.kept', \Koassi\FilamentFileExplorer\Support\Versions::keep()) }}</p>
+                                    </div>
+                                @endif
                             </div>
                         </aside>
                     @endif

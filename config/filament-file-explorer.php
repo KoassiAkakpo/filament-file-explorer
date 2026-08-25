@@ -300,6 +300,37 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | File versions
+    |--------------------------------------------------------------------------
+    |
+    | Only ever engages when 'on_conflict' above is 'replace'. Instead of
+    | destroying the file that was there, the old row is moved aside into the
+    | collection below and kept as a version, which the Get Info inspector lists
+    | and can restore. Same trade the trash makes: move aside rather than
+    | destroy.
+    |
+    | Which means the disk holds more than it used to. `keep` is the ceiling —
+    | the oldest version past it is purged for good on the next replacement —
+    | and versions count against the quota, exactly like trashed files, because
+    | they occupy the disk until something purges them.
+    |
+    | A version is not a second way to download a file: the collection below is
+    | not the explorer's, so the media routes refuse it like they refuse a
+    | trashed file. Restoring is what brings an old version back.
+    |
+    | The whole history dies with the file: purging it takes its versions with
+    | it, and there is nothing left to keep them for.
+    |
+    */
+    'versions' => [
+        'enabled' => true,
+        'collection' => 'file-explorer-versions',
+        'keep' => 3,
+        'table' => 'file_explorer_file_versions',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Folders
     |--------------------------------------------------------------------------
     |

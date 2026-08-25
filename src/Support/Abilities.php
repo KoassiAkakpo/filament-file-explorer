@@ -64,6 +64,17 @@ final class Abilities
         // what it holds — the same kind of edit as a rename, and denied
         // wherever renaming is.
         'annotate' => 'rename',
+
+        // Reading a file's history is reading about the file, which is what
+        // getInfo already answers for — the versions are listed in that panel
+        // and nowhere else.
+        'viewVersions' => 'getInfo',
+
+        // Making an old version current is the same act as uploading over the
+        // file: it decides what the folder now holds. Not `delete`, even though
+        // the version that was live is pushed into the history — nothing is
+        // destroyed, which is the whole point of keeping versions.
+        'restoreVersion' => 'upload',
     ];
 
     /** @var array<string, array<string, bool>> */
