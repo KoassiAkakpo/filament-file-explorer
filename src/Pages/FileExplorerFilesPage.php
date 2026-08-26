@@ -85,11 +85,24 @@ abstract class FileExplorerFilesPage extends Page implements HasTable
 
     protected function getHeaderActions(): array
     {
+        // Same rule as the explorer page's own button: `make-page --list`
+        // generates this page without its companion, and a closure resolved
+        // during the header's render is past anything that could catch it.
+        if (! static::getResource()::hasPage($this->fileExplorerExplorerPageName())) {
+            return [];
+        }
+
+        $url = $this->fileExplorerCompanionUrl(fn (): string => $this->fileExplorerExplorerUrl());
+
+        if ($url === null) {
+            return [];
+        }
+
         return [
             Action::make('explorer')
                 ->label(__('filament-file-explorer::file-explorer.explorer'))
                 ->icon('heroicon-o-folder-open')
-                ->url(fn (): string => $this->fileExplorerExplorerUrl()),
+                ->url($url),
         ];
     }
 }

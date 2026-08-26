@@ -112,11 +112,17 @@ abstract class StandaloneFileExplorerFilesPage extends Page implements HasTable
 
     protected function getHeaderActions(): array
     {
+        $url = $this->fileExplorerCompanionUrl(fn (): string => $this->fileExplorerExplorerUrl());
+
+        if ($url === null) {
+            return [];
+        }
+
         return [
             Action::make('explorer')
                 ->label(__('filament-file-explorer::file-explorer.explorer'))
                 ->icon('heroicon-o-folder-open')
-                ->url(fn (): string => $this->fileExplorerExplorerUrl()),
+                ->url($url),
         ];
     }
 }

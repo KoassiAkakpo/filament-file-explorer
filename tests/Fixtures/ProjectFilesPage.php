@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Koassi\FilamentFileExplorer\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Model;
-use Koassi\FilamentFileExplorer\Pages\FileExplorerPage;
+use Koassi\FilamentFileExplorer\Pages\FileExplorerFilesPage;
 
-class ProjectExplorerPage extends FileExplorerPage
+class ProjectFilesPage extends FileExplorerFilesPage
 {
     protected static string $resource = ProjectResource::class;
 

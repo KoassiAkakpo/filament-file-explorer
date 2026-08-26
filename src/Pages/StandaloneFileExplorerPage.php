@@ -99,11 +99,20 @@ abstract class StandaloneFileExplorerPage extends Page
             return [];
         }
 
+        // Registered and permitted is still not the same as routed: a panel with
+        // `register_pages` off may have registered one of the pair by hand. A
+        // url() closure would raise that from inside the header's render.
+        $url = $this->fileExplorerCompanionUrl(fn (): string => $filesPage::getUrl());
+
+        if ($url === null) {
+            return [];
+        }
+
         return [
             Action::make('filesList')
                 ->label(__('filament-file-explorer::file-explorer.files'))
                 ->icon('heroicon-o-table-cells')
-                ->url(fn (): string => $filesPage::getUrl()),
+                ->url($url),
         ];
     }
 }

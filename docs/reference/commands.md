@@ -22,7 +22,7 @@ php artisan filament-file-explorer:make-page ProjectResource
 php artisan filament-file-explorer:make-page --standalone
 ```
 
-Generates the explorer page and the files list page — for a resource, or panel-level. `--explorer` or `--list` generates one of the two; `--force` overwrites.
+Generates the explorer page and the files list page — for a resource, or panel-level. `--explorer` or `--list` generates one of the two; `--force` overwrites. Generating one alone is fine — the header button each page offers to the other is drawn only when that other page is actually registered.
 
 The generated classes extend the package's abstract pages, so they inherit the scope resolution and both guards. See [Record-scoped pages](../getting-started/record-scoped-pages.md) and [Replacing the pages](../getting-started/standalone-page.md#replacing-the-pages).
 

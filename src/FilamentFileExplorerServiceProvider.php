@@ -54,7 +54,6 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
             ->hasTranslations()
             ->discoversMigrations()
             ->runsMigrations()
-            ->hasAssets()
             ->hasCommands([
                 InstallCommand::class,
                 MakePageCommand::class,
@@ -142,6 +141,17 @@ class FilamentFileExplorerServiceProvider extends PackageServiceProvider
                 __DIR__.'/../stubs' => base_path('stubs/filament-file-explorer'),
             ], 'filament-file-explorer-stubs');
 
+            // The `filament-file-explorer-assets` tag, in full.
+            //
+            // Deliberately *not* `->hasAssets()` on the package: that registers
+            // a publish group pointing at `resources/dist`, which this package
+            // has not had since the JS and CSS started shipping from their
+            // sources — so `vendor:publish --tag=filament-file-explorer-assets`
+            // answered "Can't locate path: <…/resources/dist>" on a clean
+            // install, in the middle of an install command that had otherwise
+            // worked. Laravel merges paths registered under one tag, so the
+            // missing directory did not stop the images from being published;
+            // it only reported an error nobody could act on.
             $this->publishes([
                 __DIR__.'/../resources/images' => public_path('vendor/filament-file-explorer'),
             ], 'filament-file-explorer-assets');

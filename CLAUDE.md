@@ -41,6 +41,19 @@ Everything in the package reduces to one Livewire component driven by two values
 
 Both share [Pages/Concerns/InteractsWithFileExplorer.php](src/Pages/Concerns/InteractsWithFileExplorer.php), which is the single seam: it declares `fileExplorerScopeKey()` + `resolveFileExplorerRootFolderId()` abstract, sets `$rootFolderId`, and aborts 403 via the authorizer. The page Blade view just hands both values to `<livewire:filament-file-explorer::file-explorer>`. Adding a third mode means implementing those two methods, nothing more.
 
+## The companion-page button
+
+Each page of a pair links to the other with a header action — the explorer page to the flat files table, and back. Two things about how that URL is produced:
+
+- **It is resolved in `getHeaderActions()`, never inside the action's `url()` closure.** Filament evaluates that closure while rendering the header, which is long past any `try`/`catch` in `getHeaderActions()` — so a companion the host did not register raised `RouteNotFoundException` out of the middle of a Blade view. `make-page --explorer` and `--list` each generate one page of the pair, so that is one of the two documented ways to use the generator rather than an edge case. `InteractsWithFileExplorer::fileExplorerCompanionUrl()` is the one place that resolution happens, for all four pages.
+- **The record-scoped pages ask `getResource()::hasPage()` first**, which is the list the host actually registered rather than the router's. The catch behind it is the second layer, for a page named in `getPages()` whose route was never built (a panel with `register_pages` off that wired up one of the pair by hand).
+
+A test asserts no returned action can throw from `getUrl()`. Note it catches by hand: `toThrow(Throwable::class)` is useless here because `Throwable` is an interface, `class_exists()` is false for it, and Pest then reads the argument as a *message* to match — so the expectation passes whatever happens. That mistake was in this very test first.
+
+## Publishing assets
+
+`->hasAssets()` is deliberately **not** on the package. It registers a publish group pointing at `resources/dist`, which this package has not had since the JS and CSS started shipping from their sources — so `vendor:publish --tag=filament-file-explorer-assets` answered `Can't locate path: <…/resources/dist>` on a clean install, from inside `filament-file-explorer:install`. Laravel merges paths registered under one tag, so the images were published anyway and the only symptom was an error nobody could act on. The tag is registered in full by the explicit `publishes()` call for `resources/images`. A test walks every tag the package registers and asserts each path exists.
+
 ## Configuration precedence (important)
 
 Standalone settings are read through [Support/StandaloneSettings.php](src/Support/StandaloneSettings.php), never from `config()` directly at call sites. It tries the panel's plugin instance first, then falls back to config. This keeps settings **panel-scoped** in multi-panel apps instead of mutating global config, and keeps things working outside a panel (console, tests) where `FilamentFileExplorerPlugin::get()` throws. Any new standalone setting must be added in three places: the config file, a fluent setter + accessor on the plugin, and a `StandaloneSettings` reader.

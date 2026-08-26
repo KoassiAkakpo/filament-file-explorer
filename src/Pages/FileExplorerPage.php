@@ -67,20 +67,29 @@ abstract class FileExplorerPage extends Page
 
     protected function getHeaderActions(): array
     {
-        $actions = [];
+        $page = $this->fileExplorerFilesPageName();
 
-        try {
-            $actions[] = Action::make('filesList')
-                ->label(__('filament-file-explorer::file-explorer.files'))
-                ->icon('heroicon-o-table-cells')
-                ->url(fn (): string => static::getResource()::getUrl(
-                    $this->fileExplorerFilesPageName(),
-                    ['record' => $this->getRecord()],
-                ));
-        } catch (\Throwable) {
-            // Files list page may not be registered.
+        // Asked of the resource rather than of the router: `getPages()` is the
+        // list the host actually registered, and `make-page --explorer`
+        // generates this page without its companion.
+        if (! static::getResource()::hasPage($page)) {
+            return [];
         }
 
-        return $actions;
+        $url = $this->fileExplorerCompanionUrl(fn (): string => static::getResource()::getUrl(
+            $page,
+            ['record' => $this->getRecord()],
+        ));
+
+        if ($url === null) {
+            return [];
+        }
+
+        return [
+            Action::make('filesList')
+                ->label(__('filament-file-explorer::file-explorer.files'))
+                ->icon('heroicon-o-table-cells')
+                ->url($url),
+        ];
     }
 }

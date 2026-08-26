@@ -73,7 +73,7 @@ public static function getPages(): array
 }
 ```
 
-`--explorer` or `--list` generates just one of the two.
+`--explorer` or `--list` generates just one of the two, and that is a supported way to use it: each page offers a header button linking to its companion, and the button is simply **not drawn** when the companion is not in `getPages()`. Nothing else changes.
 
 ## What the generated page is
 
