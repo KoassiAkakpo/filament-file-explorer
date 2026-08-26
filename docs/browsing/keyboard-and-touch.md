@@ -42,6 +42,8 @@ So the two pointers get different gestures.
 | Drag to move or copy | press and move | — |
 | Marquee select | press empty space and move | — |
 
+![An item's context menu — right-click with a mouse, hold with a finger](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/context-menu.webp)
+
 **A touch never arms a drag.** It arms a hold, and moving cancels the hold and leaves the browser to scroll. Moving items stays fully reachable: the hold opens the context menu, where cut, navigate and paste do what the drag would have.
 
 A hold on **empty space** opens the folder's own menu, the counterpart of right-clicking the background.

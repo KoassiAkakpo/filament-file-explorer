@@ -7,6 +7,8 @@ description: The lightbox, and the confirmation dialog that says what a delete a
 
 ## The lightbox
 
+![The lightbox over an image, with its name, type and position in the listing](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/preview.webp)
+
 Double-clicking a file — or pressing Enter, or picking **Open** in the context menu — opens it in a lightbox. Images, video, audio, PDFs and text render inline; anything else offers a download. Left and right arrows walk through the files of the current listing.
 
 Previewing requires the **`download`** ability rather than one of its own, because it streams the same bytes through the same media route. Gating it separately would have made "can preview but not download" a distinction the transport cannot actually enforce.

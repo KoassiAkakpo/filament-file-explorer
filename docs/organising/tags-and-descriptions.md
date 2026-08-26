@@ -20,6 +20,8 @@ Folders and files can carry a **description** and any number of **tags**, both w
 
 Gated on the `annotate` ability, which [follows `rename`](../integrating/authorization.md#an-ability-set-that-can-grow) for any authorizer that does not answer it: both change what an item is called rather than what it holds.
 
+![Adding a tag and a description in the inspector, the colour picked from seven](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/add-tag-and-description.webp)
+
 ## Tags belong to a scope
 
 A tenant's vocabulary is not another tenant's. And **a tag nothing carries any more is deleted**, which is why there is no tag management screen: the list of tags *is* the list in use, and the filter menu can never offer a word that matches nothing.
@@ -31,6 +33,8 @@ A tag is a shared row rather than free text on each item, which is what lets the
 The search box matches names, descriptions **and** tag names in one query, across the whole scope — so a note you wrote is a note you can find again.
 
 ## The filter
+
+![The tag filter, offering the scope's whole vocabulary with a count each](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/tags.webp)
 
 Beside the kind filter in the toolbar. Two things make it different from that one:
 

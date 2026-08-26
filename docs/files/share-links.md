@@ -21,6 +21,8 @@ Right-click a file and **Share** gives it a link that works with no account and 
 
 Gated on the `share` ability, which [follows `download`](../integrating/authorization.md#an-ability-set-that-can-grow) for any authorizer that does not answer it — so an authorizer written before this existed keeps meaning what its author meant, and one that refuses downloads refuses sharing too.
 
+![The share dialog: the link, when it expires, how often it has been opened, and a way to stop](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/share.webp)
+
 ## How it holds up without a session
 
 This is the only route in the package with no authenticated user behind it, so the two guards cannot both run at request time. They are **split in time**:

@@ -316,6 +316,40 @@ a:hover { text-decoration: underline; }
 }
 .prose tbody tr:last-child td { border-bottom: 0; }
 
+/* Screenshots.
+ *
+ * A border rather than a shadow: the explorer's own chrome is pale, so on a
+ * white page a shadowless screenshot has no edge and bleeds into the prose.
+ * The border is what says where the application stops. */
+
+.prose img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 0 1.35rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+/* Badges are inline images and must keep none of the above. */
+.badges img,
+.badges p img {
+    display: inline-block;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+}
+
+/* A caption is the italic line the image is followed by. */
+.prose img + em,
+.prose p > img + em {
+    display: block;
+    margin: -0.9rem 0 1.35rem;
+    font-size: 0.82rem;
+    font-style: normal;
+    color: var(--text-faint);
+}
+
 /* Cards on the overview page */
 
 .cards {

@@ -7,6 +7,8 @@ description: A Finder-style file explorer for Filament v4/v5, backed by Spatie M
 
 A Finder-style file explorer for Filament v4/v5, backed by [Spatie Media Library](https://spatie.be/docs/laravel-medialibrary) over a folder tree. Icons, columns and details views; keyboard operation; drag and drop; trash, quotas, tags, versions and share links.
 
+![The explorer browsing a photo folder in dark mode](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/overview-dark.webp)
+
 <div class="badges" markdown="1">
 
 [![Latest version](https://img.shields.io/packagist/v/koassi/filament-file-explorer.svg?style=flat-square)](https://packagist.org/packages/koassi/filament-file-explorer)

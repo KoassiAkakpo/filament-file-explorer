@@ -30,6 +30,8 @@ Two of them mean nothing for a folder, and fall back to its name while keeping t
 
 ## Filtering by kind
 
+![The kind filter menu, offering images, PDF, documents, spreadsheets, presentations, archives, audio and video](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/filters.webp)
+
 The funnel in the toolbar narrows a folder to one kind: **images**, **PDF**, **documents**, **spreadsheets**, **presentations**, **archives**, **audio**, **video**.
 
 The entry toggles, so choosing the active kind again clears it, and a bar above the listing says which filter is on with a way out — a narrowed folder that simply looked empty, with nothing on screen saying why, would be a bug report.

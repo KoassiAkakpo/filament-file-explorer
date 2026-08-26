@@ -16,6 +16,8 @@ FileExplorerPicker::make('attachments')->multiple()     // state: list<int>
 
 Choosing writes **media ids** into the field's state: one id when the field is single, a list when it is `->multiple()`.
 
+![The picker: the explorer in a modal, with Choose in its own toolbar](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/file-picker.webp)
+
 ## Which library it browses
 
 Given neither a root nor a scope key, it browses the **standalone** library — the one the panel's own explorer page opens — and creates that root on first use, exactly as visiting the page would.

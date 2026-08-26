@@ -15,6 +15,8 @@ description: Deleting moves things aside instead of destroying them.
 
 On by default. Deleting moves things aside: folders are soft-deleted, files move to a separate media collection, and the toolbar's trash button lists what is in there with where it came from and when it went — each row restorable or deletable for good.
 
+![The trash view, each row saying where it came from and when it went](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/trash.webp)
+
 ## The two halves work differently, on purpose
 
 **Folders use soft deletes.** A trashed folder drops out of every folder query the explorer runs, so the listing, the sidebar, the search scope and the containment walk need no extra filter at all. The exception is *where a folder sits*: a trashed folder still has to say where it came from, so parent lookups deliberately include trashed rows.

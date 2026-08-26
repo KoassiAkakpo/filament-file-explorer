@@ -23,6 +23,8 @@ Uploading a file over one that is already there used to destroy what was there â
 
 **The default conflict policy is `rename`**, which keeps both files under different names â€” so on a default install none of this runs. It is `replace` that this changes: from *destroys the old file* to *keeps the last three*.
 
+![Previous versions in the inspector, each restorable, with what is kept stated underneath](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/file-versions.webp)
+
 ## What follows from how it is built
 
 - **Versions count against the quota.** They sit on the disk until something purges them, exactly like trashed files. Which also means replacing a file no longer frees what it took: the **whole incoming size** counts, and an upload that does not fit is refused rather than putting the scope over its cap.

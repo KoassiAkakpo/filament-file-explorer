@@ -22,15 +22,21 @@ The default only applies until the user picks one; after that their choice is re
 
 ## Icons
 
+![The icon view over a folder of subfolders and documents](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/grid-view.webp)
+
 A grid of thumbnails with the name on a pill beneath. Images render their [thumbnail](../files/thumbnails.md) through the media route; everything else gets an icon for its kind.
 
 The selected item's label is a solid accent pill with white text, while the well behind the icon stays translucent — a thumbnail has to show through the selection, and the Finder makes the label the unmistakable cue.
 
 ## Details
 
+![The details view, with kind, size and date columns](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/detail-view.webp)
+
 Rows with kind, size and date, under a column header that stays pinned while the rows scroll under it. Clicking a header sorts by it; clicking it again reverses.
 
 ## Columns
+
+![The column view: one pane per level of the path, the trail marked behind](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/column-view.webp)
 
 The Finder's cascading browser: one pane per level of the path, the contents of the folder you are in on the right, and the trail through the tree marked in the panes behind it. Clicking a folder in any pane moves there and drops the panes beyond it; clicking a file in a pane behind the last one moves there and selects it.
 

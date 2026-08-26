@@ -1,0 +1,9 @@
+# Keep the Composer dist to what an application actually installs. The
+# screenshots are 7.6 MB of PNG originals and the docs site is another 800 KB of
+# WebP — both belong in the repository and in neither vendor/ directory.
+/screenshots        export-ignore
+/docs               export-ignore
+/.github            export-ignore
+/CLAUDE.md          export-ignore
+/ROADMAP.md         export-ignore
+/.gitattributes     export-ignore

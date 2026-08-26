@@ -9,6 +9,8 @@ description: Get Info — the panel that follows the selection, and the only pla
 
 Gated on the `getInfo` ability.
 
+![The Get Info panel describing the selected file](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/inspector.webp)
+
 ## It follows the selection
 
 Select something else and the panel re-reads for it; select nothing and it closes. That is the behaviour every entry point has to honour, and it is worth knowing because it explains two things you will notice:

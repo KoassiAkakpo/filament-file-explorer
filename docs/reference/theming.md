@@ -32,6 +32,8 @@ It is deliberately **not** Filament's `--primary-*`. Those belong to the panel; 
 
 Grey is not a second selection colour — it means **the trail** through the tree in the [column view](../browsing/views.md#columns), which is the distinction the Finder makes.
 
+![The explorer in dark mode — the accent carries through the selection and the active sidebar row](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/dark-mode.webp)
+
 ## How tall the finder gets
 
 The explorer scrolls its contents inside itself, and the ceiling is one custom property:

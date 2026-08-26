@@ -16,6 +16,8 @@ description: A cap per scope, refused before anything is written.
 FilamentFileExplorerPlugin::make()->quota(10 * 1024 ** 3)
 ```
 
+![The quota in the sidebar, under the folder tree](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/storage.webp)
+
 ## The cap is per root folder
 
 Not per application. With the [per-user or per-tenant resolver](../getting-started/root-resolvers.md) each scope gets an allowance **of that size** — which is the only reading of a quota that means anything when the resolver hands out one root each.

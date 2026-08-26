@@ -6,6 +6,8 @@
 [![PHP](https://img.shields.io/packagist/dependency-v/koassi/filament-file-explorer/php?style=flat-square)](https://packagist.org/packages/koassi/filament-file-explorer)
 [![License](https://img.shields.io/packagist/l/koassi/filament-file-explorer.svg?style=flat-square)](LICENSE)
 
+![Filament File Explorer](docs/assets/screenshots/cover.webp)
+
 A Finder-style file explorer for Filament v4/v5, backed by [Spatie Media Library](https://spatie.be/docs/laravel-medialibrary) over a folder tree. Icons, columns and details views; keyboard operation; drag and drop; trash, quotas, tags, versions and share links.
 
 **📖 [Documentation](https://koassiakakpo.github.io/filament-file-explorer/)**

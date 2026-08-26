@@ -456,6 +456,10 @@ Two things about it are load-bearing:
 
 Pages carry only `title:` and `description:` in their front matter; the H1 is in the markdown. Internal links are relative and end in `.md` — `jekyll-relative-links` rewrites them, which is what makes a page read correctly on GitHub *and* on the site. Anchors follow kramdown's rule (punctuation dropped, spaces to hyphens), so `` `file-explorer:demo` `` is `#file-explorerdemo` and not `#file-explorer-demo`.
 
+**Screenshots are two sets from one source.** `screenshots/*.png` are the originals as shot (7.6 MB); `docs/assets/screenshots/*.webp` are what the site and the README actually serve — 1600px wide at q92, 836 KB for all seventeen. Regenerate with `cwebp -q 92 -resize 1600 0 in.png -o out.webp`. `.gitattributes` `export-ignore`s both directories, so neither reaches a host app's `vendor/`.
+
+**Their URLs in `docs/` are absolute, and have to be.** Pretty permalinks serve a page at `/files/versions/`, one level deeper than the file at `docs/files/versions.md`, so *no* relative path resolves the same way on GitHub and on the site — `../assets/` is right for one and `../../assets/` for the other. `jekyll-relative-links` only rewrites links to `.md` files, not image `src`. The absolute `https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/…` works in both, which is why "tidying" it into a relative path breaks one of the two silently. The README is the exception and uses `docs/assets/screenshots/…`: it is served from the repository root, where the relative path is correct on GitHub and Packagist alike.
+
 There is no link checker in CI. `docs/` has 29 pages and the cross-references are dense, so verify with a script over the tree — front matter present, every page in `nav.yml` and every `nav.yml` url a page, every relative link and anchor resolving — rather than by reading.
 
 ## Foreign agent configs
