@@ -10,8 +10,8 @@ use Filament\Resources\Pages\Page;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
-use Koassi\FilamentFileExplorer\Models\Concerns\HasFileExplorer;
 use Koassi\FilamentFileExplorer\Pages\Concerns\InteractsWithFileExplorer;
+use Koassi\FilamentFileExplorer\Pages\Concerns\ResolvesRecordRootFolder;
 use Koassi\FilamentFileExplorer\Support\HasFileExplorerModel;
 use Koassi\FilamentFileExplorer\Tables\Concerns\InteractsWithFileExplorerTable;
 
@@ -21,6 +21,7 @@ abstract class FileExplorerFilesPage extends Page implements HasTable
     use InteractsWithFileExplorerTable;
     use InteractsWithRecord;
     use InteractsWithTable;
+    use ResolvesRecordRootFolder;
 
     protected string $view = 'filament-file-explorer::filament.pages.file-explorer-files';
 
@@ -50,17 +51,6 @@ abstract class FileExplorerFilesPage extends Page implements HasTable
     protected function resolveFileExplorerRootFolderId(): int
     {
         return $this->resolveFileExplorerRootFolderIdFromRecord($this->getRecord());
-    }
-
-    protected function resolveFileExplorerRootFolderIdFromRecord(mixed $record): int
-    {
-        /** @var HasFileExplorer $record */
-        $record = HasFileExplorerModel::assert($record);
-        $id = $record->fileExplorerRootFolderId();
-
-        abort_unless($id, 404);
-
-        return $id;
     }
 
     protected function fileExplorerRootFolderId(): int

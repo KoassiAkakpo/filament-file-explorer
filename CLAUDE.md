@@ -41,6 +41,18 @@ Everything in the package reduces to one Livewire component driven by two values
 
 Both share [Pages/Concerns/InteractsWithFileExplorer.php](src/Pages/Concerns/InteractsWithFileExplorer.php), which is the single seam: it declares `fileExplorerScopeKey()` + `resolveFileExplorerRootFolderId()` abstract, sets `$rootFolderId`, and aborts 403 via the authorizer. The page Blade view just hands both values to `<livewire:filament-file-explorer::file-explorer>`. Adding a third mode means implementing those two methods, nothing more.
 
+## A record's root folder
+
+`HasFileExplorer` hooks **`creating`**, so rows that predate the trait have no `folder_id` — and adding the explorer to a model that already holds records is the ordinary way it gets adopted, not an edge case. Both record pages answered `abort_unless($id, 404)` for those, which reads as "no such page" over a record that is plainly there and left every host writing the same one-line override.
+
+[Pages/Concerns/ResolvesRecordRootFolder.php](src/Pages/Concerns/ResolvesRecordRootFolder.php) is now the single implementation — both pages held identical copies — and it creates the root through `ensureFileExplorerRoot()`. Three things about it:
+
+- **On the visit, not before.** Same rule as `canAccess()` never creating: this runs from `mount()`, once, for one record. `ResolvesExistingRoot` exists because the standalone page's `canAccess()` runs on every navigation render; a record page's mount does not.
+- **The authorizer runs immediately after, in `mountFileExplorer()`, against the id this returns.** Asking it *before* the write would mean handing a record-scoped authorizer a root id of `0` — the standalone convention — which no authorizer written against the record mode has been told to answer for, so a strict one would refuse a legitimate first visit. The exposure taken instead is one empty folder for a record whose Filament page authorization already passed and whom the explorer's own authorizer then refuses.
+- **`auto_create_root` is honoured.** Off means the roots are the host's to assign, so the page refuses — but with a message naming the record and the column, since a bare 404 named neither.
+
+Two records sharing a name get two roots sharing a slug, and that is fine: the unique index is `(parent_id, slug)` and no driver compares NULL parents. A record root is only ever reached by id, so `findRoot()` picking the first never applies to it.
+
 ## The companion-page button
 
 Each page of a pair links to the other with a header action — the explorer page to the flat files table, and back. Two things about how that URL is produced:

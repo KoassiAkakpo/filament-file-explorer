@@ -54,6 +54,26 @@ class Project extends Model
 }
 ```
 
+### Records that already exist
+
+The trait creates the root folder on the model's `creating` event, so **rows that were already in the table when you added the trait have no `folder_id`**. Adding the explorer to a model that already holds records is the ordinary way this feature gets adopted, so that is the normal case rather than an edge one.
+
+Nothing to do: **the root is created on the first visit to that record's explorer page**, named after the record, and the id is written to the column. A second visit finds it.
+
+It happens on the visit and not before, for the same reason the standalone page creates its root in `mount()` and never in `canAccess()` — Filament calls `canAccess()` on every navigation render, so creating there would write a folder for every authenticated user on every page of the panel.
+
+If you would rather fill them in ahead of time — to see them in a report, or to avoid the write happening inside someone's page load:
+
+```php
+Project::query()->whereNull('folder_id')->each(
+    fn (Project $project) => $project->ensureFileExplorerRoot()
+);
+```
+
+`ensureFileExplorerRoot()` is idempotent: it returns the existing folder when the column is already set.
+
+> **With `auto_create_root` off**, roots are yours to assign and the page will not write one. It refuses with a message naming the record and the column instead of a bare 404.
+
 ## 2. Generate the pages
 
 ```bash

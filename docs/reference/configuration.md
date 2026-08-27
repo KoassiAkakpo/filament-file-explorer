@@ -25,7 +25,7 @@ Two settings are **config only, and deliberately**: `thumbnails.*` and `folders.
 | --- | --- | --- |
 | `authorizer` | `AllowAllAuthorizer` | **P** — your [`FileExplorerAuthorizer`](../integrating/authorization.md) |
 | `collection` | `'file-explorer'` | The media collection [files live in](../files/where-files-land.md#the-collection) |
-| `auto_create_root` | `true` | Create a root folder when a `HasFileExplorer` model is created |
+| `auto_create_root` | `true` | Create a root folder when a `HasFileExplorer` model is created — and on the first visit to a record that has none, see [Records that already exist](../getting-started/record-scoped-pages.md#records-that-already-exist) |
 | `morph_class` | `null` | Only when [migrating from another implementation](../integrating/folder-model.md) |
 | `livewire_component` | `Livewire\FileExplorer` | The component the pages mount |
 

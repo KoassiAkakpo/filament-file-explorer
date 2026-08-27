@@ -9,12 +9,14 @@ use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
 use Koassi\FilamentFileExplorer\Models\Concerns\HasFileExplorer;
 use Koassi\FilamentFileExplorer\Pages\Concerns\InteractsWithFileExplorer;
+use Koassi\FilamentFileExplorer\Pages\Concerns\ResolvesRecordRootFolder;
 use Koassi\FilamentFileExplorer\Support\HasFileExplorerModel;
 
 abstract class FileExplorerPage extends Page
 {
     use InteractsWithFileExplorer;
     use InteractsWithRecord;
+    use ResolvesRecordRootFolder;
 
     protected string $view = 'filament-file-explorer::filament.pages.file-explorer';
 
@@ -44,20 +46,6 @@ abstract class FileExplorerPage extends Page
     protected function resolveFileExplorerRootFolderId(): int
     {
         return $this->resolveFileExplorerRootFolderIdFromRecord($this->getRecord());
-    }
-
-    /**
-     * Override when the model does not use HasFileExplorer.
-     */
-    protected function resolveFileExplorerRootFolderIdFromRecord(mixed $record): int
-    {
-        /** @var HasFileExplorer $record */
-        $record = HasFileExplorerModel::assert($record);
-        $id = $record->fileExplorerRootFolderId();
-
-        abort_unless($id, 404);
-
-        return $id;
     }
 
     protected function fileExplorerFilesPageName(): string
