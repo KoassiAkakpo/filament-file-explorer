@@ -56,7 +56,7 @@ Every one of those features can be turned off in config, and nothing then reads 
 
 **A failed thumbnail no longer costs the upload.** The file lands, the event fires, the explorer draws its icon. This was a fix for images before it was a prerequisite for [PDF and video thumbnails](../files/thumbnails.md).
 
-**A record page 404s on records that predate the trait.** Fixed in 1.0.2: the root folder is created on the first visit instead. Before that, only records created *after* `HasFileExplorer` was added had a `folder_id`, and the rest answered 404 — which reads as "no such page" over a record that is plainly there. See [Records that already exist](record-scoped-pages.md#records-that-already-exist).
+**A record with no `folder_id` gets one on its first visit.** The trait hooks `creating`, so only records made *after* `HasFileExplorer` was added had a root — and the rest used to answer 404, which reads as "no such page" over a record that is plainly there. The root is created on the visit now. See [Records that already exist](record-scoped-pages.md#records-that-already-exist).
 
 ## If the explorer looks wrong after an upgrade
 
