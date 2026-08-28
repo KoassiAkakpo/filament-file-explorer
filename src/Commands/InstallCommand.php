@@ -6,7 +6,10 @@ namespace Koassi\FilamentFileExplorer\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
+use Koassi\FilamentFileExplorer\Support\Quota;
 use Koassi\FilamentFileExplorer\Support\Thumbnails;
+use Koassi\FilamentFileExplorer\Support\UploadLimits;
+use Koassi\FilamentFileExplorer\Support\UploadRules;
 
 class InstallCommand extends Command
 {
@@ -73,9 +76,57 @@ class InstallCommand extends Command
         $this->comment('  # or: php artisan vendor:publish --tag=filament-file-explorer-stubs');
 
         $this->hintPanelPlugin();
+        $this->reportUploadCeiling();
         $this->warnMissingThumbnailTooling();
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The size an upload may actually be, and which setting decides it.
+     *
+     * `upload.max_size_kb` reads like the ceiling and is not one: four other
+     * limits sit under it and the lowest wins. On a stock host the honest answer
+     * is Media Library's 10 MB — so a host who read 50 MB in *our* config file
+     * discovers the real number from a user whose upload was refused, which is
+     * the worst place to learn it.
+     *
+     * Printed here because the install command is the one moment the host is
+     * looking at this package's own output, and it is safe to re-run.
+     */
+    protected function reportUploadCeiling(): void
+    {
+        $max = UploadLimits::maxUploadBytes();
+        $promised = UploadRules::maxSizeKb() * 1024;
+        $binding = UploadLimits::bindingConstraint();
+
+        $this->newLine();
+        $this->components->info('Largest file this host will accept: '.($max === null ? 'no limit' : Quota::format($max)));
+
+        foreach (UploadLimits::constraints() as $name => $bytes) {
+            $this->line(sprintf(
+                '  %s %-46s %s',
+                $name === $binding ? '→' : ' ',
+                $name,
+                $bytes === null ? 'no limit' : Quota::format($bytes),
+            ));
+        }
+
+        if (UploadLimits::chunkingEngages()) {
+            $this->line('  Sliced uploads are engaged, so the three request-shaped limits above do not cap a file.');
+        }
+
+        // The one thing worth interrupting for: our own setting promises more
+        // than the installation can deliver.
+        if ($max !== null && $max < $promised && $binding !== null && $binding !== 'filament-file-explorer.upload.max_size_kb') {
+            $this->newLine();
+            $this->components->warn(sprintf(
+                'upload.max_size_kb is set to %s, but %s caps it at %s. Raise that setting too, or lower ours so the two agree.',
+                Quota::format($promised),
+                $binding,
+                Quota::format($max),
+            ));
+        }
     }
 
     /**

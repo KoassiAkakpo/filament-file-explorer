@@ -59,6 +59,14 @@ return [
     |--------------------------------------------------------------------------
     */
     'upload' => [
+        /*
+         | A promise, not a ceiling. Four other limits sit under this one and
+         | the lowest wins — media-library.max_file_size (10 MB by default) is
+         | usually the binding one, so raising this without raising that
+         | changes nothing. See the 'chunk' block below, and run
+         | `php artisan filament-file-explorer:install` to have this host print
+         | its real answer and name the setting that decides it.
+         */
         'max_size_kb' => 51200,
 
         /*

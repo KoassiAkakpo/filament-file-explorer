@@ -115,6 +115,8 @@ The explorer never loads a folder's contents into memory to sort them. [Support/
   - **An unknown kind throws** from `kinds()`, at render time. Dropping it would leave a restriction that quietly does not restrict, which is the one failure mode a limit must not have.
   - **A filter for an excluded kind narrows nothing** rather than emptying the folder — both in `setKind()` and in `FolderListing`'s constructor, since the value can also arrive from a stored view preference.
 
+- **The chosen list draws thumbnails, from `Thumbnails::drawable()`.** It was one generic document glyph whatever the file was, in a field whose whole job is choosing between files. `describeFile()` is the one place a chosen row is described, and the URL goes through the media route with the field's own scope key — `$media->getUrl()` would be a raw disk URL past both guards. The route needs the scope registered in the session, which the explorer the modal mounts does on the same render.
+
   `normaliseState()` is the one owner of the field's shape, used by both `afterStateHydrated` and `dehydrateStateUsing`: an application storing a single id in a column and one storing a list in JSON both fill correctly, and adding or removing `->multiple()` does not strand the old shape.
 
 Its test fixture (`tests/Fixtures/PickerForm.php`) is the one that renders the field in a real Filament schema. Before it existed, every test around the picker built the explorer directly with a root the field itself was failing to resolve, which is exactly how the 404 shipped.
@@ -260,6 +262,8 @@ Details in that class that are load-bearing:
 - **`sliceableDisk()` resolves the disk the way Livewire's own `isUsingS3()` does** — `config('livewire.temporary_file_upload.disk') ?: config('filesystems.default')` — and deliberately *not* through `FileUploadConfiguration::disk()`, which answers `tmp-for-tests` while a suite is running. A check that describes the harness instead of the host is a check that only ever fails in tests, and this one did.
 - **`chunkingEngages()` is three questions, not one**: the setting is on, the temporary disk is local, and a whole file does not already fit in one request. The last is what keeps the transport off the path of uploads that were already working.
 - **`bindingConstraint()` names the setting**, because a refusal that gives only a number leaves the host hunting through four config files.
+
+`UploadLimits::constraints()` is also what `filament-file-explorer:install` prints, with an arrow on `bindingConstraint()` and a warning when `upload.max_size_kb` promises more than the host delivers. That report is the fix for the report that keeps coming in — "config says 50 MB and 10 MB is refused" — because `media-library.max_file_size` is 10 MB out of the box and **slicing does not lift it**: it is a per-file ceiling, not a per-request one. Nothing in the package raises another package's setting.
 
 ### The slice transport
 

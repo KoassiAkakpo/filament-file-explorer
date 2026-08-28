@@ -179,3 +179,41 @@ it('tells the browser nothing to slice with when it is not slicing', function ()
         ->and($limits['begin_url'])->toBeNull()
         ->and($limits['chunk_url'])->toBeNull();
 });
+
+/**
+ * The report `filament-file-explorer:install` prints.
+ *
+ * `upload.max_size_kb` reads like the ceiling and is not one — Media Library's
+ * 10 MB is usually what actually decides. A host who read 50 MB in our own
+ * config file used to learn the real number from a user whose upload was
+ * refused, which is the worst place to learn it.
+ */
+it('names the setting that really caps an upload', function (): void {
+    config()->set('filament-file-explorer.upload.max_size_kb', 51200);
+    config()->set('media-library.max_file_size', 10 * 1024 * 1024);
+    config()->set('filament-file-explorer.upload.chunk.enabled', false);
+
+    $this->artisan('filament-file-explorer:install')
+        ->expectsOutputToContain('media-library.max_file_size')
+        ->assertSuccessful();
+});
+
+it('warns when our own setting promises more than the host delivers', function (): void {
+    config()->set('filament-file-explorer.upload.max_size_kb', 51200);
+    config()->set('media-library.max_file_size', 10 * 1024 * 1024);
+    config()->set('filament-file-explorer.upload.chunk.enabled', false);
+
+    $this->artisan('filament-file-explorer:install')
+        ->expectsOutputToContain('upload.max_size_kb')
+        ->assertSuccessful();
+});
+
+it('says nothing about a mismatch when our own setting is the binding one', function (): void {
+    config()->set('filament-file-explorer.upload.max_size_kb', 1024);
+    config()->set('media-library.max_file_size', 500 * 1024 * 1024);
+    config()->set('filament-file-explorer.upload.chunk.enabled', true);
+
+    // Ours is the lowest, so there is no gap between what it promises and what
+    // the host will take, and nothing to interrupt for.
+    expect(UploadLimits::bindingConstraint())->toBe('filament-file-explorer.upload.max_size_kb');
+});

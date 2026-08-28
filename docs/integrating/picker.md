@@ -61,7 +61,11 @@ The **Choose** button sits in the explorer's toolbar beside the selection count 
 
 **Folders are never chosen:** a folder is where you look, not what you pick.
 
-Whatever the field holds is drawn under the button, in the order it was chosen, each entry removable.
+Whatever the field holds is drawn under the button, in the order it was chosen, each entry removable — **with its thumbnail** where there is one to draw, and the kind's icon where there is not.
+
+That is the same `Thumbnails::drawable()` answer the explorer's own views ask, so an image shows its picture whatever became of its conversion, and a PDF shows its picture only once one was really generated. Guessing from the mime type would put a broken image where the icon belongs. The URL goes through the guarded media route with the field's own scope key, never `$media->getUrl()` — which on a public disk would hand the file to anyone holding the link, past both guards.
+
+See [Thumbnails](../files/thumbnails.md) for which kinds produce one.
 
 ## The state's shape
 

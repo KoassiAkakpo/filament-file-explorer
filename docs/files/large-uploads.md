@@ -19,7 +19,34 @@ So the honest default was 2 MB against a promise of 50 — and a file over it fa
 
 `Support\UploadLimits` is the single reader of all five, and the split it makes is the whole design: **three of them cap a request, two cap a file.** Slicing takes the first three out of the answer, because no request then carries a whole file.
 
-Two things change it, and they are alternatives rather than additions.
+## Ask this host what its real ceiling is
+
+Before changing anything, have the installation say which of the five is deciding:
+
+```bash
+php artisan filament-file-explorer:install
+```
+
+```
+INFO  Largest file this host will accept: 10.0 MB
+
+      filament-file-explorer.upload.max_size_kb      50.0 MB
+    → media-library.max_file_size                    10.0 MB
+      livewire.temporary_file_upload.rules           12.0 MB
+      upload_max_filesize                             2.0 MB
+      post_max_size                                   8.0 MB
+
+WARN  upload.max_size_kb is set to 50.0 MB, but media-library.max_file_size caps
+      it at 10.0 MB. Raise that setting too, or lower ours so the two agree.
+```
+
+The arrow is the one that decides, and the warning fires whenever our own setting promises more than the host will deliver. The command is safe to re-run, so it is also how you check a change worked.
+
+In code, `Support\UploadLimits::constraints()` is that same list and `bindingConstraint()` that same answer.
+
+> **The commonest case by far**: `media-library.max_file_size` is 10 MB out of the box, so a fresh install refuses an 11 MB file however high `upload.max_size_kb` is. Slicing does not lift that one — it is a per-*file* limit, not a per-request one.
+
+Two things change the request-shaped ceilings, and they are alternatives rather than additions.
 
 ## Slicing
 

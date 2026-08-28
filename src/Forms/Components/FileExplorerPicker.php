@@ -10,7 +10,9 @@ use InvalidArgumentException;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
 use Koassi\FilamentFileExplorer\Support\FileKinds;
 use Koassi\FilamentFileExplorer\Support\MediaScope;
+use Koassi\FilamentFileExplorer\Support\MimeIcon;
 use Koassi\FilamentFileExplorer\Support\StandaloneSettings;
+use Koassi\FilamentFileExplorer\Support\Thumbnails;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -123,7 +125,7 @@ class FileExplorerPicker extends Field
      * rather than leaking a file name the viewer may not see. The field is not
      * the place to relax the containment rule.
      *
-     * @return list<array{id: int, name: string}>
+     * @return list<array{id: int, name: string, icon: string, thumbUrl: string|null}>
      */
     public function getChosenFiles(): array
     {
@@ -147,7 +149,7 @@ class FileExplorerPicker extends Field
      * file name the viewer may not be allowed to see.
      *
      * @param  list<int>  $ids
-     * @return list<array{id: int, name: string}>
+     * @return list<array{id: int, name: string, icon: string, thumbUrl: string|null}>
      */
     protected function resolveFiles(array $ids): array
     {
@@ -166,9 +168,49 @@ class FileExplorerPicker extends Field
         // Walked in the state's order rather than the query's: the order the
         // user chose in is the order they expect to read back.
         return array_values(array_map(
-            fn (int $id): array => ['id' => $id, 'name' => (string) $byId[$id]->name],
+            fn (int $id): array => $this->describeFile($byId[$id]),
             array_values(array_filter($ids, fn (int $id): bool => $byId->has($id))),
         ));
+    }
+
+    /**
+     * What the field draws for one chosen file.
+     *
+     * `Thumbnails::drawable()` rather than a mime test, which is the same call
+     * the explorer's own four drawing sites make: an image is drawable whatever
+     * became of its conversion, because the media route falls back to the
+     * original; anything else only once a conversion really exists, since an
+     * `<img>` pointed at a PDF renders nothing at all.
+     *
+     * @return array{id: int, name: string, icon: string, thumbUrl: string|null}
+     */
+    protected function describeFile(Media $media): array
+    {
+        return [
+            'id' => (int) $media->id,
+            'name' => (string) $media->name,
+            'icon' => MimeIcon::forMedia($media),
+            'thumbUrl' => Thumbnails::drawable($media) ? $this->thumbnailUrl((int) $media->id) : null,
+        ];
+    }
+
+    /**
+     * Through the guarded media route, with this field's own scope key.
+     *
+     * Never `$media->getUrl('thumbnail')`: that is a raw disk URL, and on a
+     * public disk it hands the file to anyone holding the link, past both
+     * guards. The route resolves the scope's root itself and requires the
+     * `download` ability, exactly as it does for the explorer in the modal — so
+     * a field whose viewer may not download draws the icon instead of a broken
+     * image.
+     */
+    protected function thumbnailUrl(int $mediaId): string
+    {
+        return route('filament-file-explorer.media.show', [
+            'scopeKey' => $this->getScopeKey(),
+            'media' => $mediaId,
+            'conversion' => 'thumbnail',
+        ]);
     }
 
     public function rootFolderId(int $id): static

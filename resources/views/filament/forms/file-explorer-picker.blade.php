@@ -62,7 +62,24 @@
             <ul class="fe-picker__list">
                 @foreach ($chosen as $file)
                     <li class="fe-picker__item">
-                        @svg('heroicon-o-document', 'h-3.5 w-3.5 shrink-0 text-zinc-400')
+                        {{-- The thumbnail through the guarded media route, and the
+                             kind's icon where there is none to draw — the same
+                             two cases the explorer itself draws, from the same
+                             Thumbnails::drawable() answer. --}}
+                        @if ($file['thumbUrl'])
+                            <img
+                                src="{{ $file['thumbUrl'] }}"
+                                alt=""
+                                draggable="false"
+                                loading="lazy"
+                                decoding="async"
+                                class="fe-picker__thumb"
+                            >
+                        @else
+                            <span class="fe-picker__thumb fe-picker__thumb--icon">
+                                <x-filament-file-explorer::file-explorer.mime-icon :icon="$file['icon']" size="sm" />
+                            </span>
+                        @endif
                         <span class="fe-picker__name">{{ $file['name'] }}</span>
                         @unless ($isDisabled())
                             <button

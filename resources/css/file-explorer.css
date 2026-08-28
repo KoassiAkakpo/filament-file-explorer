@@ -1179,6 +1179,30 @@ body.fe-is-dragging * {
   background: rgba(255, 255, 255, 0.06);
   color: #e4e4e7;
 }
+/* The chosen file's thumbnail, and the well the kind's icon sits in when there
+   is no thumbnail to draw. One box either way, so a list mixing images and
+   documents keeps its names on one left edge instead of stepping in and out. */
+.fe-picker__thumb {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-radius: 5px;
+  object-fit: cover;
+  background: rgba(24, 24, 27, 0.06);
+}
+.dark .fe-picker__thumb {
+  background: rgba(255, 255, 255, 0.08);
+}
+.fe-picker__thumb--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+}
+.dark .fe-picker__thumb--icon {
+  background: none;
+}
+
 .fe-picker__name {
   min-width: 0;
   flex: 1;

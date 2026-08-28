@@ -26,7 +26,7 @@ Both lists are checked, and against the **sniffed** mime type rather than the de
 
 > **SVG is deliberately absent.** The media route serves files inline, and an SVG runs script in the panel's own origin. Adding it to both lists is one line and entirely your call — but that is what it costs.
 
-`max_size_kb` is a promise rather than a ceiling on a stock host: four other limits sit under it and the lowest wins. [Large uploads](large-uploads.md) is about exactly that, and is worth reading before raising this number.
+`max_size_kb` is a promise rather than a ceiling on a stock host: four other limits sit under it and the lowest wins, and out of the box `media-library.max_file_size` (**10 MB**) is usually the one that decides. `php artisan filament-file-explorer:install` prints which — see [Ask this host what its real ceiling is](large-uploads.md#ask-this-host-what-its-real-ceiling-is).
 
 ## When the name is taken
 

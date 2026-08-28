@@ -549,3 +549,69 @@ it('draws nothing for a held id of the wrong kind', function (): void {
     expect(Livewire::test(PickerForm::class)->set('data.files', (int) $clip->id)->assertOk()->html())
         ->not->toContain('demo.mp4');
 });
+
+/**
+ * What the chosen file looks like under the button.
+ *
+ * It was a single generic document glyph whatever the file was, so a field
+ * holding three images told you their names and nothing else — in a picker whose
+ * whole job is choosing one of them.
+ */
+it('draws the thumbnail of a chosen image', function (): void {
+    $image = fePickerMedia('logo.png', null, 'image/png');
+
+    $html = Livewire::test(PickerForm::class)
+        ->set('data.files', (int) $image->id)
+        ->assertOk()
+        ->html();
+
+    expect($html)->toContain('fe-picker__thumb')
+        // Through the guarded media route with this field's own scope key —
+        // never $media->getUrl(), which on a public disk hands the file to
+        // anyone holding the link, past both guards.
+        ->and($html)->toContain('conversion=thumbnail')
+        ->and($html)->toContain('files/'.$image->id);
+});
+
+it('draws the kind icon for a file with no thumbnail', function (): void {
+    $pdf = fePickerMedia('contract.pdf');
+
+    $html = Livewire::test(PickerForm::class)
+        ->set('data.files', (int) $pdf->id)
+        ->assertOk()
+        ->html();
+
+    // An <img> pointed at a PDF renders nothing at all, so guessing from the
+    // mime type would put a broken image where the icon belongs.
+    expect($html)->toContain('fe-picker__thumb--icon')
+        ->and($html)->not->toContain('conversion=thumbnail');
+});
+
+it('answers the same drawable question the explorer does', function (): void {
+    $image = fePickerMedia('logo.png', null, 'image/png');
+    $pdf = fePickerMedia('contract.pdf');
+
+    $picker = FileExplorerPicker::make('files');
+    $described = fn (Media $media): array => (fn () => $this->describeFile($media))->call($picker);
+
+    // One answer for both, from Support\Thumbnails — the class the explorer's
+    // own four drawing sites read. A second mime test here would be a second
+    // implementation to drift.
+    expect($described($image)['thumbUrl'])->not->toBeNull()
+        ->and($described($pdf)['thumbUrl'])->toBeNull()
+        ->and($described($pdf)['icon'])->toBe('pdf');
+});
+
+it('draws no thumbnail for an image outside the scope', function (): void {
+    $outside = app(FileExplorerManager::class)->createRoot('Elsewhere', 'elsewhere-thumb');
+    $stranger = fePickerMedia('theirs.png', (int) $outside->id, 'image/png');
+
+    $html = Livewire::test(PickerForm::class)
+        ->set('data.files', (int) $stranger->id)
+        ->assertOk()
+        ->html();
+
+    // The containment check decides before anything is described, so a
+    // thumbnail is not a second way to read a file the field may not resolve.
+    expect($html)->not->toContain('files/'.$stranger->id);
+});

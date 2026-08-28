@@ -13,6 +13,8 @@ php artisan filament-file-explorer:install [--force] [--stubs] [--migrate]
 
 Publishes the config file. Safe to re-run — and worth re-running after an upgrade, because it also **prints what the host is missing** for features that need tooling: a [thumbnail kind](../files/thumbnails.md#pdfs-and-videos) whose generator is not installed, say, which otherwise produces nothing quietly.
 
+It also prints **the largest file this host will actually accept**, with the five stacked ceilings and an arrow on the one that decides — `upload.max_size_kb` reads like the ceiling and usually is not. See [Ask this host what its real ceiling is](../files/large-uploads.md#ask-this-host-what-its-real-ceiling-is).
+
 `--stubs` publishes the generator templates, which is only needed to customise them. `--migrate` runs the migrations after installing.
 
 ## `filament-file-explorer:make-page`
