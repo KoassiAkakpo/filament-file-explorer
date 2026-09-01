@@ -8,7 +8,6 @@ use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
@@ -38,6 +37,7 @@ use Koassi\FilamentFileExplorer\Models\Folder;
 use Koassi\FilamentFileExplorer\Support\Abilities;
 use Koassi\FilamentFileExplorer\Support\ActiveRoot;
 use Koassi\FilamentFileExplorer\Support\Annotations;
+use Koassi\FilamentFileExplorer\Support\Dates;
 use Koassi\FilamentFileExplorer\Support\FileKinds;
 use Koassi\FilamentFileExplorer\Support\FileNames;
 use Koassi\FilamentFileExplorer\Support\FolderListing;
@@ -222,7 +222,7 @@ class FileExplorer extends Component
      */
     public ?array $deleteRequest = null;
 
-    /** @var array{id: int, name: string, mime: string, kind: string, url: string, download_url: string, size: string, icon: string, position: int, total: int}|null */
+    /** @var array{id: int, name: string, mime: string, kind: string, url: string, download_url: string, size: string, created: string|null, icon: string, position: int, total: int}|null */
     public ?array $previewItem = null;
 
     /**
@@ -1149,7 +1149,7 @@ class FileExplorer extends Component
                 'id' => (int) $folder->id,
                 'name' => (string) $folder->name,
                 'path' => $this->trashOriginPath($folder->parent_id),
-                'deleted_at' => $folder->deleted_at?->format('Y/m/d H:i') ?? '—',
+                'deleted_at' => Dates::formatOrPlaceholder($folder->deleted_at),
                 'meta' => __('filament-file-explorer::file-explorer.folder_kind'),
                 'icon' => 'folder',
             ];
@@ -1163,9 +1163,7 @@ class FileExplorer extends Component
                 'id' => (int) $media->id,
                 'name' => MediaLabel::display($media),
                 'path' => $this->trashOriginPath((int) $media->model_id),
-                'deleted_at' => is_string($trashedAt)
-                    ? Carbon::parse($trashedAt)->format('Y/m/d H:i')
-                    : '—',
+                'deleted_at' => Dates::formatOrPlaceholder(is_string($trashedAt) ? $trashedAt : null),
                 'meta' => $this->formatBytes((int) $media->size),
                 'icon' => MimeIcon::forMedia($media),
             ];
@@ -1398,6 +1396,10 @@ class FileExplorer extends Component
             'url' => $this->mediaOpenUrl((int) $media->id),
             'download_url' => $this->mediaDownloadUrl((int) $media->id),
             'size' => $this->formatBytes((int) $media->size),
+            // Same formatting as the inspector and the row views: the lightbox
+            // is one more place a date is read, not a place with a date of its
+            // own.
+            'created' => Dates::format($media->created_at),
             'icon' => MimeIcon::forMedia($media),
             'position' => $position === false ? 0 : $position + 1,
             'total' => count($ids),
@@ -1495,7 +1497,7 @@ class FileExplorer extends Component
             'media_id' => (int) $media->id,
             'name' => MediaLabel::display($media),
             'url' => app(Sharing::class)->url($share),
-            'expires_at' => $share->expires_at?->toDayDateTimeString(),
+            'expires_at' => Dates::format($share->expires_at),
             'views' => (int) $share->views,
         ];
     }
@@ -1741,8 +1743,8 @@ class FileExplorer extends Component
                 'path' => $this->folderPathString($folder),
                 'mime' => __('filament-file-explorer::file-explorer.folder_kind'),
                 'permissions' => $this->folderPermissionLabel($folder),
-                'created' => $folder->created_at?->format('Y/m/d H:i'),
-                'updated' => $folder->updated_at?->format('Y/m/d H:i'),
+                'created' => Dates::format($folder->created_at),
+                'updated' => Dates::format($folder->updated_at),
                 'extra' => trans_choice('filament-file-explorer::file-explorer.items_count', $items),
                 'delete_note' => $this->folderDeleteNote($folder),
             ];
@@ -1765,8 +1767,8 @@ class FileExplorer extends Component
                 'path' => $this->folderPathString($folder).' / '.$media->file_name,
                 'mime' => MediaLabel::kind($media),
                 'permissions' => $this->mediaPermissionLabel($media),
-                'created' => $media->created_at?->format('Y/m/d H:i'),
-                'updated' => $media->updated_at?->format('Y/m/d H:i'),
+                'created' => Dates::format($media->created_at),
+                'updated' => Dates::format($media->updated_at),
                 'extra' => $media->file_name,
                 'icon' => MimeIcon::forMedia($media),
                 // The inspector shows it at 80px: the thumbnail is enough, and
@@ -1801,8 +1803,8 @@ class FileExplorer extends Component
             'path' => $this->folderPathString($folder),
             'mime' => __('filament-file-explorer::file-explorer.current_folder_kind'),
             'permissions' => $this->folderPermissionLabel($folder),
-            'created' => $folder->created_at?->format('Y/m/d H:i'),
-            'updated' => $folder->updated_at?->format('Y/m/d H:i'),
+            'created' => Dates::format($folder->created_at),
+            'updated' => Dates::format($folder->updated_at),
             'extra' => trans_choice('filament-file-explorer::file-explorer.items_count', $items),
             'delete_note' => $this->folderDeleteNote($folder),
         ];

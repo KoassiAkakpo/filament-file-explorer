@@ -11,6 +11,8 @@ description: The lightbox, and the confirmation dialog that says what a delete a
 
 Double-clicking a file — or pressing Enter, or picking **Open** in the context menu — opens it in a lightbox. Images, video, audio, PDFs and text render inline; anything else offers a download. Left and right arrows walk through the files of the current listing.
 
+Its bar carries the name, the type, the size and the date the file was added — written the way [`dates.format`](../reference/configuration.md#dates) says, like every other date in the explorer.
+
 Previewing requires the **`download`** ability rather than one of its own, because it streams the same bytes through the same media route. Gating it separately would have made "can preview but not download" a distinction the transport cannot actually enforce.
 
 > **PDFs and text files render in a same-origin `<iframe>`.** An application that sends `X-Frame-Options: DENY` needs `SAMEORIGIN` for that part of the preview to show — or, on a CSP, `frame-ancestors 'self'`. Images, video and audio are unaffected.

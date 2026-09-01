@@ -7,6 +7,8 @@ description: Get Info — the panel that follows the selection, and the only pla
 
 **Get Info** opens a panel beside the listing describing what is selected: name, kind, size, path, dates, who uploaded it, its [description and tags](../organising/tags-and-descriptions.md), and — for a file that has one — [its version history](../files/versions.md).
 
+The dates are written the way [`dates.format`](../reference/configuration.md#dates) says — one pattern for every locale, or one per locale.
+
 Gated on the `getInfo` ability.
 
 ![The Get Info panel describing the selected file](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/inspector.webp)

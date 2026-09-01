@@ -64,6 +64,18 @@ class FilamentFileExplorerPlugin implements Plugin
 
     protected bool $refreshSet = false;
 
+    /** @var string|array<string, string>|null */
+    protected string|array|null $dateFormat = null;
+
+    protected bool $dateFormatSet = false;
+
+    protected ?string $dateLocale = null;
+
+    // Null is what "follow the application's locale" means here, so the value
+    // alone cannot say whether the panel had an opinion — same reason the quota
+    // and the refresh interval carry a flag.
+    protected bool $dateLocaleSet = false;
+
     protected ?string $defaultViewMode = null;
 
     protected ?int $maxFolderDepth = null;
@@ -193,6 +205,41 @@ class FilamentFileExplorerPlugin implements Plugin
     {
         $this->refreshSeconds = $seconds;
         $this->refreshSet = true;
+
+        return $this;
+    }
+
+    /**
+     * How a date is written on screen — the inspector, the row views, the
+     * lightbox, the trash, the version history and the share panel.
+     *
+     * One pattern for every locale, or an array keyed by locale with a
+     * 'default' entry for the rest:
+     *
+     *   ->dateFormat('j F Y \a\t g:i A')
+     *   ->dateFormat(['fr' => 'd/m/Y H:i', 'en' => 'M j, Y g:i A'])
+     *
+     * PHP's own date() letters, formatted the translated way, so the month and
+     * day names come out in the locale below.
+     *
+     * @param  string|array<string, string>  $format
+     */
+    public function dateFormat(string|array $format): static
+    {
+        $this->dateFormat = $format;
+        $this->dateFormatSet = true;
+
+        return $this;
+    }
+
+    /**
+     * The locale the month and day names are written in, or null to follow the
+     * application's — which is the default.
+     */
+    public function dateLocale(?string $locale): static
+    {
+        $this->dateLocale = $locale;
+        $this->dateLocaleSet = true;
 
         return $this;
     }
@@ -379,6 +426,29 @@ class FilamentFileExplorerPlugin implements Plugin
     public function getRefreshSeconds(): ?int
     {
         return $this->refreshSeconds;
+    }
+
+    public function hasDateFormat(): bool
+    {
+        return $this->dateFormatSet;
+    }
+
+    /**
+     * @return string|array<string, string>|null
+     */
+    public function getDateFormat(): string|array|null
+    {
+        return $this->dateFormat;
+    }
+
+    public function hasDateLocale(): bool
+    {
+        return $this->dateLocaleSet;
+    }
+
+    public function getDateLocale(): ?string
+    {
+        return $this->dateLocale;
     }
 
     public function getDefaultViewMode(): ?string

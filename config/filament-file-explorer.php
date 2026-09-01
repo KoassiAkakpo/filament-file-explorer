@@ -463,6 +463,45 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Dates
+    |--------------------------------------------------------------------------
+    |
+    | How every date the explorer shows is written: the Get Info inspector, the
+    | date column of the details and list views, the lightbox, the trash, the
+    | version history and a share link's expiry.
+    |
+    | PHP's own date() letters, formatted the translated way — so 'j F Y' reads
+    | "1 septembre 2026" under a French locale and "1 September 2026" under an
+    | English one, and a literal letter has to be escaped ('\l\e j F Y').
+    |
+    | One pattern for every locale:
+    |
+    |   'format' => 'd/m/Y H:i',
+    |
+    | Or one per locale, with 'default' answering for the rest. A regional
+    | locale falls back to its language, so 'fr' also answers for 'fr_CA':
+    |
+    |   'format' => [
+    |       'fr' => 'd/m/Y \à H:i',
+    |       'en' => 'M j, Y g:i A',
+    |       'default' => 'Y/m/d H:i',
+    |   ],
+    |
+    | 'locale' pins the language the month and day names are written in. Null —
+    | the default — follows the application's, which is what makes the explorer
+    | speak whatever the panel already speaks.
+    |
+    | Per panel instead: FilamentFileExplorerPlugin::make()->dateFormat(...)
+    | and ->dateLocale(...).
+    |
+    */
+    'dates' => [
+        'format' => 'Y/m/d H:i',
+        'locale' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Default view
     |--------------------------------------------------------------------------
     |

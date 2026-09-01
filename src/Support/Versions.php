@@ -344,7 +344,7 @@ final class Versions
                 'size' => (int) $row->size,
                 'size_label' => Quota::format((int) $row->size),
                 'name' => MediaLabel::display($row),
-                'replaced_at' => $line->replaced_at?->format('Y/m/d H:i'),
+                'replaced_at' => Dates::format($line->replaced_at),
                 'added_by' => $uploader->label($row),
             ];
         }

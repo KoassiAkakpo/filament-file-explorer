@@ -13,7 +13,7 @@ publishes `config/filament-file-explorer.php`.
 
 ## Config or plugin
 
-Anything in the `standalone` block, plus `quota`, `refresh`, `view.default` and `folders.max_depth`, can also be set **on the plugin** — and the plugin wins. That keeps settings panel-scoped in a multi-panel application instead of mutating global config, and keeps things working outside a panel (console, tests) where there is no plugin to ask.
+Anything in the `standalone` block, plus `quota`, `refresh`, `view.default`, `dates.*` and `folders.max_depth`, can also be set **on the plugin** — and the plugin wins. That keeps settings panel-scoped in a multi-panel application instead of mutating global config, and keeps things working outside a panel (console, tests) where there is no plugin to ask.
 
 Marked **P** below where a plugin setter exists. See [The standalone page](../getting-started/standalone-page.md#config-or-plugin).
 
@@ -136,6 +136,45 @@ Config only.
 | Key | Default | |
 | --- | --- | --- |
 | `default` | `'grid'` | **P** — `grid`, `columns` or `details`. Until the user picks |
+
+## `dates`
+
+**P** — `->dateFormat(...)` and `->dateLocale(...)`.
+
+| Key | Default | |
+| --- | --- | --- |
+| `format` | `'Y/m/d H:i'` | One pattern, or an array keyed by locale |
+| `locale` | `null` | The language month and day names are written in; `null` follows the application's |
+
+Every date the explorer shows goes through it: the [Get Info inspector](../browsing/inspector.md), the date column of the details and list views, the [lightbox](../browsing/preview.md), the [trash](../files/trash.md), the [version history](../files/versions.md) and a [share link](../files/share-links.md)'s expiry.
+
+The pattern is PHP's own `date()` letters, formatted the translated way — so `'j F Y'` reads *1 septembre 2026* under a French locale and *1 September 2026* under an English one. A literal letter has to be escaped: `'\l\e j F Y'`.
+
+```php
+'dates' => [
+    'format' => 'd/m/Y H:i',
+],
+```
+
+One pattern per locale instead, with `default` answering for the rest. A regional locale falls back to its language, so `fr` also answers for `fr_CA`:
+
+```php
+'dates' => [
+    'format' => [
+        'fr' => 'd/m/Y \à H:i',
+        'en' => 'M j, Y g:i A',
+        'default' => 'Y/m/d H:i',
+    ],
+],
+```
+
+`locale` pins the language regardless of the application's, which is how a panel writes French dates in an English application:
+
+```php
+FilamentFileExplorerPlugin::make()
+    ->dateFormat('j F Y \à H:i')
+    ->dateLocale('fr')
+```
 
 ## `standalone`
 

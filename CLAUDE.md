@@ -75,6 +75,17 @@ Two wrinkles the newer settings introduced:
 - A setting whose "unset" value is a legal value needs its own flag. `quota` and `refresh` are nullable — null means *no limit* — so the value alone cannot say whether the panel had an opinion, and `->quota(null)` has to be able to lift a limit config had set. Hence `hasQuota()` / `hasRefreshInterval()` beside the getters.
 - `tableColumns()` takes a Closure, which cannot live in a config file, so it is plugin-only. `StandaloneSettings::tableColumns()` still exists as the single reader; it just has no config fallback. The trait keys its columns by name so the callback can add, drop or reorder them.
 
+## Dates on screen
+
+[Support/Dates.php](src/Support/Dates.php) is the single owner of how a date is written — the inspector, the date column of the row views, the lightbox, the trash, the version history and a share link's expiry. There were fourteen `format('Y/m/d H:i')` calls and one `toDayDateTimeString()`, which is English whatever the panel's locale is, so the package already had two spellings before anything was configurable.
+
+- **`translatedFormat()`, never `format()`.** They agree exactly on a numeric pattern like the default and differ on every pattern with a word in it, which is the whole point: `j F Y` has to read "1 septembre 2026" under a French locale.
+- **The pattern may be a string or an array keyed by locale**, with `default` for the rest and a regional locale falling back to its language (`fr` answers for `fr_CA`). Anything unreadable falls back to `DEFAULT_FORMAT`, which is what the package wrote before the setting existed — a date is not the place to throw.
+- **`format()` returns null for a missing date and `formatOrPlaceholder()` returns `—`.** Two callers, two needs: a row of the trash always has a cell to fill, an inspector row can be absent.
+- **`dates.locale` needs its own `has*()` flag**, because null is a legal value there — it is what "follow the application" means — so `->dateLocale(null)` has to be able to lift a locale config had pinned. Same rule as `quota` and `refresh`.
+
+The lightbox gained a date with this: it showed type and size only, and it is one more place a date is read rather than a place with a date of its own.
+
 ## Container bindings
 
 Registered in [FilamentFileExplorerServiceProvider.php](src/FilamentFileExplorerServiceProvider.php):

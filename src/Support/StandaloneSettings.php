@@ -152,6 +152,42 @@ final class StandaloneSettings
     }
 
     /**
+     * How a date is written on screen: one pattern for every locale, or an
+     * array keyed by locale. Read by Support\Dates and nowhere else.
+     *
+     * @return string|array<string, string>
+     */
+    public static function dateFormat(): string|array
+    {
+        $plugin = self::plugin();
+
+        $format = $plugin?->hasDateFormat() === true
+            ? $plugin->getDateFormat()
+            : config('filament-file-explorer.dates.format', Dates::DEFAULT_FORMAT);
+
+        return is_string($format) || is_array($format) ? $format : Dates::DEFAULT_FORMAT;
+    }
+
+    /**
+     * The locale the month and day names are written in, or null to follow the
+     * application's.
+     *
+     * Null is a legal value here — it is what "follow the application" means —
+     * so the plugin needs its own flag to be able to set it back, exactly like
+     * the quota and the refresh interval.
+     */
+    public static function dateLocale(): ?string
+    {
+        $plugin = self::plugin();
+
+        $locale = $plugin?->hasDateLocale() === true
+            ? $plugin->getDateLocale()
+            : config('filament-file-explorer.dates.locale');
+
+        return is_string($locale) && $locale !== '' ? $locale : null;
+    }
+
+    /**
      * View the explorer opens in until the user picks another.
      */
     public static function defaultViewMode(): string

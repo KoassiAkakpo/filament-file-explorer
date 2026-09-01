@@ -811,7 +811,7 @@
                                     @if ($viewMode === 'details')
                                         <span class="text-xs text-zinc-500">{{ trans_choice('filament-file-explorer::file-explorer.items_count', $folderItems) }}</span>
                                     @endif
-                                    <span class="text-xs text-zinc-500">{{ $folder->updated_at?->format('Y/m/d H:i') }}</span>
+                                    <span class="text-xs text-zinc-500">{{ \Koassi\FilamentFileExplorer\Support\Dates::format($folder->updated_at) }}</span>
                                 </div>
                             @endforeach
 
@@ -878,7 +878,7 @@
                                     @if ($viewMode === 'details')
                                         <span class="text-xs text-zinc-500">{{ $sizeLabel }}</span>
                                     @endif
-                                    <span class="text-xs text-zinc-500">{{ $media->created_at?->format('Y/m/d H:i') }}</span>
+                                    <span class="text-xs text-zinc-500">{{ \Koassi\FilamentFileExplorer\Support\Dates::format($media->created_at) }}</span>
                                 </div>
                             @endforeach
                         @else
@@ -1350,6 +1350,9 @@
                             <div class="truncate text-[13px] font-medium">{{ $previewItem['name'] }}</div>
                             <div class="text-[11px] opacity-70">
                                 {{ $previewItem['mime'] }} · {{ $previewItem['size'] }}
+                                @if ($previewItem['created'])
+                                    · {{ $previewItem['created'] }}
+                                @endif
                                 @if ($previewItem['total'] > 1 && $previewItem['position'] > 0)
                                     · {{ __('filament-file-explorer::file-explorer.lightbox.position', ['position' => $previewItem['position'], 'total' => $previewItem['total']]) }}
                                 @endif
