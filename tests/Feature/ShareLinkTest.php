@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Koassi\FilamentFileExplorer\Authorizers\AllowAllAuthorizer;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerAuthorizer;
 use Koassi\FilamentFileExplorer\Contracts\FileExplorerRootResolver;
@@ -314,4 +316,167 @@ it('drops the action entirely when sharing is off', function (): void {
     feShMedia();
 
     expect(feShComponent()->assertOk()->html())->not->toContain('$wire.shareFile');
+});
+
+it('marks a shared file in the listing, and stops once it is revoked', function (): void {
+    $media = feShMedia();
+
+    // Nothing to mark before the link exists.
+    expect(feShComponent()->instance()->shareIndex())->toBe([]);
+
+    $shared = feShComponent()->call('shareFile', $media->id);
+
+    expect($shared->instance()->shareIndex())->toBe([$media->id => true])
+        // Drawn on the item itself: a file anyone with a URL can open is not
+        // something to find out by opening a dialog per row.
+        ->and($shared->html())->toContain('fe-share-mark');
+
+    $shared->call('revokeShare');
+
+    expect(feShComponent()->instance()->shareIndex())->toBe([])
+        ->and(feShComponent()->html())->not->toContain('fe-share-mark');
+});
+
+it('marks nothing when sharing is turned off', function (): void {
+    $media = feShMedia();
+    feShShare($media);
+
+    config(['filament-file-explorer.share.enabled' => false]);
+
+    expect(feShComponent()->instance()->shareIndex())->toBe([]);
+});
+
+it('asks once for a whole window of files', function (): void {
+    $media = collect(range(1, 5))->map(fn (int $i): Media => feShMedia("file-{$i}.pdf"));
+    $media->each(fn (Media $file) => feShShare($file));
+
+    $component = feShComponent();
+
+    $queries = 0;
+    DB::listen(function () use (&$queries): void {
+        $queries++;
+    });
+
+    // One query for the window, as the tag index does — asking per row is how a
+    // folder of a hundred files becomes a hundred queries.
+    expect($component->instance()->shareIndex())->toHaveCount(5)
+        ->and($queries)->toBe(1);
+});
+
+it('lists every live link of the scope, with the file behind it', function (): void {
+    $folder = FolderModel::query()->create(['name' => 'Docs', 'slug' => 'docs', 'parent_id' => feShRootId()]);
+    $inside = feShMedia('inside.pdf', (int) $folder->id);
+    $atRoot = feShMedia('root.pdf');
+
+    feShShare($inside);
+    feShShare($atRoot);
+
+    $rows = feShComponent()->instance()->sharedItems();
+
+    expect($rows)->toHaveCount(2)
+        // Newest first, and each says where its file sits — a link is the
+        // scope's, wherever in the tree that is.
+        ->and($rows[0]['name'])->toBe('root.pdf')
+        ->and($rows[1]['name'])->toBe('inside.pdf')
+        ->and($rows[1]['path'])->toContain('Docs')
+        ->and($rows[0]['url'])->toContain('file-explorer/share/');
+});
+
+it('leaves out a link that already reaches nothing', function (): void {
+    $media = feShMedia();
+    feShShare($media);
+
+    expect(feShComponent()->instance()->sharedItems())->toHaveCount(1);
+
+    app(Trash::class)->trashMedia($media);
+    app()->forgetScopedInstances();
+
+    // The link is dead on its own — that is how a share dies, with nothing kept
+    // in step — so offering to stop it would be offering to stop nothing.
+    expect(feShComponent()->instance()->sharedItems())->toBe([]);
+});
+
+it('lists no link made under another scope or another root', function (): void {
+    $media = feShMedia();
+
+    app(Sharing::class)->create('other-scope', feShRootId(), $media);
+
+    expect(feShComponent()->instance()->sharedItems())->toBe([]);
+});
+
+it('stops one share from the dialog', function (): void {
+    $first = feShShare(feShMedia('one.pdf'));
+    $second = feShShare(feShMedia('two.pdf'));
+
+    $component = feShComponent()
+        ->call('openSharePanel')
+        ->assertSet('showSharePanel', true)
+        ->call('revokeShareById', $first->id);
+
+    expect(FileShare::query()->find($first->id)?->revoked_at)->not->toBeNull()
+        ->and(FileShare::query()->find($second->id)?->revoked_at)->toBeNull();
+
+    // The dialog stays open on what is left: revoking several is one visit.
+    $component->assertSet('showSharePanel', true);
+
+    expect($component->instance()->sharedItems())->toHaveCount(1);
+});
+
+it('refuses to stop a link of another scope', function (): void {
+    $media = feShMedia();
+    $foreign = app(Sharing::class)->create('other-scope', feShRootId(), $media);
+
+    feShComponent()->call('revokeShareById', $foreign->id);
+
+    // The id arrives from the client, so the scope is proved rather than
+    // trusted — as it is for every other id this component is handed.
+    expect(FileShare::query()->find($foreign->id)?->revoked_at)->toBeNull();
+});
+
+it('closes the single-link dialog when its own link is stopped from the list', function (): void {
+    $media = feShMedia();
+
+    $component = feShComponent()->call('shareFile', $media->id);
+    $share = app(Sharing::class)->activeForMedia($media->id, 'library', feShRootId());
+
+    $component->call('revokeShareById', $share->id)->assertSet('shareItem', null);
+});
+
+it('needs the share ability to open the list or stop anything', function (): void {
+    $share = feShShare();
+
+    app()->instance(FileExplorerAuthorizer::class, new class extends AllowAllAuthorizer
+    {
+        public function abilities(string $scopeKey, int $rootFolderId): array
+        {
+            return [...parent::abilities($scopeKey, $rootFolderId), 'share' => false];
+        }
+    });
+    app()->forgetScopedInstances();
+
+    feShComponent()->call('openSharePanel')->assertForbidden();
+    feShComponent()->call('revokeShareById', $share->id)->assertForbidden();
+
+    expect(FileShare::query()->find($share->id)?->revoked_at)->toBeNull();
+});
+
+it('offers the list from the toolbar, and only while sharing is on', function (): void {
+    $toolbar = fn (string $html): string => (string) Str::between($html, 'class="fe-toolbar', 'class="fe-browser');
+
+    expect($toolbar(feShComponent()->html()))->toContain('wire:click="openSharePanel"');
+
+    config(['filament-file-explorer.share.enabled' => false]);
+
+    expect($toolbar(feShComponent()->html()))->not->toContain('openSharePanel');
+});
+
+it('renders the list with a way to stop each link', function (): void {
+    $media = feShMedia();
+    feShShare($media);
+
+    $html = feShComponent()->call('openSharePanel')->html();
+
+    expect($html)->toContain('fe-share-row')
+        ->toContain('report.pdf')
+        ->toContain('revokeShareById');
 });

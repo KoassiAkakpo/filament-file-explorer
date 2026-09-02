@@ -884,6 +884,11 @@ body.fe-is-dragging * {
   border-color: rgba(255, 255, 255, 0.1);
   color: #fafafa;
 }
+/* The shared-files dialog holds rows rather than a sentence, so it is given the
+   width a row needs — the single-link dialog keeps the narrow one. */
+.fe-modal--wide {
+  max-width: 42rem;
+}
 .fe-modal__title {
   font-size: 0.95rem;
   font-weight: 600;
@@ -1098,6 +1103,72 @@ body.fe-is-dragging * {
 .fe-tag-dots .fe-tag__dot {
   height: 0.4rem;
   width: 0.4rem;
+}
+
+/* A file anyone with a link can open. Drawn in the accent, like the selection,
+   because it is a state of the item rather than a warning about it. */
+.fe-share-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--fe-accent-text);
+}
+.fe-share-mark__icon {
+  height: 0.75rem;
+  width: 0.75rem;
+}
+/* Over the icon in the views that have one. The disc is what keeps it readable
+   against a thumbnail, which can be any colour at all. */
+.fe-share-mark--badge {
+  position: absolute;
+  right: 0.1rem;
+  bottom: 0.1rem;
+  border-radius: 9999px;
+  background: #fff;
+  padding: 1px;
+  box-shadow: 0 0 0 1px rgba(24, 24, 27, 0.08);
+}
+.dark .fe-share-mark--badge {
+  background: #27272a;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* The shared-files dialog. The list scrolls rather than the dialog growing past
+   the window: a scope can hold many links and the actions have to stay put. */
+.fe-shares {
+  margin-top: 0.7rem;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+.fe-shares__count {
+  margin-inline-start: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #71717a;
+}
+.fe-share-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+}
+.fe-share-row:hover {
+  background: rgba(24, 24, 27, 0.04);
+}
+.dark .fe-share-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+@media (max-width: 720px) {
+  .fe-share-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .fe-share-row > :nth-child(2),
+  .fe-share-row > :nth-child(3) {
+    display: none;
+  }
 }
 /* Picking the colour a new tag is added with.
    Real radios, hidden rather than replaced, so the group keeps its keyboard

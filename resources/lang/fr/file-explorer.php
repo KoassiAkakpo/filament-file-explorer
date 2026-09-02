@@ -255,6 +255,10 @@ return [
         'revoked' => 'Le lien ne fonctionne plus',
         'open' => 'Ouvrir',
         'shared' => 'Partagé',
+        'panel' => 'Fichiers partagés',
+        'panel_empty' => "Aucun fichier n'est partagé pour le moment.",
+        'count' => '{0} aucun|{1} :count fichier|[2,*] :count fichiers',
+        'where' => 'Dans',
     ],
     'trash' => [
         'title' => 'Corbeille',

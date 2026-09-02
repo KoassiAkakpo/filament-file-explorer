@@ -10,6 +10,8 @@
             $panes = $this->columnPanes();
             // Both kinds prefetched in two queries: the rows below ask per item.
             $tagIndex = $this->tagIndex();
+            // Same reason, one query: which of the files on screen are public.
+            $shareIndex = $this->shareIndex();
             $locale = str_replace('_', '-', app()->getLocale());
             $i18n = trans('filament-file-explorer::file-explorer');
         @endphp
@@ -46,7 +48,7 @@
             @new-folder-created.window="focusInput('[data-fe-new-folder-input]', $event.detail)"
             @focus-rename-input.window="focusInput('[data-fe-rename-input]', $event.detail)"
             @click.window="closeContext()"
-            @keydown.escape.window="closeContext(); $wire.cancelRename(); $wire.cancelNewFolder(); $wire.closeInfo(); $wire.cancelDelete(); $wire.closePreview(); $wire.closeShare()"
+            @keydown.escape.window="closeContext(); $wire.cancelRename(); $wire.cancelNewFolder(); $wire.closeInfo(); $wire.cancelDelete(); $wire.closePreview(); $wire.closeShare(); $wire.closeSharePanel()"
         >
             <div class="fe-finder w-full overflow-hidden rounded-xl border border-zinc-200/90 bg-zinc-50/80 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40" dir="ltr" lang="{{ $locale }}" translate="no">
                 <div class="fe-body flex min-h-[560px]">
@@ -284,6 +286,22 @@
                         wire:click="toggleTrash"
                     >
                         @svg('heroicon-o-trash', 'h-4 w-4')
+                    </button>
+                    @endif
+
+                    {{-- The shared files, from anywhere in the scope. Not behind
+                         @unless($showTrash) like the controls above it: those act
+                         on the folder being browsed, and this one does not — a
+                         link is the scope's, wherever its file sits. --}}
+                    @if ($this->sharingEnabled() && $abilities['share'])
+                    <button
+                        type="button"
+                        @class(['fe-tool-btn', 'fe-tool-btn--active' => $showSharePanel])
+                        title="{{ __('filament-file-explorer::file-explorer.share.panel') }}"
+                        aria-pressed="{{ $showSharePanel ? 'true' : 'false' }}"
+                        wire:click="openSharePanel"
+                    >
+                        @svg('heroicon-o-link', 'h-4 w-4')
                     </button>
                     @endif
 
@@ -707,6 +725,7 @@
                                                     @endif
                                                 </span>
                                                 <span class="truncate">{{ $paneLabel }}</span>
+                                                <x-filament-file-explorer::file-explorer.share-mark :shared="isset($shareIndex[$media->id])" />
                                             </div>
                                         @else
                                             <button
@@ -872,6 +891,7 @@
                                         @else
                                             <span class="truncate text-zinc-800 dark:text-zinc-100">{{ $fileLabel }}</span>
                                             <x-filament-file-explorer::file-explorer.tag-dots :tags="$tagIndex['file'][$media->id] ?? []" />
+                                            <x-filament-file-explorer::file-explorer.share-mark :shared="isset($shareIndex[$media->id])" />
                                         @endif
                                     </div>
                                     <span class="truncate text-xs text-zinc-500">{{ strtoupper(pathinfo($media->file_name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
@@ -898,6 +918,7 @@
                                 <x-filament-file-explorer::file-explorer.media
                                     :media="$media"
                                     :tags="$tagIndex['file'][$media->id] ?? []"
+                                    :shared="isset($shareIndex[$media->id])"
                                     :selectedFiles="$selectedFiles"
                                     :selectedFolders="$selectedFolders"
                                     :openUrl="$this->mediaOpenUrl($media->id)"
@@ -1323,6 +1344,86 @@
                                 {{ __('filament-file-explorer::file-explorer.share.open') }}
                             </a>
                             <button type="button" class="fe-btn" wire:click="closeShare">
+                                {{ __('filament-file-explorer::file-explorer.inspector.close') }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- Every live link of the scope, and the way to stop one.
+                 A dialog rather than a mode like the trash: these are not a
+                 folder's contents, and reading them is not a reason to lose the
+                 folder being browsed. Gated on the ability as well as on the
+                 flag, so a client setting the flag by hand gets nothing —
+                 sharedItems() refuses it in any case. --}}
+            @if ($showSharePanel && $this->sharingEnabled() && $abilities['share'])
+                @php
+                    $sharedRows = $this->sharedItems();
+                    $sharesId = 'fe-shares-'.$this->getId();
+                @endphp
+                <div class="fe-overlay" wire:key="fe-share-panel">
+                    <div
+                        class="fe-modal fe-modal--wide"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="{{ $sharesId }}"
+                        tabindex="-1"
+                        x-data
+                        x-init="$nextTick(() => $el.focus())"
+                        @keydown.tab.prevent="trapTab($event, $el)"
+                    >
+                        <h2 id="{{ $sharesId }}" class="fe-modal__title">
+                            {{ __('filament-file-explorer::file-explorer.share.panel') }}
+                            <span class="fe-shares__count">{{ trans_choice('filament-file-explorer::file-explorer.share.count', count($sharedRows), ['count' => count($sharedRows)]) }}</span>
+                        </h2>
+
+                        @if ($sharedRows === [])
+                            <p class="fe-modal__note">{{ __('filament-file-explorer::file-explorer.share.panel_empty') }}</p>
+                        @else
+                            <p class="fe-modal__note">{{ __('filament-file-explorer::file-explorer.share.description') }}</p>
+
+                            <ul class="fe-shares">
+                                @foreach ($sharedRows as $row)
+                                    <li class="fe-share-row" wire:key="fe-share-row-{{ $row['id'] }}" x-data="{ copied: false }">
+                                        <div class="flex min-w-0 items-center gap-2">
+                                            <x-filament-file-explorer::file-explorer.mime-icon :icon="$row['icon']" size="sm" />
+                                            <span class="truncate text-[13px] text-zinc-800 dark:text-zinc-100">{{ $row['name'] }}</span>
+                                        </div>
+                                        <span class="truncate text-xs text-zinc-500">{{ __('filament-file-explorer::file-explorer.share.where') }}: {{ $row['path'] }}</span>
+                                        <span class="truncate text-xs text-zinc-500">
+                                            {{ $row['expires_at'] ?? __('filament-file-explorer::file-explorer.share.never_expires') }}
+                                            &middot;
+                                            {{ trans_choice('filament-file-explorer::file-explorer.share.views', $row['views'], ['count' => $row['views']]) }}
+                                        </span>
+                                        <div class="flex shrink-0 items-center gap-1">
+                                            <button
+                                                type="button"
+                                                class="fe-btn"
+                                                @click="navigator.clipboard?.writeText(@js($row['url'])); copied = true; setTimeout(() => copied = false, 1500)"
+                                            >
+                                                <span x-show="!copied">{{ __('filament-file-explorer::file-explorer.share.copy') }}</span>
+                                                <span x-show="copied" x-cloak>{{ __('filament-file-explorer::file-explorer.share.copied') }}</span>
+                                            </button>
+                                            <a class="fe-tool-btn" href="{{ $row['url'] }}" target="_blank" rel="noopener" title="{{ __('filament-file-explorer::file-explorer.share.open') }}">
+                                                @svg('heroicon-o-arrow-top-right-on-square', 'h-3.5 w-3.5')
+                                            </a>
+                                            <button
+                                                type="button"
+                                                class="fe-tool-btn fe-tool-btn--ghost-danger"
+                                                title="{{ __('filament-file-explorer::file-explorer.share.revoke') }}"
+                                                wire:click="revokeShareById({{ $row['id'] }})"
+                                            >
+                                                @svg('heroicon-m-link-slash', 'h-3.5 w-3.5')
+                                            </button>
+                                        </div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+
+                        <div class="fe-modal__actions">
+                            <button type="button" class="fe-btn" wire:click="closeSharePanel">
                                 {{ __('filament-file-explorer::file-explorer.inspector.close') }}
                             </button>
                         </div>

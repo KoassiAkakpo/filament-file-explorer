@@ -393,6 +393,11 @@ That split is what makes a link die on its own: a file moved out of scope fails 
 
 Sharing the same file twice hands back the existing link rather than minting a second, so revoking has one thing to revoke — and `FileShared` therefore fires only for a link that is actually new.
 
+Two things read the shares back, and both go through `Sharing`'s own `liveQuery()` — the SQL counterpart of `FileShare::isLive()`, which three callers now ask and a fourth spelling of would be a fourth chance to forget the expiry:
+
+- **The listing's mark.** `shareIndex()` answers the whole window in one query, like `tagIndex()` — asking per row is how a folder of a hundred files becomes a hundred queries. It is deliberately **not** gated on the `share` ability: that one decides who may hand a file out, while the mark says the file *is* public, which whoever would want it stopped is the first to need.
+- **The shared-files dialog.** `sharedItems()` is a dialog and not a mode like the trash: the shares of a scope are not a folder's contents, and reading them is not a reason to lose the folder being browsed — which is also why its toolbar button sits outside the `@unless ($showTrash)` the folder's own controls live behind. It leaves out a link whose file has moved out, been trashed or deleted: those already reach nothing, and offering to stop one would be offering to stop nothing. `revokeShareById()` is the row action and the one place a revoke happens now — `revokeShare()` delegates to it — and it proves the scope and the root because the id comes from the client.
+
 ## Quotas
 
 `Support\Quota` caps a scope by root folder, not by application: with the per-user or per-tenant resolver each scope gets an allowance of the same size, which is the only reading of a quota that means anything when the resolver hands out one root each.

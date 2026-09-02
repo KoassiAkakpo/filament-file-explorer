@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Koassi\FilamentFileExplorer\Support;
 
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Koassi\FilamentFileExplorer\Models\FileShare;
 use RuntimeException;
@@ -104,14 +106,55 @@ final class Sharing
 
     public function activeForMedia(int $mediaId, string $scopeKey, int $rootFolderId): ?FileShare
     {
-        return FileShare::query()
+        return $this->liveQuery($scopeKey, $rootFolderId)
             ->where('media_id', $mediaId)
-            ->where('scope_key', $scopeKey)
-            ->where('root_folder_id', $rootFolderId)
-            ->whereNull('revoked_at')
-            ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * Which of these files carry a live link, in one query.
+     *
+     * The listing draws a window of rows and any of them may be shared; asking
+     * per row is how a folder of a hundred files becomes a hundred queries —
+     * the same reason Annotations::tagsFor() exists. The answer is keyed by id
+     * so the views can ask `isset()` rather than search a list per row.
+     *
+     * @param  list<int>  $mediaIds
+     * @return array<int, true>
+     */
+    public function activeMediaIds(array $mediaIds, string $scopeKey, int $rootFolderId): array
+    {
+        if (! self::enabled() || $mediaIds === []) {
+            return [];
+        }
+
+        return array_fill_keys(
+            $this->liveQuery($scopeKey, $rootFolderId)
+                ->whereIn('media_id', $mediaIds)
+                ->pluck('media_id')
+                ->map(fn ($id): int => (int) $id)
+                ->all(),
+            true,
+        );
+    }
+
+    /**
+     * Every live link of one scope and root, newest first.
+     *
+     * Says nothing about the files behind them: a share whose file has been
+     * moved out, trashed or deleted is still a row here, and mediaFor() is what
+     * answers whether it still reaches anything.
+     *
+     * @return Collection<int, FileShare>
+     */
+    public function liveForScope(string $scopeKey, int $rootFolderId): Collection
+    {
+        if (! self::enabled()) {
+            return new Collection;
+        }
+
+        return $this->liveQuery($scopeKey, $rootFolderId)->latest('id')->get();
     }
 
     public function revoke(FileShare $share): void
@@ -140,6 +183,22 @@ final class Sharing
             'views' => $share->views + 1,
             'last_viewed_at' => now(),
         ]);
+    }
+
+    /**
+     * What "live" means, in SQL — the counterpart of FileShare::isLive(), and
+     * the one place the two conditions are written. Three callers ask it, and a
+     * fourth spelling of it would be a fourth chance to forget the expiry.
+     *
+     * @return Builder<FileShare>
+     */
+    private function liveQuery(string $scopeKey, int $rootFolderId): Builder
+    {
+        return FileShare::query()
+            ->where('scope_key', $scopeKey)
+            ->where('root_folder_id', $rootFolderId)
+            ->whereNull('revoked_at')
+            ->where(fn (Builder $query): Builder => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()));
     }
 
     /**

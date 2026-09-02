@@ -23,6 +23,16 @@ Gated on the `share` ability, which [follows `download`](../integrating/authoriz
 
 ![The share dialog: the link, when it expires, how often it has been opened, and a way to stop](https://koassiakakpo.github.io/filament-file-explorer/assets/screenshots/share.webp)
 
+## Seeing what is shared
+
+A file with a live link carries a **small link mark** in the listing — over its icon in the grid and the column view, beside its name in the details view. It is drawn the way the [tag dots](../organising/tags-and-descriptions.md) are, and for the same reason: that a file is public is worth reading from across the folder rather than by opening a dialog per row. The mark is not gated on the `share` ability — it says something about the file, and whoever would want a link stopped is the first person who needs to see there is one.
+
+The **link button in the toolbar** opens the list of every live link of the scope, wherever in the tree its file sits: what is shared, which folder it is in, when it expires, how often it has been opened, a copy button, and a **Stop sharing** button per row. It is a dialog rather than a mode like the [trash](trash.md) — the shares of a scope are not a folder's contents, and reading them is not a reason to lose the folder you were browsing — and the dialog stays open as you revoke, since revoking several is one visit.
+
+The list leaves out a link that already **reaches nothing** — its file moved out of the scope, trashed or deleted. Those die on their own (see below), so offering to stop one would be offering to stop nothing.
+
+Both the mark and the list need the `share` feature on; the list additionally needs the `share` ability, which is what the button is gated on.
+
 ## How it holds up without a session
 
 This is the only route in the package with no authenticated user behind it, so the two guards cannot both run at request time. They are **split in time**:
@@ -54,6 +64,8 @@ Links are **stored rather than signed**, because revoking is the half of sharing
 
 Revoking is a database write and takes effect immediately. The row is **kept**, so a withdrawn share is still there to inspect.
 
+Three ways to revoke, all the same write: the **Stop sharing** button of the share dialog, the same button on a row of the shared-files list, and `Sharing::revoke()` from your own code. Both buttons take the `share` ability — the one that made the link — because someone who can hand a file out can stop handing it out, and a separate ability would let an authorizer allow the first without the second.
+
 Sharing the same file twice hands back the existing link rather than minting a second, so revoking has one thing to revoke — and `FileShared` therefore fires only for a link that is actually new.
 
 ## Events
@@ -74,6 +86,8 @@ $share = $sharing->resolve($token);              // null for a bad, expired or r
 $media = $share ? $sharing->mediaFor($share) : null;   // null when containment fails
 
 $sharing->activeForMedia($media->id, $scopeKey, $rootFolderId);
+$sharing->activeMediaIds([$id, $id2], $scopeKey, $rootFolderId);  // which of these are shared, in one query
+$sharing->liveForScope($scopeKey, $rootFolderId);                 // every live link, newest first
 $sharing->url($share);
 $sharing->revoke($share);
 ```

@@ -233,6 +233,16 @@ class FileExplorer extends Component
      */
     public ?array $shareItem = null;
 
+    /**
+     * Whether the dialog listing every live link of this scope is open.
+     *
+     * A dialog rather than a mode like the trash: the shares of a scope are not
+     * a folder's contents, and reading them is not a reason to lose the folder
+     * you were browsing. It is the client's own state, so the ability is
+     * checked by sharedItems() and by every action it offers, never by this.
+     */
+    public bool $showSharePanel = false;
+
     /** Whether the browser area shows the trash instead of the current folder. */
     public bool $showTrash = false;
 
@@ -1448,11 +1458,7 @@ class FileExplorer extends Component
     }
 
     /**
-     * Withdraws the link the panel is showing.
-     *
-     * Takes the same ability that made it: someone who can hand a file out can
-     * stop handing it out, and a separate ability would let an authorizer allow
-     * the first without the second.
+     * Withdraws the link the dialog is showing.
      */
     public function revokeShare(): void
     {
@@ -1462,10 +1468,28 @@ class FileExplorer extends Component
             return;
         }
 
-        $share = FileShare::query()->find($this->shareItem['id'] ?? 0);
+        $this->revokeShareById((int) ($this->shareItem['id'] ?? 0));
+    }
+
+    /**
+     * Withdraws one link by id — the shared-files dialog's row action, and what
+     * the single-link dialog above delegates to.
+     *
+     * Takes the same ability that made the link: someone who can hand a file out
+     * can stop handing it out, and a separate ability would let an authorizer
+     * allow the first without the second. The id arrives from the client, so the
+     * scope and the root are proved here rather than trusted — the same shape as
+     * every other id this component is handed.
+     */
+    public function revokeShareById(int $shareId): void
+    {
+        abort_unless(Sharing::enabled(), 404);
+        abort_unless($this->ability('share'), 403);
+
+        $share = FileShare::query()->find($shareId);
 
         // Nothing to say if it is already gone or was never this scope's: the
-        // panel simply closes.
+        // row simply leaves the list.
         if ($share instanceof FileShare
             && $share->scope_key === $this->scopeKey
             && $share->root_folder_id === $this->rootFolderId) {
@@ -1474,7 +1498,11 @@ class FileExplorer extends Component
             event(new ShareRevoked($this->scopeKey, $this->rootFolderId, auth()->user(), $share));
         }
 
-        $this->shareItem = null;
+        // The single-link dialog describing this very link would otherwise go on
+        // offering a Stop sharing button for a link that has stopped.
+        if ((int) ($this->shareItem['id'] ?? 0) === $shareId) {
+            $this->shareItem = null;
+        }
 
         Notification::make()
             ->success()
@@ -1485,6 +1513,108 @@ class FileExplorer extends Component
     public function closeShare(): void
     {
         $this->shareItem = null;
+    }
+
+    public function sharingEnabled(): bool
+    {
+        return Sharing::enabled();
+    }
+
+    public function openSharePanel(): void
+    {
+        abort_unless(Sharing::enabled(), 404);
+        abort_unless($this->ability('share'), 403);
+
+        $this->showSharePanel = true;
+    }
+
+    public function closeSharePanel(): void
+    {
+        $this->showSharePanel = false;
+    }
+
+    /**
+     * Every live link of this scope and root, with the file behind it.
+     *
+     * A link whose file has been moved out, trashed or deleted is left out: it
+     * already reaches nothing — that is how a share dies, with nothing kept in
+     * step — and listing it would offer to stop a sharing that has stopped.
+     *
+     * @return list<array{id: int, media_id: int, name: string, path: string, icon: string, url: string, expires_at: string|null, views: int}>
+     */
+    public function sharedItems(): array
+    {
+        if (! Sharing::enabled()) {
+            return [];
+        }
+
+        abort_unless($this->ability('share'), 403);
+
+        $sharing = app(Sharing::class);
+        $shares = $sharing->liveForScope($this->scopeKey, $this->rootFolderId);
+
+        if ($shares->isEmpty()) {
+            return [];
+        }
+
+        // One query for the files, as the listing does for tags: a scope with
+        // fifty links would otherwise be fifty lookups to draw one dialog.
+        $files = Media::query()
+            ->whereIn('id', $shares->pluck('media_id')->all())
+            ->get()
+            ->keyBy(fn (Media $media): int => (int) $media->id);
+
+        $scope = app(MediaScope::class);
+        $rows = [];
+
+        foreach ($shares as $share) {
+            $media = $files->get((int) $share->media_id);
+
+            if (! $media instanceof Media) {
+                continue;
+            }
+
+            $folder = $scope->folderUnderRoot($media, $this->rootFolderId);
+
+            if ($folder === null) {
+                continue;
+            }
+
+            $rows[] = [
+                'id' => (int) $share->id,
+                'media_id' => (int) $media->id,
+                'name' => MediaLabel::display($media),
+                'path' => $this->folderPathString($folder),
+                'icon' => MimeIcon::forMedia($media),
+                'url' => $sharing->url($share),
+                'expires_at' => Dates::format($share->expires_at),
+                'views' => (int) $share->views,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Which files of the current listing carry a public link.
+     *
+     * Not gated on the `share` ability: that one decides who may hand a file
+     * out, and that a file *is* public is a fact about it worth reading by
+     * anyone allowed to see it at all — including whoever would want it stopped.
+     *
+     * @return array<int, true>
+     */
+    public function shareIndex(): array
+    {
+        if (! Sharing::enabled()) {
+            return [];
+        }
+
+        return app(Sharing::class)->activeMediaIds(
+            $this->listing()['files']->map(fn (Media $media): int => (int) $media->id)->all(),
+            $this->scopeKey,
+            $this->rootFolderId,
+        );
     }
 
     /**

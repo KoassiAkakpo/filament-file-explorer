@@ -255,6 +255,10 @@ return [
         'revoked' => 'The link no longer works',
         'open' => 'Open',
         'shared' => 'Shared',
+        'panel' => 'Shared files',
+        'panel_empty' => 'Nothing is shared right now.',
+        'count' => '{0} none|{1} :count file|[2,*] :count files',
+        'where' => 'In',
     ],
     'trash' => [
         'title' => 'Trash',

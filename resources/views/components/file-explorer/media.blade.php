@@ -2,6 +2,7 @@
     'thumbUrl' => null,
     'media',
     'tags' => [],
+    'shared' => false,
     'selectedFiles',
     'selectedFolders' => [],
     'openUrl' => null,
@@ -58,7 +59,7 @@
     ])
 >
     <div
-        class="fe-icon-well flex h-[68px] w-[76px] shrink-0 items-center justify-center rounded-xl"
+        class="fe-icon-well relative flex h-[68px] w-[76px] shrink-0 items-center justify-center rounded-xl"
         :class="{ 'fe-icon-well--selected': (sel.hasFile({{ $media->id }}) || sel.inMarqueeFile({{ $media->id }})) && !@js($isRenaming) }"
     >
         @if ($thumb)
@@ -73,6 +74,11 @@
         @else
             <x-filament-file-explorer::file-explorer.mime-icon :icon="$mimeIcon" size="md" />
         @endif
+
+        {{-- On the icon rather than under the label: the caption already carries
+             the name and the tag dots, and a third line there would make a
+             shared file taller than the one beside it. --}}
+        <x-filament-file-explorer::file-explorer.share-mark :shared="$shared" badge />
     </div>
 
     <div class="fe-caption relative mt-1.5 flex w-full flex-col items-center px-0.5">
