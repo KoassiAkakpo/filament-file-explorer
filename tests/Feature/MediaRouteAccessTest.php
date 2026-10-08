@@ -59,6 +59,16 @@ it('serves a media file that belongs to the requested scope', function (): void 
         ->and($response->streamedContent())->toBe('file-contents');
 });
 
+it('forbids the browser from sniffing past the content type', function (): void {
+    $media = feAttachFile(feStandaloneRoot(), 'notes.txt', '<html><script>alert(1)</script></html>');
+
+    // Served inline, so the recorded type is all that keeps these bytes from
+    // being rendered as a page in the panel's origin.
+    $this->get(feShowUrl('library', $media))
+        ->assertOk()
+        ->assertHeader('x-content-type-options', 'nosniff');
+});
+
 it('refuses a media file that is not under the root of the requested scope', function (): void {
     // The root used to be derived from the requested media by walking up to its
     // top-most ancestor, which made the containment check tautological: any

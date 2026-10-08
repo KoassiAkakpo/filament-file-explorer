@@ -60,12 +60,17 @@ final class UploadRules
         $mime = (string) $file->getMimeType();
         $ext = strtolower((string) $file->getClientOriginalExtension());
 
-        if (in_array($mime, self::acceptedMimeTypes(), true)) {
-            return true;
-        }
-
+        // The extension is checked first and unconditionally, because it is
+        // what the stored file name keeps. An accepted mime type alone used to
+        // be enough, so a PNG header followed by PHP or HTML went in as
+        // `shell.php` or `page.html` — and on a public disk the web server
+        // serves (or runs) a file by its extension, never by what was sniffed.
         if (! in_array($ext, self::acceptedExtensions(), true)) {
             return false;
+        }
+
+        if (in_array($mime, self::acceptedMimeTypes(), true)) {
+            return true;
         }
 
         return $mime === ''

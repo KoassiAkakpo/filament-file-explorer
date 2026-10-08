@@ -78,7 +78,8 @@ it('serves the file to someone with no session at all', function (): void {
 
     $this->get(app(Sharing::class)->url($share))
         ->assertOk()
-        ->assertHeader('content-type', 'application/pdf');
+        ->assertHeader('content-type', 'application/pdf')
+        ->assertHeader('x-content-type-options', 'nosniff');
 });
 
 it('takes nothing but the token', function (): void {

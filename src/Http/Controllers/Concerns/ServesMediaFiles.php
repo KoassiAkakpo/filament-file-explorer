@@ -24,6 +24,15 @@ use Symfony\Component\HttpFoundation\Response;
 trait ServesMediaFiles
 {
     /**
+     * Files go out inline, so the content type is the only thing standing
+     * between a stored file and a page in the panel's own origin. Without this
+     * a browser may sniff past it — bytes recorded as text/plain that look like
+     * HTML would be rendered as HTML. The upload rules already refuse those
+     * formats; this keeps that true for whatever got in before they did.
+     */
+    private const NO_SNIFF = ['X-Content-Type-Options' => 'nosniff'];
+
+    /**
      * Which rendition to serve, or null for the original.
      *
      * Conversions go out through this route like everything else, because
@@ -64,6 +73,7 @@ trait ServesMediaFiles
 
             $response = new BinaryFileResponse($path, Response::HTTP_OK, [
                 'Content-Type' => $contentType,
+                ...self::NO_SNIFF,
             ]);
 
             $response->setContentDisposition($disposition, $fileName);
@@ -81,7 +91,7 @@ trait ServesMediaFiles
 
         abort_unless($disk->exists($path), 404);
 
-        return $disk->response($path, $fileName, ['Content-Type' => $contentType], $disposition);
+        return $disk->response($path, $fileName, ['Content-Type' => $contentType, ...self::NO_SNIFF], $disposition);
     }
 
     /**

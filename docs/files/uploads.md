@@ -24,6 +24,10 @@ The defaults cover every kind the shipped mime icons can render, so a file the e
 
 Both lists are checked, and against the **sniffed** mime type rather than the declared one. That matters more than it sounds: the [kind filter](../browsing/large-libraries.md#filtering-by-kind), the kind sort and these rules all read `mime_type`, so a type the client chose would make all three advisory.
 
+The extension is checked **first, and always**. An accepted mime type is a confirmation, never a substitute, because the stored file keeps the extension it arrived with. A file that opens with a real PNG header sniffs as `image/png` whatever follows it, so a mime type alone would let `shell.php` or `page.html` in under its own name, and a web server decides how to serve a file (or whether to run it) from that extension.
+
+> **Keep the files off a public disk.** Media Library defaults to `public`, which puts every upload under the web root where the web server answers for it directly, past both of the explorer's guards. A [private disk](where-files-land.md#keeping-the-files-private) costs no functionality: everything the explorer shows goes through its own route, which also sends `X-Content-Type-Options: nosniff` so a browser renders a file as the type it was recorded with and nothing else.
+
 > **SVG is deliberately absent.** The media route serves files inline, and an SVG runs script in the panel's own origin. Adding it to both lists is one line and entirely your call — but that is what it costs.
 
 `max_size_kb` is a promise rather than a ceiling on a stock host: four other limits sit under it and the lowest wins, and out of the box `media-library.max_file_size` (**10 MB**) is usually the one that decides. `php artisan filament-file-explorer:install` prints which — see [Ask this host what its real ceiling is](large-uploads.md#ask-this-host-what-its-real-ceiling-is).
